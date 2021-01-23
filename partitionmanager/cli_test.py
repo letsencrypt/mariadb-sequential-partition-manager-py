@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from .cli import parser, partition_cmd
 
@@ -38,9 +39,11 @@ class TestPartitionCmd(unittest.TestCase):
         )
         output = partition_cmd(args)
 
+        expectedDate = datetime.now(tz=timezone.utc).strftime("p_%Y%m%d")
+
         self.assertEqual(
             "ALTER TABLE `testdb`.`testtable` REORGANIZE PARTITION `p_20201204` INTO "
-            + "(PARTITION `p_20201204` VALUES LESS THAN (3101009), PARTITION `p_20210122` "
+            + f"(PARTITION `p_20201204` VALUES LESS THAN (3101009), PARTITION `{expectedDate}` "
             + "VALUES LESS THAN MAXVALUE);",
             output,
         )
