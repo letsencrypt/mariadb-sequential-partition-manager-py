@@ -30,17 +30,15 @@ def get_autoincrement(database, db_name, table_name):
     return parse_table_information_schema(database.run(sql_cmd))
 
 
-def parse_table_information_schema(text):
+def parse_table_information_schema(rows):
     """
     Parse a table information schema, validating options and returning the
     current autoincrement ID.
     """
-    options = dict()
-    for l in text.split("\n"):
-        if ": " in l:
-            k, v = l.split(": ")
-            options[k] = v
+    if len(rows) != 1:
+        raise TableInformationException("Expected one result")
 
+    options = rows[0]
     if options["AUTO_INCREMENT"] in ("null", "NULL"):
         raise TableInformationException(
             f"Auto Increment value is {options['AUTO_INCREMENT']}"
@@ -51,12 +49,11 @@ def parse_table_information_schema(text):
             f"Partitioned is not in the features: {options['CREATE_OPTIONS']}"
         )
 
-    try:
-        return int(options["AUTO_INCREMENT"])
-    except ValueError as ve:
+    if type(options["AUTO_INCREMENT"]) != int:
         raise TableInformationException(
-            f"Auto Increment value cannot be cast to an int: {ve}"
+            f"Auto Increment value not an int: {options['AUTO_INCREMENT']}"
         )
+    return options["AUTO_INCREMENT"]
 
 
 def get_partition_map(database, table_name):
@@ -69,7 +66,7 @@ def get_partition_map(database, table_name):
     return parse_partition_map(database.run(sql_cmd))
 
 
-def parse_partition_map(text):
+def parse_partition_map(rows):
     """
     Read a partition statement from a table creation string and produce tuples
     for each partition with a max, and a single string for the partition using
@@ -84,7 +81,12 @@ def parse_partition_map(text):
     range_col = None
     partitions = list()
 
-    for l in text.split("\n"):
+    if len(rows) != 1:
+        raise TableInformationException("Expected one result")
+
+    options = rows[0]
+
+    for l in options["Create Table"].split("\n"):
         ai_match = auto_increment.match(l)
         if ai_match:
             ai_col = ai_match.group(1)

@@ -1,8 +1,77 @@
 import subprocess
 import pymysql
 import pymysql.cursors
+import xml.parsers.expat
 
+from collections import defaultdict
 from partitionmanager.types import DatabaseCommand
+
+
+def destring(text):
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    return text
+
+
+class XmlResult:
+    def __init__(self):
+        self.xmlparser = xml.parsers.expat.ParserCreate()
+
+        self.xmlparser.StartElementHandler = self.start_element
+        self.xmlparser.EndElementHandler = self.end_element
+        self.xmlparser.CharacterDataHandler = self.char_data
+
+        self.rows = list()
+        self.current_row = None
+        self.current_field = None
+        self.current_elements = list()
+
+    def parse(self, data):
+        self.xmlparser.Parse(data)
+        return self.rows
+
+    def start_element(self, name, attrs):
+        print("Start element:", name, attrs)
+        self.current_elements.append(name)
+        if name == "resultset":
+            self.statement = attrs["statement"]
+        elif name == "row":
+            assert self.current_row is None
+            self.current_row = defaultdict(str)
+        elif name == "field":
+            assert self.current_field is None
+            if "xsi:nil" in attrs and attrs["xsi:nil"] == "true":
+                self.current_row[attrs["name"]] = None
+            else:
+                self.current_field = attrs["name"]
+
+    def end_element(self, name):
+        print("End element:", name)
+        assert name == self.current_elements.pop()
+
+        if name == "row":
+            self.rows.append(self.current_row)
+            self.current_row = None
+        elif name == "field":
+            self.current_row[self.current_field] = destring(
+                self.current_row[self.current_field]
+            )
+            self.current_field = None
+
+    def char_data(self, data):
+        print(f"Character data for {self.current_elements[-1]}:", repr(data))
+
+        if self.current_elements[-1] == "field":
+            assert self.current_field is not None
+            assert self.current_row is not None
+
+            self.current_row[self.current_field] += data
 
 
 class SubprocessDatabaseCommand(DatabaseCommand):
@@ -11,13 +80,13 @@ class SubprocessDatabaseCommand(DatabaseCommand):
 
     def run(self, sql_cmd):
         result = subprocess.run(
-            [self.exe, "-E"],
+            [self.exe, "-X"],
             input=sql_cmd,
             stdout=subprocess.PIPE,
             encoding="UTF-8",
             check=True,
         )
-        return result.stdout
+        return XmlResult().parse(result.stdout)
 
 
 class IntegratedDatabaseCommand(DatabaseCommand):
@@ -38,6 +107,4 @@ class IntegratedDatabaseCommand(DatabaseCommand):
     def run(self, sql_cmd):
         with self.connection.cursor() as cursor:
             cursor.execute(sql_cmd)
-            for result in cursor.fetchone():
-                yield result
-        return
+            return [result for result in cursor.fetchone()]
