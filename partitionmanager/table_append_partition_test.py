@@ -4,15 +4,18 @@ import unittest
 import argparse
 from partitionmanager.types import (
     DatabaseCommand,
+    DuplicatePartitionException,
     TableInformationException,
     MismatchedIdException,
     SqlInput,
+    UnexpectedPartitionException,
 )
 from partitionmanager.table_append_partition import (
     parse_table_information_schema,
     parse_partition_map,
     get_autoincrement,
     get_partition_map,
+    reorganize_partition,
 )
 
 
@@ -172,6 +175,21 @@ class TestSqlInput(unittest.TestCase):
     def test_okay(self):
         SqlInput("my_table")
         SqlInput("zz-table")
+
+
+class TestReorganizePartitions(unittest.TestCase):
+    def test_list_without_final_entry(self):
+        with self.assertRaises(UnexpectedPartitionException):
+            reorganize_partition([("a", 1), ("b", 2)], "new", 3)
+
+    def test_reorganize_with_duplicate(self):
+        with self.assertRaises(DuplicatePartitionException):
+            reorganize_partition([("a", 1), "b"], "b", 3)
+
+    def test_reorganize(self):
+        last_value, reorg_list = reorganize_partition([("a", 1), "b"], "c", 2)
+        self.assertEqual(last_value, "b")
+        self.assertEqual(reorg_list, [("b", "(2)"), ("c", "MAXVALUE")])
 
 
 if __name__ == "__main__":

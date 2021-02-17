@@ -1,4 +1,5 @@
 from partitionmanager.types import (
+    DuplicatePartitionException,
     MismatchedIdException,
     SqlInput,
     TableInformationException,
@@ -121,7 +122,7 @@ def parition_name_now():
     return datetime.now(tz=timezone.utc).strftime("p_%Y%m%d")
 
 
-def reorganize_partition(partition_list, auto_increment):
+def reorganize_partition(partition_list, new_partition_name, auto_increment):
     """
     From a partial partitions list (ending with a single value that indicates MAX VALUE),
     add a new partition at the auto_increment number.
@@ -129,9 +130,12 @@ def reorganize_partition(partition_list, auto_increment):
     last_value = partition_list.pop()
     if type(last_value) is not str:
         raise UnexpectedPartitionException(last_value)
+    if last_value == new_partition_name:
+        raise DuplicatePartitionException(last_value)
+
     reorganized_list = list()
     reorganized_list.append((last_value, f"({auto_increment})"))
-    reorganized_list.append((parition_name_now(), "MAXVALUE"))
+    reorganized_list.append((new_partition_name, "MAXVALUE"))
     return last_value, reorganized_list
 
 
