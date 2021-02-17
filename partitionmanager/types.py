@@ -1,6 +1,7 @@
 import abc
 import argparse
 import re
+from urllib.parse import urlparse
 
 
 class SqlInput(str):
@@ -15,6 +16,20 @@ class SqlInput(str):
 
     def __repr__(self):
         return str(self)
+
+
+def toSqlUrl(urlstring):
+    try:
+        urltuple = urlparse(urlstring)
+        if urltuple.scheme.lower() != "sql":
+            raise argparse.ArgumentTypeError(f"{urlstring} is not a valid sql://")
+        if urltuple.path != "/":
+            raise argparse.ArgumentTypeError(
+                f"{urlstring} should not include a db path"
+            )
+        return urltuple
+    except ValueError as ve:
+        raise argparse.ArgumentTypeError(f"{urlstring} not valid: {ve}")
 
 
 class DatabaseCommand(abc.ABC):

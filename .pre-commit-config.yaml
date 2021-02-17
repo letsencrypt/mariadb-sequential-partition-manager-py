@@ -18,6 +18,8 @@ repos:
   -   id: pylint
       args:
       - -E
+      additional_dependencies:
+      - PyMySQL
 - repo:  https://github.com/psf/black
   rev: 19.3b0
   hooks:

@@ -11,14 +11,14 @@ class TestPartitionCmd(unittest.TestCase):
     def test_partition_cmd_no_exec(self):
         args = parser.parse_args(
             [
-                "--db",
-                "testdb",
-                "--table",
-                "testtable",
                 "--mariadb",
                 str(nonexistant_exec),
                 "add_partition",
+                "--db",
+                "testdb",
                 "--noop",
+                "--table",
+                "testtable",
             ]
         )
         with self.assertRaises(FileNotFoundError):
@@ -27,14 +27,14 @@ class TestPartitionCmd(unittest.TestCase):
     def test_partition_cmd_noop(self):
         args = parser.parse_args(
             [
-                "--db",
-                "testdb",
-                "--table",
-                "testtable",
                 "--mariadb",
                 str(fake_exec),
                 "add_partition",
                 "--noop",
+                "--db",
+                "testdb",
+                "--table",
+                "testtable",
             ]
         )
         output = partition_cmd(args)
@@ -51,13 +51,30 @@ class TestPartitionCmd(unittest.TestCase):
     def test_partition_cmd_final(self):
         args = parser.parse_args(
             [
+                "--mariadb",
+                str(fake_exec),
+                "add_partition",
                 "--db",
                 "testdb",
                 "--table",
                 "testtable",
+            ]
+        )
+        output = partition_cmd(args)
+
+        self.assertEqual("", output)
+
+    def test_partition_cmd_several_tables(self):
+        args = parser.parse_args(
+            [
                 "--mariadb",
                 str(fake_exec),
                 "add_partition",
+                "--db",
+                "testdb",
+                "--table",
+                "testtable",
+                "another_table",
             ]
         )
         output = partition_cmd(args)
