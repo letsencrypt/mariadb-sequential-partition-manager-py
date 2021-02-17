@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import subprocess
 import traceback
 
 from partitionmanager.table_append_partition import (
@@ -11,8 +10,8 @@ from partitionmanager.table_append_partition import (
     reorganize_partition,
     format_sql_reorganize_partition_command,
 )
-from partitionmanager.types import DatabaseCommand, SqlInput
-
+from partitionmanager.types import SqlInput, toSqlUrl
+from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
 
 parser = argparse.ArgumentParser(
     description="""
@@ -27,64 +26,62 @@ parser.add_argument(
     type=lambda x: getattr(logging, x.upper()),
     help="Configure the logging level.",
 )
-parser.add_argument("--mariadb", default="mariadb", help="Path to mariadb command")
-# parser.add_argument("--user", help="database username")
-parser.add_argument("--db", type=SqlInput, help="database name", required=True)
-parser.add_argument("--table", "-t", type=SqlInput, help="table name", required=True)
+
+group = parser.add_mutually_exclusive_group()
+group.add_argument("--mariadb", default="mariadb", help="Path to mariadb command")
+group.add_argument(
+    "--dburl",
+    type=toSqlUrl,
+    help="DB connection url, such as sql://user:pass@10.0.0.1:3306/",
+)
 
 
 def partition_cmd(args):
-    dbcmd = SubprocessDatabaseCommand(args.mariadb)
+    if args.dburl:
+        dbcmd = IntegratedDatabaseCommand(args.dburl)
+    else:
+        dbcmd = SubprocessDatabaseCommand(args.mariadb)
 
-    ai = get_autoincrement(dbcmd, args.db, args.table)
+    for table in args.table:
+        ai = get_autoincrement(dbcmd, args.db, table)
 
-    partitions = get_partition_map(dbcmd, args.db, args.table)
+        partitions = get_partition_map(dbcmd, args.db, table)
 
-    filled_partition_id, partitions = reorganize_partition(partitions, ai)
+        filled_partition_id, partitions = reorganize_partition(partitions, ai)
 
-    sql_cmd = format_sql_reorganize_partition_command(
-        args.db,
-        args.table,
-        partition_to_alter=filled_partition_id,
-        partition_list=partitions,
-    )
+        sql_cmd = format_sql_reorganize_partition_command(
+            args.db,
+            table,
+            partition_to_alter=filled_partition_id,
+            partition_list=partitions,
+        )
 
-    if args.noop:
-        logging.info("No-op mode")
-        return sql_cmd
+        if args.noop:
+            logging.info("No-op mode")
+            return sql_cmd
 
-    logging.info("Executing " + sql_cmd)
-    results = dbcmd.run(sql_cmd)
-    logging.info("Results:")
-    logging.info(results)
+        logging.info("Executing " + sql_cmd)
+        results = dbcmd.run(sql_cmd)
+        logging.info("Results:")
+        logging.info(results)
     return results
 
 
 subparsers = parser.add_subparsers(dest="subparser_name")
-
 partition_parser = subparsers.add_parser("add_partition", help="add a partition")
-partition_parser.set_defaults(func=partition_cmd)
+partition_parser.add_argument(
+    "--db", type=SqlInput, help="database name", required=True
+)
 partition_parser.add_argument(
     "--noop",
     "-n",
     action="store_true",
     help="Don't attempt to commit changes, just print",
 )
-
-
-class SubprocessDatabaseCommand(DatabaseCommand):
-    def __init__(self, exe):
-        self.exe = exe
-
-    def run(self, sql_cmd):
-        result = subprocess.run(
-            [self.exe, "-E"],
-            input=sql_cmd,
-            stdout=subprocess.PIPE,
-            encoding="UTF-8",
-            check=True,
-        )
-        return result.stdout
+partition_parser.add_argument(
+    "--table", "-t", type=SqlInput, nargs="+", help="table names", required=True
+)
+partition_parser.set_defaults(func=partition_cmd)
 
 
 def main():

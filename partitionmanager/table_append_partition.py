@@ -18,9 +18,9 @@ def get_autoincrement(database, db_name, table_name):
         raise ValueError("Unexpected type")
     sql_cmd = f"""
                SELECT AUTO_INCREMENT, CREATE_OPTIONS FROM
-                  `INFORMATION_SCHEMA.TABLES
+                  INFORMATION_SCHEMA.TABLES
                WHERE
-                  TABLE_SCHEMA = `{db_name}` and TABLE_NAME = `{table_name}`;"
+                  TABLE_SCHEMA=`{db_name}` and TABLE_NAME=`{table_name}`;"
                """.strip()
 
     return parse_table_information_schema(database.run(sql_cmd))
