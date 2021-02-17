@@ -9,12 +9,16 @@ import logging
 import re
 
 
+def get_database(database):
+    return database.run("SELECT DATABASE();")
+
+
 def get_autoincrement(database, db_name, table_name):
     """
     Gather the information schema from the database command and parse out the
     autoincrement value.
     """
-    if type(db_name) != SqlInput or type(table_name) != SqlInput:
+    if type(table_name) != SqlInput:
         raise ValueError("Unexpected type")
     sql_cmd = f"""
                SELECT AUTO_INCREMENT, CREATE_OPTIONS FROM
@@ -55,13 +59,13 @@ def parse_table_information_schema(text):
         )
 
 
-def get_partition_map(database, db_name, table_name):
+def get_partition_map(database, table_name):
     """
     Gather the partition map via the database command tool.
     """
-    if type(db_name) != SqlInput or type(table_name) != SqlInput:
+    if type(table_name) != SqlInput:
         raise ValueError("Unexpected type")
-    sql_cmd = f"SHOW CREATE TABLE `{db_name}`.`{table_name}`;".strip()
+    sql_cmd = f"SHOW CREATE TABLE `{table_name}`;".strip()
     return parse_partition_map(database.run(sql_cmd))
 
 
@@ -134,10 +138,10 @@ def reorganize_partition(partition_list, auto_increment):
 
 
 def format_sql_reorganize_partition_command(
-    db_name, table_name, *, partition_to_alter, partition_list
+    table_name, *, partition_to_alter, partition_list
 ):
     """
-    Produce a SQL command to reorganize the partition in db_name.table_name to
+    Produce a SQL command to reorganize the partition in table_name to
     match the new partition_list.
     """
     partition_strings = list()
@@ -148,6 +152,6 @@ def format_sql_reorganize_partition_command(
     partition_update = ", ".join(partition_strings)
 
     return (
-        f"ALTER TABLE `{db_name}`.`{table_name}` "
+        f"ALTER TABLE `{table_name}` "
         f"REORGANIZE PARTITION `{partition_to_alter}` INTO ({partition_update});"
     )

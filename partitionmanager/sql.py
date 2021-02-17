@@ -22,11 +22,16 @@ class SubprocessDatabaseCommand(DatabaseCommand):
 
 class IntegratedDatabaseCommand(DatabaseCommand):
     def __init__(self, url):
+        db_name = None
+        if url.path and url.path != "/":
+            db_name = url.path
+
         self.connection = pymysql.connect(
             host=url.hostname,
             port=url.port,
             user=url.username,
             password=url.password,
+            database=db_name,
             cursorclass=pymysql.cursors.DictCursor,
         )
 
