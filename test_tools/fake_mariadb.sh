@@ -16,6 +16,7 @@ if echo $stdin | grep "INFORMATION_SCHEMA" >/dev/null; then
     <field name="AUTO_INCREMENT">3101009</field>
     <field name="CREATE_OPTIONS">max_rows=10380835156842741 transactional=0 partitioned</field>
   </row>
+</resultset>
 EOF
 	exit
 fi
@@ -59,7 +60,6 @@ if echo $stdin | grep "SELECT DATABASE" >/dev/null; then
     <field name="DATABASE()">tasty-treats</field>
   </row>
 </resultset>
-
 EOF
     exit
 fi

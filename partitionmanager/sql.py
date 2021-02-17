@@ -4,7 +4,12 @@ import pymysql.cursors
 import xml.parsers.expat
 
 from collections import defaultdict
-from partitionmanager.types import DatabaseCommand, TableInformationException, SqlInput
+from partitionmanager.types import (
+    DatabaseCommand,
+    TruncatedDatabaseResultException,
+    TableInformationException,
+    SqlInput,
+)
 
 
 def destring(text):
@@ -34,6 +39,10 @@ class XmlResult:
 
     def parse(self, data):
         self.xmlparser.Parse(data)
+        if len(self.current_elements) != 0:
+            raise TruncatedDatabaseResultException(
+                f"{self.current_elements} are unclosed"
+            )
         return self.rows
 
     def start_element(self, name, attrs):

@@ -46,6 +46,14 @@ class MismatchedIdException(Exception):
     pass
 
 
+class TruncatedDatabaseResultException(Exception):
+    """
+    Raised if the XML schema truncated over a subprocess interaction
+    """
+
+    pass
+
+
 class DuplicatePartitionException(Exception):
     """
     Raise if a partition being created already exists.

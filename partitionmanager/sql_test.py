@@ -1,5 +1,6 @@
 import unittest
 from .sql import destring, XmlResult
+from .types import TruncatedDatabaseResultException
 
 
 class TestSubprocessParsing(unittest.TestCase):
@@ -112,4 +113,24 @@ class TestSubprocessParsing(unittest.TestCase):
 ) ENGINE=InnoDB AUTO_INCREMENT=10101 DEFAULT CHARSET=utf8
  PARTITION BY RANGE (`id`)
 (PARTITION `p_start` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)""",
+            )
+
+    def test_truncated_resultset(self):
+        with self.assertRaises(TruncatedDatabaseResultException):
+            XmlResult().parse(
+                """<?xml version="1.0"?>
+
+<resultset statement="select * from here limit 1" xmlns:xsi="">
+  <row>
+    <field name="id">1</field>
+  </row>"""
+            )
+
+        with self.assertRaises(TruncatedDatabaseResultException):
+            XmlResult().parse(
+                """<?xml version="1.0"?>
+
+<resultset statement="select * from here limit 1" xmlns:xsi="">
+  <row>
+    <field name="id">1</field>"""
             )
