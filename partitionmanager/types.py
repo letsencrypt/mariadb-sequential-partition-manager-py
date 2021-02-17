@@ -23,10 +23,8 @@ def toSqlUrl(urlstring):
         urltuple = urlparse(urlstring)
         if urltuple.scheme.lower() != "sql":
             raise argparse.ArgumentTypeError(f"{urlstring} is not a valid sql://")
-        if urltuple.path != "/":
-            raise argparse.ArgumentTypeError(
-                f"{urlstring} should not include a db path"
-            )
+        if urltuple.path == "/" or urltuple.path == "":
+            raise argparse.ArgumentTypeError(f"{urlstring} should include a db path")
         return urltuple
     except ValueError as ve:
         raise argparse.ArgumentTypeError(f"{urlstring} not valid: {ve}")

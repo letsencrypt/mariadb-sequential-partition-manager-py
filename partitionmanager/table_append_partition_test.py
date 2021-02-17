@@ -20,15 +20,18 @@ class TestDatabaseCommand(DatabaseCommand):
     def run(self, cmd):
         return ""
 
+    def db_name(self):
+        return "the-database"
+
 
 class TestTypeEnforcement(unittest.TestCase):
     def test_get_partition_map(self):
         with self.assertRaises(ValueError):
             get_partition_map(TestDatabaseCommand(), "")
 
-    def test_get_autoincrementp(self):
+    def test_get_autoincrement(self):
         with self.assertRaises(ValueError):
-            get_autoincrement(TestDatabaseCommand(), "", "")
+            get_autoincrement(TestDatabaseCommand(), "")
 
 
 class TestParseTableInformationSchema(unittest.TestCase):
