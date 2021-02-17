@@ -50,7 +50,7 @@ class TestPartitionCmd(unittest.TestCase):
         )
         output = partition_cmd(args)
 
-        self.assertEqual("", output)
+        self.assertEqual(list(), output)
 
     def test_partition_cmd_several_tables(self):
         args = parser.parse_args(
@@ -65,4 +65,4 @@ class TestPartitionCmd(unittest.TestCase):
         )
         output = partition_cmd(args)
 
-        self.assertEqual("", output)
+        self.assertEqual(list(), output)
