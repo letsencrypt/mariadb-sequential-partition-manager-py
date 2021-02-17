@@ -4,7 +4,7 @@ import pymysql.cursors
 import xml.parsers.expat
 
 from collections import defaultdict
-from partitionmanager.types import DatabaseCommand
+from partitionmanager.types import DatabaseCommand, TableInformationException, SqlInput
 
 
 def destring(text):
@@ -88,23 +88,35 @@ class SubprocessDatabaseCommand(DatabaseCommand):
         )
         return XmlResult().parse(result.stdout)
 
+    def db_name(self):
+        rows = self.run("SELECT DATABASE();")
+        if len(rows) != 1:
+            raise TableInformationException("Expected one result")
+
+        return SqlInput(rows[0]["DATABASE()"])
+
 
 class IntegratedDatabaseCommand(DatabaseCommand):
     def __init__(self, url):
-        db_name = None
+        self.db = None
         if url.path and url.path != "/":
-            db_name = url.path
+            self.db = url.path.lstrip("/")
+        if not self.db:
+            raise Exception("You must supply a database name")
 
         self.connection = pymysql.connect(
             host=url.hostname,
             port=url.port,
             user=url.username,
             password=url.password,
-            database=db_name,
+            database=self.db,
             cursorclass=pymysql.cursors.DictCursor,
         )
+
+    def db_name(self):
+        return SqlInput(self.db)
 
     def run(self, sql_cmd):
         with self.connection.cursor() as cursor:
             cursor.execute(sql_cmd)
-            return [result for result in cursor.fetchone()]
+            return [row for row in cursor]

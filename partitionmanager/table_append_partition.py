@@ -9,23 +9,19 @@ import logging
 import re
 
 
-def get_database(database):
-    return database.run("SELECT DATABASE();")
-
-
-def get_autoincrement(database, db_name, table_name):
+def get_autoincrement(database, table_name):
     """
     Gather the information schema from the database command and parse out the
     autoincrement value.
     """
-    if type(table_name) != SqlInput:
+    db_name = database.db_name()
+
+    if type(db_name) != SqlInput or type(table_name) != SqlInput:
         raise ValueError("Unexpected type")
-    sql_cmd = f"""
-               SELECT AUTO_INCREMENT, CREATE_OPTIONS FROM
-                  INFORMATION_SCHEMA.TABLES
-               WHERE
-                  TABLE_SCHEMA=`{db_name}` and TABLE_NAME=`{table_name}`;"
-               """.strip()
+    sql_cmd = (
+        "SELECT AUTO_INCREMENT, CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES "
+        + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table_name}';"
+    ).strip()
 
     return parse_table_information_schema(database.run(sql_cmd))
 

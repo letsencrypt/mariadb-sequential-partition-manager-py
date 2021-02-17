@@ -5,7 +5,6 @@ import logging
 import traceback
 
 from partitionmanager.table_append_partition import (
-    get_database,
     get_partition_map,
     get_autoincrement,
     reorganize_partition,
@@ -44,9 +43,7 @@ def partition_cmd(args):
         dbcmd = SubprocessDatabaseCommand(args.mariadb)
 
     for table in args.table:
-        db_name = get_database(dbcmd)
-
-        ai = get_autoincrement(dbcmd, db_name, table)
+        ai = get_autoincrement(dbcmd, table)
 
         partitions = get_partition_map(dbcmd, table)
 

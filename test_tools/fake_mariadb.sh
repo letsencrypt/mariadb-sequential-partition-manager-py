@@ -56,7 +56,7 @@ if echo $stdin | grep "SELECT DATABASE" >/dev/null; then
 
 <resultset statement="select database()" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <row>
-    <field name="database()">tasty-treats</field>
+    <field name="DATABASE()">tasty-treats</field>
   </row>
 </resultset>
 
