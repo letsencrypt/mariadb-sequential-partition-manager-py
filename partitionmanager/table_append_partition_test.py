@@ -24,7 +24,7 @@ class TestDatabaseCommand(DatabaseCommand):
 class TestTypeEnforcement(unittest.TestCase):
     def test_get_partition_map(self):
         with self.assertRaises(ValueError):
-            get_partition_map(TestDatabaseCommand(), "", "")
+            get_partition_map(TestDatabaseCommand(), "")
 
     def test_get_autoincrementp(self):
         with self.assertRaises(ValueError):

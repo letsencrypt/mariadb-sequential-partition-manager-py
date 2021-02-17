@@ -33,4 +33,12 @@ if echo $stdin | grep "REORGANIZE PARTITION" >/dev/null; then
     exit
 fi
 
+if echo $stdin | grep "SELECT DATABASE" >/dev/null; then
+    cat <<EOF
+*************************** 1. row ***************************
+DATABASE(): tasty-treats
+EOF
+    exit
+fi
+
 exit 1

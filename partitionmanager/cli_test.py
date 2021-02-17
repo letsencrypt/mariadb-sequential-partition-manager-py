@@ -14,8 +14,6 @@ class TestPartitionCmd(unittest.TestCase):
                 "--mariadb",
                 str(nonexistant_exec),
                 "add_partition",
-                "--db",
-                "testdb",
                 "--noop",
                 "--table",
                 "testtable",
@@ -31,8 +29,6 @@ class TestPartitionCmd(unittest.TestCase):
                 str(fake_exec),
                 "add_partition",
                 "--noop",
-                "--db",
-                "testdb",
                 "--table",
                 "testtable",
             ]
@@ -42,7 +38,7 @@ class TestPartitionCmd(unittest.TestCase):
         expectedDate = datetime.now(tz=timezone.utc).strftime("p_%Y%m%d")
 
         self.assertEqual(
-            "ALTER TABLE `testdb`.`testtable` REORGANIZE PARTITION `p_20201204` INTO "
+            "ALTER TABLE `testtable` REORGANIZE PARTITION `p_20201204` INTO "
             + f"(PARTITION `p_20201204` VALUES LESS THAN (3101009), PARTITION `{expectedDate}` "
             + "VALUES LESS THAN MAXVALUE);",
             output,
@@ -50,15 +46,7 @@ class TestPartitionCmd(unittest.TestCase):
 
     def test_partition_cmd_final(self):
         args = parser.parse_args(
-            [
-                "--mariadb",
-                str(fake_exec),
-                "add_partition",
-                "--db",
-                "testdb",
-                "--table",
-                "testtable",
-            ]
+            ["--mariadb", str(fake_exec), "add_partition", "--table", "testtable"]
         )
         output = partition_cmd(args)
 
@@ -70,8 +58,6 @@ class TestPartitionCmd(unittest.TestCase):
                 "--mariadb",
                 str(fake_exec),
                 "add_partition",
-                "--db",
-                "testdb",
                 "--table",
                 "testtable",
                 "another_table",

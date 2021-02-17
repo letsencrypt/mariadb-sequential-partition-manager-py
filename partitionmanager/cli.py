@@ -5,6 +5,7 @@ import logging
 import traceback
 
 from partitionmanager.table_append_partition import (
+    get_database,
     get_partition_map,
     get_autoincrement,
     reorganize_partition,
@@ -32,7 +33,7 @@ group.add_argument("--mariadb", default="mariadb", help="Path to mariadb command
 group.add_argument(
     "--dburl",
     type=toSqlUrl,
-    help="DB connection url, such as sql://user:pass@10.0.0.1:3306/",
+    help="DB connection url, such as sql://user:pass@10.0.0.1:3306/database",
 )
 
 
@@ -43,17 +44,16 @@ def partition_cmd(args):
         dbcmd = SubprocessDatabaseCommand(args.mariadb)
 
     for table in args.table:
-        ai = get_autoincrement(dbcmd, args.db, table)
+        db_name = get_database(dbcmd)
 
-        partitions = get_partition_map(dbcmd, args.db, table)
+        ai = get_autoincrement(dbcmd, db_name, table)
+
+        partitions = get_partition_map(dbcmd, table)
 
         filled_partition_id, partitions = reorganize_partition(partitions, ai)
 
         sql_cmd = format_sql_reorganize_partition_command(
-            args.db,
-            table,
-            partition_to_alter=filled_partition_id,
-            partition_list=partitions,
+            table, partition_to_alter=filled_partition_id, partition_list=partitions
         )
 
         if args.noop:
@@ -69,9 +69,6 @@ def partition_cmd(args):
 
 subparsers = parser.add_subparsers(dest="subparser_name")
 partition_parser = subparsers.add_parser("add_partition", help="add a partition")
-partition_parser.add_argument(
-    "--db", type=SqlInput, help="database name", required=True
-)
 partition_parser.add_argument(
     "--noop",
     "-n",
