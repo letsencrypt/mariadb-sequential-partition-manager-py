@@ -5,10 +5,11 @@ import logging
 import traceback
 
 from partitionmanager.table_append_partition import (
-    get_partition_map,
-    get_autoincrement,
-    reorganize_partition,
     format_sql_reorganize_partition_command,
+    get_autoincrement,
+    get_partition_map,
+    parition_name_now,
+    reorganize_partition,
 )
 from partitionmanager.types import SqlInput, toSqlUrl
 from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
@@ -47,7 +48,9 @@ def partition_cmd(args):
 
         partitions = get_partition_map(dbcmd, table)
 
-        filled_partition_id, partitions = reorganize_partition(partitions, ai)
+        filled_partition_id, partitions = reorganize_partition(
+            partitions, parition_name_now(), ai
+        )
 
         sql_cmd = format_sql_reorganize_partition_command(
             table, partition_to_alter=filled_partition_id, partition_list=partitions

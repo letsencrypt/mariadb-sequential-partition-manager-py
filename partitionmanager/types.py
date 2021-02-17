@@ -46,6 +46,14 @@ class MismatchedIdException(Exception):
     pass
 
 
+class DuplicatePartitionException(Exception):
+    """
+    Raise if a partition being created already exists.
+    """
+
+    pass
+
+
 class UnexpectedPartitionException(Exception):
     """
     Raised when the partition map is unexpected.
