@@ -5,14 +5,14 @@ import logging
 import traceback
 
 from partitionmanager.table_append_partition import (
+    assert_table_is_compatible,
     format_sql_reorganize_partition_command,
-    get_autoincrement,
     get_current_positions,
     get_partition_map,
     parition_name_now,
     reorganize_partition,
 )
-from partitionmanager.types import SqlInput, toSqlUrl
+from partitionmanager.types import SqlInput, toSqlUrl, TableInformationException
 from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
 
 parser = argparse.ArgumentParser(
@@ -44,9 +44,16 @@ def partition_cmd(args):
     else:
         dbcmd = SubprocessDatabaseCommand(args.mariadb)
 
-    for table in args.table:
-        get_autoincrement(dbcmd, table)
+    # Preflight
+    try:
+        for table in args.table:
+            assert_table_is_compatible(dbcmd, table)
+    except TableInformationException as tie:
+        logging.error(f"Cannot proceed: {tie}")
+        return {}
 
+    all_results = dict()
+    for table in args.table:
         map_data = get_partition_map(dbcmd, table)
 
         positions = get_current_positions(dbcmd, table, map_data["range_cols"])
@@ -61,13 +68,15 @@ def partition_cmd(args):
 
         if args.noop:
             logging.info("No-op mode")
-            return sql_cmd
+            all_results[table] = {"sql": sql_cmd}
+            continue
 
         logging.info("Executing " + sql_cmd)
-        results = dbcmd.run(sql_cmd)
+        output = dbcmd.run(sql_cmd)
+        all_results[table] = {"sql": sql_cmd, "output": output}
         logging.info("Results:")
-        logging.info(results)
-    return results
+        logging.info(output)
+    return all_results
 
 
 subparsers = parser.add_subparsers(dest="subparser_name")
@@ -95,7 +104,7 @@ def main():
         return
 
     try:
-        print(args.func(args))
+        args.func(args)
     except Exception:
         logging.warning(f"Couldn't complete command: {args.subparser_name}")
         logging.warning(traceback.format_exc())

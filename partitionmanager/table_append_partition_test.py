@@ -11,11 +11,11 @@ from partitionmanager.types import (
     UnexpectedPartitionException,
 )
 from partitionmanager.table_append_partition import (
-    parse_table_information_schema,
-    parse_partition_map,
-    get_autoincrement,
     get_current_positions,
     get_partition_map,
+    assert_table_is_compatible,
+    assert_table_information_schema_compatible,
+    parse_partition_map,
     reorganize_partition,
 )
 
@@ -38,37 +38,27 @@ class TestTypeEnforcement(unittest.TestCase):
 
     def test_get_autoincrement(self):
         with self.assertRaises(ValueError):
-            get_autoincrement(MockDatabase(), "")
+            assert_table_is_compatible(MockDatabase(), "")
 
 
 class TestParseTableInformationSchema(unittest.TestCase):
-    def test_null_auto_increment(self):
-        info = [{"AUTO_INCREMENT": None, "CREATE_OPTIONS": "partitioned"}]
-        with self.assertRaises(TableInformationException):
-            parse_table_information_schema(info)
-
     def test_not_partitioned_and_unexpected(self):
-        info = [{"AUTO_INCREMENT": None, "CREATE_OPTIONS": "exfoliated, disenchanted"}]
+        info = [{"CREATE_OPTIONS": "exfoliated, disenchanted"}]
         with self.assertRaises(TableInformationException):
-            parse_table_information_schema(info)
-
-    def test_auto_increment_not_int(self):
-        info = [{"AUTO_INCREMENT": 1.21, "CREATE_OPTIONS": "jiggawatts, partitioned"}]
-        with self.assertRaises(TableInformationException):
-            parse_table_information_schema(info)
+            assert_table_information_schema_compatible(info, "extable")
 
     def test_not_partitioned(self):
-        info = [{"AUTO_INCREMENT": 2, "CREATE_OPTIONS": "exfoliated"}]
+        info = [{"CREATE_OPTIONS": "exfoliated"}]
         with self.assertRaises(TableInformationException):
-            parse_table_information_schema(info)
+            assert_table_information_schema_compatible(info, "extable")
 
     def test_normal(self):
-        info = [{"AUTO_INCREMENT": 3101009, "CREATE_OPTIONS": "partitioned"}]
-        self.assertEqual(parse_table_information_schema(info), 3101009)
+        info = [{"CREATE_OPTIONS": "partitioned"}]
+        assert_table_information_schema_compatible(info, "table")
 
     def test_normal_multiple_create_options(self):
-        info = [{"AUTO_INCREMENT": 3101009, "CREATE_OPTIONS": "magical, partitioned"}]
-        self.assertEqual(parse_table_information_schema(info), 3101009)
+        info = [{"CREATE_OPTIONS": "magical, partitioned"}]
+        assert_table_information_schema_compatible(info, "table")
 
 
 class TestParsePartitionMap(unittest.TestCase):
