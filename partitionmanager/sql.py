@@ -1,6 +1,7 @@
-import subprocess
+import logging
 import pymysql
 import pymysql.cursors
+import subprocess
 import xml.parsers.expat
 
 from collections import defaultdict
@@ -25,28 +26,52 @@ def destring(text):
 
 
 class XmlResult:
+    """
+    Ugly class to parse XML results from the mariadb CLI client. The general
+    schema is:
+    <resultset statement="sql query">
+        <row>
+            <field name="name" xsi:nil="true/false">data if any</field>
+        </row>
+    </resultset>
+
+    The major hangups are that field can be nil, and field can also be
+    of arbitrary size.
+    """
+
     def __init__(self):
+        self.logger = logging.getLogger(name="xml")
+
         self.xmlparser = xml.parsers.expat.ParserCreate()
 
         self.xmlparser.StartElementHandler = self.start_element
         self.xmlparser.EndElementHandler = self.end_element
         self.xmlparser.CharacterDataHandler = self.char_data
 
-        self.rows = list()
+        self.rows = None
         self.current_row = None
         self.current_field = None
         self.current_elements = list()
 
     def parse(self, data):
+        if self.rows is not None:
+            raise ValueError("XmlResult objects can only be used once")
+
+        self.rows = list()
         self.xmlparser.Parse(data)
-        if len(self.current_elements) != 0:
+
+        if len(self.current_elements) > 0:
             raise TruncatedDatabaseResultException(
-                f"{self.current_elements} are unclosed"
+                f"These XML tags are unclosed: {self.current_elements}"
             )
         return self.rows
 
     def start_element(self, name, attrs):
+        self.logger.debug(
+            f"Element start: {name} {attrs} (Current elements: {self.current_elements}"
+        )
         self.current_elements.append(name)
+
         if name == "resultset":
             self.statement = attrs["statement"]
         elif name == "row":
@@ -54,21 +79,24 @@ class XmlResult:
             self.current_row = defaultdict(str)
         elif name == "field":
             assert self.current_field is None
+            self.current_field = attrs["name"]
             if "xsi:nil" in attrs and attrs["xsi:nil"] == "true":
                 self.current_row[attrs["name"]] = None
-            else:
-                self.current_field = attrs["name"]
 
     def end_element(self, name):
+        self.logger.debug(
+            f"Element end: {name} (Current elements: {self.current_elements}"
+        )
         assert name == self.current_elements.pop()
 
         if name == "row":
             self.rows.append(self.current_row)
             self.current_row = None
         elif name == "field":
-            self.current_row[self.current_field] = destring(
-                self.current_row[self.current_field]
-            )
+            assert self.current_field is not None
+            value = self.current_row[self.current_field]
+            if value:
+                self.current_row[self.current_field] = destring(value)
             self.current_field = None
 
     def char_data(self, data):
