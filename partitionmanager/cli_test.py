@@ -41,7 +41,7 @@ class TestPartitionCmd(unittest.TestCase):
             "ALTER TABLE `testtable` REORGANIZE PARTITION `p_20201204` INTO "
             + f"(PARTITION `p_20201204` VALUES LESS THAN (3101009), PARTITION `{expectedDate}` "
             + "VALUES LESS THAN MAXVALUE);",
-            output,
+            output["testtable"]["sql"],
         )
 
     def test_partition_cmd_final(self):
@@ -50,7 +50,19 @@ class TestPartitionCmd(unittest.TestCase):
         )
         output = partition_cmd(args)
 
-        self.assertEqual(list(), output)
+        expectedDate = datetime.now(tz=timezone.utc).strftime("p_%Y%m%d")
+
+        self.assertEqual(
+            {
+                "testtable": {
+                    "output": [],
+                    "sql": "ALTER TABLE `testtable` REORGANIZE PARTITION `p_20201204` "
+                    + "INTO (PARTITION `p_20201204` VALUES LESS THAN (3101009), "
+                    + f"PARTITION `{expectedDate}` VALUES LESS THAN MAXVALUE);",
+                }
+            },
+            output,
+        )
 
     def test_partition_cmd_several_tables(self):
         args = parser.parse_args(
@@ -65,4 +77,6 @@ class TestPartitionCmd(unittest.TestCase):
         )
         output = partition_cmd(args)
 
-        self.assertEqual(list(), output)
+        self.assertEqual(len(output), 2)
+        for k in output.keys():
+            self.assertTrue(k in ["testtable", "another_table"])

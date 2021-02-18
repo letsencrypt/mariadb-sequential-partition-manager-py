@@ -10,7 +10,7 @@ import logging
 import re
 
 
-def get_autoincrement(database, table_name):
+def assert_table_is_compatible(database, table_name):
     """
     Gather the information schema from the database command and parse out the
     autoincrement value.
@@ -20,37 +20,23 @@ def get_autoincrement(database, table_name):
     if type(db_name) != SqlInput or type(table_name) != SqlInput:
         raise ValueError("Unexpected type")
     sql_cmd = (
-        "SELECT AUTO_INCREMENT, CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES "
+        "SELECT CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES "
         + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table_name}';"
     ).strip()
 
-    return parse_table_information_schema(database.run(sql_cmd))
+    assert_table_information_schema_compatible(database.run(sql_cmd), table_name)
 
 
-def parse_table_information_schema(rows):
+def assert_table_information_schema_compatible(rows, table_name):
     """
-    Parse a table information schema, validating options and returning the
-    current autoincrement ID.
+    Parse a table information schema, validating options
     """
     if len(rows) != 1:
-        raise TableInformationException("Expected one result")
+        raise TableInformationException(f"Unable to read information for {table_name}")
 
     options = rows[0]
-    if options["AUTO_INCREMENT"] in ("null", "NULL"):
-        raise TableInformationException(
-            f"Auto Increment value is {options['AUTO_INCREMENT']}"
-        )
-
     if "partitioned" not in options["CREATE_OPTIONS"]:
-        raise TableInformationException(
-            f"Partitioned is not in the features: {options['CREATE_OPTIONS']}"
-        )
-
-    if type(options["AUTO_INCREMENT"]) != int:
-        raise TableInformationException(
-            f"Auto Increment value not an int: {options['AUTO_INCREMENT']}"
-        )
-    return options["AUTO_INCREMENT"]
+        raise TableInformationException(f"Table {table_name} is not partitioned")
 
 
 def get_current_positions(database, table_name, columns):
