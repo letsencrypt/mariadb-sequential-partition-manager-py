@@ -7,6 +7,7 @@ import traceback
 from partitionmanager.table_append_partition import (
     format_sql_reorganize_partition_command,
     get_autoincrement,
+    get_current_positions,
     get_partition_map,
     parition_name_now,
     reorganize_partition,
@@ -44,12 +45,14 @@ def partition_cmd(args):
         dbcmd = SubprocessDatabaseCommand(args.mariadb)
 
     for table in args.table:
-        ai = get_autoincrement(dbcmd, table)
+        get_autoincrement(dbcmd, table)
 
-        partitions = get_partition_map(dbcmd, table)
+        map_data = get_partition_map(dbcmd, table)
+
+        positions = get_current_positions(dbcmd, table, map_data["range_cols"])
 
         filled_partition_id, partitions = reorganize_partition(
-            partitions, parition_name_now(), ai
+            map_data["partitions"], parition_name_now(), positions
         )
 
         sql_cmd = format_sql_reorganize_partition_command(

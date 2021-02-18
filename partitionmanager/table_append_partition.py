@@ -53,6 +53,26 @@ def parse_table_information_schema(rows):
     return options["AUTO_INCREMENT"]
 
 
+def get_current_positions(database, table_name, columns):
+    """
+    Get the positions of the columns provided in the given table, return
+    as a list in the same order as the provided columns
+    """
+    if type(columns) is not list:
+        raise ValueError("columns must be a list")
+
+    order_col = columns[0]
+    columns_str = ", ".join([f"`{x}`" for x in columns])
+    sql = f"SELECT {columns_str} FROM `{table_name}` ORDER BY {order_col} DESC LIMIT 1;"
+    rows = database.run(sql)
+    if len(rows) != 1:
+        raise TableInformationException("Expected one result")
+    ordered_positions = list()
+    for c in columns:
+        ordered_positions.append(rows[0][c])
+    return ordered_positions
+
+
 def get_partition_map(database, table_name):
     """
     Gather the partition map via the database command tool.
@@ -69,13 +89,15 @@ def parse_partition_map(rows):
     for each partition with a max, and a single string for the partition using
     "maxvalue".
     """
-    auto_increment = re.compile(r" *`(\w+)` .* AUTO_INCREMENT.*,")
-    partition_range = re.compile(r" PARTITION BY RANGE \(`(\w+)`\)")
-    partition_member = re.compile(r"[ (]*PARTITION `(\w+)` VALUES LESS THAN (\(\d+\))")
-    partition_tail = re.compile(r"[ (]*PARTITION `(\w+)` VALUES LESS THAN MAXVALUE")
+    partition_range = re.compile(r"[ ]*PARTITION BY RANGE \(([\w,` ]+)\)")
+    partition_member = re.compile(
+        r"[ (]*PARTITION `(\w+)` VALUES LESS THAN \(([\d, ]+)\)"
+    )
+    partition_tail = re.compile(
+        r"[ (]*PARTITION `(\w+)` VALUES LESS THAN \(?(MAXVALUE[, ]*)+\)?"
+    )
 
-    ai_col = None
-    range_col = None
+    range_cols = None
     partitions = list()
 
     if len(rows) != 1:
@@ -84,35 +106,33 @@ def parse_partition_map(rows):
     options = rows[0]
 
     for l in options["Create Table"].split("\n"):
-        ai_match = auto_increment.match(l)
-        if ai_match:
-            ai_col = ai_match.group(1)
-            logging.debug(f"Auto_Increment column identified as {ai_col}")
-
         range_match = partition_range.match(l)
         if range_match:
-            range_col = range_match.group(1)
-            logging.debug(f"Partition range column identified as {range_col}")
+            range_cols = [x.strip("` ") for x in range_match.group(1).split(",")]
+            logging.debug(f"Partition range columns: {range_cols}")
 
         member_match = partition_member.match(l)
         if member_match:
-            t = member_match.group(1, 2)
-            logging.debug(f"Found partition {t[0]} = {t[1]}")
-            partitions.append(t)
+            part_name, part_vals_str = member_match.group(1, 2)
+            logging.debug(f"Found partition {part_name} = {part_vals_str}")
+
+            part_vals = [int(x.strip("` ")) for x in part_vals_str.split(",")]
+
+            if len(part_vals) != len(range_cols):
+                logging.error(
+                    f"Partition columns {part_vals} don't match the partition range {range_cols}"
+                )
+                raise MismatchedIdException("Partition columns mismatch")
+
+            partitions.append((part_name, part_vals))
 
         member_tail = partition_tail.match(l)
         if member_tail:
-            t = member_tail.group(1)
-            logging.debug(f"Found tail partition named {t}")
-            partitions.append(t)
+            part_name = member_tail.group(1)
+            logging.debug(f"Found tail partition named {part_name}")
+            partitions.append(part_name)
 
-    if ai_col != range_col:
-        logging.error(
-            f"Auto_Increment column {ai_col} doesn't match the partition range {range_col}"
-        )
-        raise MismatchedIdException("Partition ID mismatch")
-
-    return partitions
+    return {"range_cols": range_cols, "partitions": partitions}
 
 
 def parition_name_now():
@@ -122,20 +142,32 @@ def parition_name_now():
     return datetime.now(tz=timezone.utc).strftime("p_%Y%m%d")
 
 
-def reorganize_partition(partition_list, new_partition_name, auto_increment):
+def reorganize_partition(partition_list, new_partition_name, partition_positions):
     """
     From a partial partitions list (ending with a single value that indicates MAX VALUE),
-    add a new partition at the auto_increment number.
+    add a new partition at the partition_positions, which must be a list.
     """
+    if type(partition_positions) is not list:
+        raise ValueError()
+
     last_value = partition_list.pop()
     if type(last_value) is not str:
         raise UnexpectedPartitionException(last_value)
     if last_value == new_partition_name:
         raise DuplicatePartitionException(last_value)
+    if type(partition_list[0][1]) is list:
+        if len(partition_list[0][1]) != len(partition_positions):
+            raise MismatchedIdException("Didn't get the same number of partition IDs")
+    else:
+        if len(partition_positions) != 1:
+            raise MismatchedIdException("Expected only a single partition ID")
+
+    positions_str = ", ".join([str(x) for x in partition_positions])
+    maxvalue_str = ", ".join(["MAXVALUE"] * len(partition_positions))
 
     reorganized_list = list()
-    reorganized_list.append((last_value, f"({auto_increment})"))
-    reorganized_list.append((new_partition_name, "MAXVALUE"))
+    reorganized_list.append((last_value, f"({positions_str})"))
+    reorganized_list.append((new_partition_name, maxvalue_str))
     return last_value, reorganized_list
 
 
