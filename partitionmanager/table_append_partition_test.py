@@ -71,24 +71,10 @@ class TestParsePartitionMap(unittest.TestCase):
     def test_single_partition(self):
         create_stmt = [
             {
-                "Table": "authz2",
-                "Create Table": """CREATE TABLE `authz2` (
+                "Table": "dwarves",
+                "Create Table": """CREATE TABLE `dwarves` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
-  `identifierType` tinyint(4) NOT NULL,
-  `identifierValue` varchar(255) NOT NULL,
-  `registrationID` bigint(20) NOT NULL,
-  `status` tinyint(4) NOT NULL,
-  `expires` datetime NOT NULL,
-  `challenges` tinyint(4) NOT NULL,
-  `attempted` tinyint(4) DEFAULT NULL,
-  `attemptedAt` datetime DEFAULT NULL,
-  `token` binary(32) NOT NULL,
-  `validationError` mediumblob DEFAULT NULL,
-  `validationRecord` mediumblob DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `regID_expires_idx` (`registrationID`,`status`,`expires`),
-  KEY `regID_identifier_status_expires_idx` (`registrationID`,`identifierType`,`identifierValue`,`status`,`expires`),
-  KEY `expires_idx` (`expires`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3101009 DEFAULT CHARSET=utf8
  PARTITION BY RANGE (`id`)
 (PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
@@ -102,24 +88,10 @@ class TestParsePartitionMap(unittest.TestCase):
     def test_two_partitions(self):
         create_stmt = [
             {
-                "Table": "authz2",
-                "Create Table": """CREATE TABLE `authz2` (
+                "Table": "dwarves",
+                "Create Table": """CREATE TABLE `dwarves` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
-  `identifierType` tinyint(4) NOT NULL,
-  `identifierValue` varchar(255) NOT NULL,
-  `registrationID` bigint(20) NOT NULL,
-  `status` tinyint(4) NOT NULL,
-  `expires` datetime NOT NULL,
-  `challenges` tinyint(4) NOT NULL,
-  `attempted` tinyint(4) DEFAULT NULL,
-  `attemptedAt` datetime DEFAULT NULL,
-  `token` binary(32) NOT NULL,
-  `validationError` mediumblob DEFAULT NULL,
-  `validationRecord` mediumblob DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `regID_expires_idx` (`registrationID`,`status`,`expires`),
-  KEY `regID_identifier_status_expires_idx` (`registrationID`,`identifierType`,`identifierValue`,`status`,`expires`),
-  KEY `expires_idx` (`expires`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3101009 DEFAULT CHARSET=utf8
  PARTITION BY RANGE (`id`)
 (PARTITION `before` VALUES LESS THAN (100),
@@ -135,24 +107,10 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
     def test_mismatch_range_and_ai(self):
         create_stmt = [
             {
-                "Table": "authz2",
-                "Create Table": """CREATE TABLE `authz2` (
+                "Table": "dwarves",
+                "Create Table": """CREATE TABLE `dwarves` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
-  `identifierType` tinyint(4) NOT NULL,
-  `identifierValue` varchar(255) NOT NULL,
-  `registrationID` bigint(20) NOT NULL,
-  `status` tinyint(4) NOT NULL,
-  `expires` datetime NOT NULL,
-  `challenges` tinyint(4) NOT NULL,
-  `attempted` tinyint(4) DEFAULT NULL,
-  `attemptedAt` datetime DEFAULT NULL,
-  `token` binary(32) NOT NULL,
-  `validationError` mediumblob DEFAULT NULL,
-  `validationRecord` mediumblob DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `regID_expires_idx` (`registrationID`,`status`,`expires`),
-  KEY `regID_identifier_status_expires_idx` (`registrationID`,`identifierType`,`identifierValue`,`status`,`expires`),
-  KEY `expires_idx` (`expires`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3101009 DEFAULT CHARSET=utf8
  PARTITION BY RANGE (`expires`)
 (PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
