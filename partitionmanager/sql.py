@@ -46,7 +46,6 @@ class XmlResult:
         return self.rows
 
     def start_element(self, name, attrs):
-        print("Start element:", name, attrs)
         self.current_elements.append(name)
         if name == "resultset":
             self.statement = attrs["statement"]
@@ -61,7 +60,6 @@ class XmlResult:
                 self.current_field = attrs["name"]
 
     def end_element(self, name):
-        print("End element:", name)
         assert name == self.current_elements.pop()
 
         if name == "row":
@@ -74,8 +72,6 @@ class XmlResult:
             self.current_field = None
 
     def char_data(self, data):
-        print(f"Character data for {self.current_elements[-1]}:", repr(data))
-
         if self.current_elements[-1] == "field":
             assert self.current_field is not None
             assert self.current_row is not None
