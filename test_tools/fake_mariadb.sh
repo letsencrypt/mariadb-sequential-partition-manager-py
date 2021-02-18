@@ -21,6 +21,19 @@ EOF
 	exit
 fi
 
+if echo $stdin | grep "ORDER BY" >/dev/null; then
+  cat <<EOF
+<?xml version="1.0"?>
+
+<resultset statement="SELECT id FROM burgers ORDER BY id DESC LIMIT 1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <row>
+  <field name="id">3101009</field>
+  </row>
+</resultset>
+EOF
+  exit
+fi
+
 if echo $stdin | grep "SHOW CREATE" >/dev/null; then
 	cat <<EOF
 <?xml version="1.0"?>
