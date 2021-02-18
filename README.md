@@ -1,9 +1,9 @@
-[![Build Status](https://circleci.com/gh/letsencrypt/mariadb-autoincrement-partition-manager-py.svg?style=shield)](https://circleci.com/gh/letsencrypt/mariadb-autoincrement-partition-manager-py)
+[![Build Status](https://circleci.com/gh/letsencrypt/mariadb-sequential-partition-manager-py.svg?style=shield)](https://circleci.com/gh/letsencrypt/mariadb-sequential-partition-manager-py)
 ![Maturity Level: Beta](https://img.shields.io/badge/maturity-beta-blue.svg)
 
-This tool partitions and manages MariaDB tables by autoincrement IDs.
+This tool partitions and manages MariaDB tables by sequential IDs.
 
-Note that partitioning is not a fast operation on ext4 filesystems; it is fast on xfs and zfs.
+Note that reorganizing partitions is not a fast operation on ext4 filesystems; it is fast on xfs and zfs. Adding partitions in the first place with InnoDB requires a full table copy.
 
 Similar tools:
 * https://github.com/davidburger/gomypartition, intended for tables with date-based partitions
@@ -12,9 +12,10 @@ Similar tools:
 # Usage
 
 ```sh
- → autoincrement-partition-manager --db dbname --table tablename \
-    --mariadb test_tools/fake_mariadb.sh --log-level=debug \
-    add_partition --noop
+ → pip install --editable .
+ → partition-manager --log-level=debug  \
+    --mariadb test_tools/fake_mariadb.sh \
+    add_partition --noop --table tablename
 DEBUG:root:Auto_Increment column identified as id
 DEBUG:root:Partition range column identified as id
 DEBUG:root:Found partition before = (100)
