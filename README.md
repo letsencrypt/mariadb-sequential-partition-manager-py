@@ -7,7 +7,7 @@ Note that reorganizing partitions is not a fast operation on ext4 filesystems; i
 
 Similar tools:
 * https://github.com/davidburger/gomypartition, intended for tables with date-based partitions
-* https://github.com/yahoo/mysql_partition_manager, which is arcihved and in pure SQL
+* https://github.com/yahoo/mysql_partition_manager, which is archived and in pure SQL
 
 # Usage
 
