@@ -38,6 +38,94 @@ class DatabaseCommand(abc.ABC):
         """
 
 
+class Partition(abc.ABC):
+    """
+    Represents a single SQL table partition.
+    """
+
+    @abc.abstractmethod
+    def values(self):
+        """
+        Return a SQL partition value string.
+        """
+
+    @property
+    @abc.abstractmethod
+    def name(self):
+        """
+        Return the partition's name.
+        """
+
+    @property
+    @abc.abstractmethod
+    def num_columns(self):
+        """
+        Return the number of columns this partition represents
+        """
+
+    def __repr__(self):
+        return f"{type(self).__name__}<{str(self)}>"
+
+    def __str__(self):
+        return f"{self.name}: {self.values()}"
+
+
+class PositionPartition(Partition):
+    """
+    A partition that may have positions assocated with it.
+    """
+
+    def __init__(self, name):
+        self._name = name
+        self.positions = list()
+
+    @property
+    def name(self):
+        return self._name
+
+    def add_position(self, position):
+        self.positions.append(int(position))
+
+    @property
+    def num_columns(self):
+        return len(self.positions)
+
+    def values(self):
+        return "(" + ", ".join([str(x) for x in self.positions]) + ")"
+
+    def __eq__(self, other):
+        if isinstance(other, PositionPartition):
+            return self._name == other._name and self.positions == other.positions
+        return False
+
+
+class MaxValuePartition(Partition):
+    """
+    A partition that lives at the tail of a partition list, saying
+    all remaining values belong in this partition.
+    """
+
+    def __init__(self, name, count):
+        self._name = name
+        self.count = count
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def num_columns(self):
+        return self.count
+
+    def values(self):
+        return ", ".join(["MAXVALUE"] * self.count)
+
+    def __eq__(self, other):
+        if isinstance(other, MaxValuePartition):
+            return self._name == other._name and self.count == other.count
+        return False
+
+
 class MismatchedIdException(Exception):
     """
     Raised if the partition map doesn't use the primary key as its range id.
