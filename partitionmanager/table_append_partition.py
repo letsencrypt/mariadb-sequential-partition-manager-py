@@ -1,6 +1,9 @@
 from partitionmanager.types import (
     DuplicatePartitionException,
+    MaxValuePartition,
     MismatchedIdException,
+    Partition,
+    PositionPartition,
     SqlInput,
     TableInformationException,
     UnexpectedPartitionException,
@@ -51,8 +54,12 @@ def get_current_positions(database, table_name, columns):
     columns_str = ", ".join([f"`{x}`" for x in columns])
     sql = f"SELECT {columns_str} FROM `{table_name}` ORDER BY {order_col} DESC LIMIT 1;"
     rows = database.run(sql)
-    if len(rows) != 1:
-        raise TableInformationException("Expected one result")
+    if len(rows) > 1:
+        raise TableInformationException(f"Expected one result from {table_name}")
+    if len(rows) == 0:
+        raise TableInformationException(
+            f"Table {table_name} appears to be empty. (No results)"
+        )
     ordered_positions = list()
     for c in columns:
         ordered_positions.append(rows[0][c])
@@ -71,9 +78,8 @@ def get_partition_map(database, table_name):
 
 def parse_partition_map(rows):
     """
-    Read a partition statement from a table creation string and produce tuples
-    for each partition with a max, and a single string for the partition using
-    "maxvalue".
+    Read a partition statement from a table creation string and produce Partition
+    objets for each partition.
     """
     partition_range = re.compile(r"[ ]*PARTITION BY RANGE \(([\w,` ]+)\)")
     partition_member = re.compile(
@@ -110,13 +116,17 @@ def parse_partition_map(rows):
                 )
                 raise MismatchedIdException("Partition columns mismatch")
 
-            partitions.append((part_name, part_vals))
+            pos_part = PositionPartition(part_name)
+            for v in part_vals:
+                pos_part.add_position(v)
+
+            partitions.append(pos_part)
 
         member_tail = partition_tail.match(l)
         if member_tail:
             part_name = member_tail.group(1)
             logging.debug(f"Found tail partition named {part_name}")
-            partitions.append(part_name)
+            partitions.append(MaxValuePartition(part_name, len(range_cols)))
 
     return {"range_cols": range_cols, "partitions": partitions}
 
@@ -130,31 +140,43 @@ def parition_name_now():
 
 def reorganize_partition(partition_list, new_partition_name, partition_positions):
     """
-    From a partial partitions list (ending with a single value that indicates MAX VALUE),
-    add a new partition at the partition_positions, which must be a list.
+    From a partial partitions list of Partition types add a new partition at the
+    partition_positions, which must be a list.
     """
     if type(partition_positions) is not list:
         raise ValueError()
 
-    last_value = partition_list.pop()
-    if type(last_value) is not str:
-        raise UnexpectedPartitionException(last_value)
-    if last_value == new_partition_name:
-        raise DuplicatePartitionException(last_value)
-    if type(partition_list[0][1]) is list:
-        if len(partition_list[0][1]) != len(partition_positions):
-            raise MismatchedIdException("Didn't get the same number of partition IDs")
-    else:
-        if len(partition_positions) != 1:
-            raise MismatchedIdException("Expected only a single partition ID")
+    num_partition_ids = partition_list[0].num_columns
 
-    positions_str = ", ".join([str(x) for x in partition_positions])
-    maxvalue_str = ", ".join(["MAXVALUE"] * len(partition_positions))
+    tail_part = partition_list.pop()
+    if not isinstance(tail_part, MaxValuePartition):
+        raise UnexpectedPartitionException(tail_part)
+    if tail_part.name == new_partition_name:
+        raise DuplicatePartitionException(tail_part)
 
-    reorganized_list = list()
-    reorganized_list.append((last_value, f"({positions_str})"))
-    reorganized_list.append((new_partition_name, maxvalue_str))
-    return last_value, reorganized_list
+    # Check any remaining partitions in the list after popping off the tail
+    # to make sure each entry has the same number of partition IDs as the first
+    # entry.
+    for p in partition_list:
+        if len(p.positions) != num_partition_ids:
+            raise MismatchedIdException(
+                "Didn't get the same number of partition IDs: "
+                + f"{p} has {len(p)} while expected {num_partition_ids}"
+            )
+    if len(partition_positions) != num_partition_ids:
+        raise MismatchedIdException(
+            f"Provided {len(partition_positions)} partition IDs,"
+            + f" but expected {num_partition_ids}"
+        )
+
+    altered_partition = PositionPartition(tail_part.name)
+    for p in partition_positions:
+        altered_partition.add_position(p)
+
+    new_partition = MaxValuePartition(new_partition_name, num_partition_ids)
+
+    reorganized_list = [altered_partition, new_partition]
+    return altered_partition.name, reorganized_list
 
 
 def format_sql_reorganize_partition_command(
@@ -166,9 +188,9 @@ def format_sql_reorganize_partition_command(
     """
     partition_strings = list()
     for p in partition_list:
-        if type(p) is not tuple:
+        if not isinstance(p, Partition):
             raise UnexpectedPartitionException(p)
-        partition_strings.append(f"PARTITION `{p[0]}` VALUES LESS THAN {p[1]}")
+        partition_strings.append(f"PARTITION `{p.name}` VALUES LESS THAN {p.values()}")
     partition_update = ", ".join(partition_strings)
 
     return (

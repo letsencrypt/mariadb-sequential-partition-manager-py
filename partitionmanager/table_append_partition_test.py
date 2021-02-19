@@ -5,9 +5,12 @@ import argparse
 from partitionmanager.types import (
     DatabaseCommand,
     DuplicatePartitionException,
-    TableInformationException,
+    MaxValuePartition,
     MismatchedIdException,
+    Partition,
+    PositionPartition,
     SqlInput,
+    TableInformationException,
     UnexpectedPartitionException,
 )
 from partitionmanager.table_append_partition import (
@@ -77,7 +80,7 @@ class TestParsePartitionMap(unittest.TestCase):
         ]
         results = parse_partition_map(create_stmt)
         self.assertEqual(len(results["partitions"]), 1)
-        self.assertEqual(results["partitions"][0], "p_20201204")
+        self.assertEqual(results["partitions"][0], mkTailPart("p_20201204"))
         self.assertEqual(results["range_cols"], ["id"])
 
     def test_two_partitions(self):
@@ -96,8 +99,8 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
         ]
         results = parse_partition_map(create_stmt)
         self.assertEqual(len(results["partitions"]), 2)
-        self.assertEqual(results["partitions"][0], ("before", [100]))
-        self.assertEqual(results["partitions"][1], "p_20201204")
+        self.assertEqual(results["partitions"][0], mkPPart("before", 100))
+        self.assertEqual(results["partitions"][1], mkTailPart("p_20201204"))
         self.assertEqual(results["range_cols"], ["id"])
 
     def test_dual_keys_single_partition(self):
@@ -115,7 +118,7 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
         ]
         results = parse_partition_map(create_stmt)
         self.assertEqual(len(results["partitions"]), 1)
-        self.assertEqual(results["partitions"][0], "p_start")
+        self.assertEqual(results["partitions"][0], mkTailPart("p_start", count=2))
         self.assertEqual(results["range_cols"], ["firstID", "secondID"])
 
     def test_dual_keys_multiple_partitions(self):
@@ -134,8 +137,8 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
         ]
         results = parse_partition_map(create_stmt)
         self.assertEqual(len(results["partitions"]), 2)
-        self.assertEqual(results["partitions"][0], ("p_start", [255, 1234567890]))
-        self.assertEqual(results["partitions"][1], "p_next")
+        self.assertEqual(results["partitions"][0], mkPPart("p_start", 255, 1234567890))
+        self.assertEqual(results["partitions"][1], mkTailPart("p_next", count=2))
         self.assertEqual(results["range_cols"], ["firstID", "secondID"])
 
 
@@ -153,35 +156,55 @@ class TestSqlInput(unittest.TestCase):
         SqlInput("zz-table")
 
 
+def mkPPart(name, *pos):
+    p = PositionPartition(name)
+    for x in pos:
+        p.add_position(x)
+    return p
+
+
+def mkTailPart(name, count=1):
+    return MaxValuePartition(name, count)
+
+
 class TestReorganizePartitions(unittest.TestCase):
     def test_list_without_final_entry(self):
         with self.assertRaises(UnexpectedPartitionException):
-            reorganize_partition([("a", 1), ("b", 2)], "new", [3])
+            reorganize_partition([mkPPart("a", 1), mkPPart("b", 2)], "new", [3])
 
     def test_reorganize_with_duplicate(self):
         with self.assertRaises(DuplicatePartitionException):
-            reorganize_partition([("a", 1), "b"], "b", [3])
+            reorganize_partition([mkPPart("a", 1), mkTailPart("b")], "b", [3])
+
+    def test_reorganize_single_partition(self):
+        last_value, reorg_list = reorganize_partition([mkTailPart("a")], "b", [1])
+        self.assertEqual(last_value, "a")
+        self.assertEqual(reorg_list, [mkPPart("a", 1), mkTailPart("b")])
 
     def test_reorganize(self):
-        last_value, reorg_list = reorganize_partition([("a", 1), "b"], "c", [2])
+        last_value, reorg_list = reorganize_partition(
+            [mkPPart("a", 1), mkTailPart("b")], "c", [2]
+        )
         self.assertEqual(last_value, "b")
-        self.assertEqual(reorg_list, [("b", "(2)"), ("c", "MAXVALUE")])
+        self.assertEqual(reorg_list, [mkPPart("b", 2), mkTailPart("c")])
 
     def test_reorganize_too_many_partition_ids(self):
         with self.assertRaises(MismatchedIdException):
-            reorganize_partition([("a", 1), "b"], "c", [2, 3, 4])
+            reorganize_partition([mkPPart("a", 1), mkTailPart("b")], "c", [2, 3, 4])
 
     def test_reorganize_too_few_partition_ids(self):
         with self.assertRaises(MismatchedIdException):
-            reorganize_partition([("a", [1, 1, 1]), "b"], "c", [2, 3])
+            reorganize_partition([mkPPart("a", 1, 1, 1), mkTailPart("b")], "c", [2, 3])
 
     def test_reorganize_with_dual_keys(self):
         last_value, reorg_list = reorganize_partition(
-            [("p_start", [255, 1234567890]), "p_next"], "new", [512, 2345678901]
+            [mkPPart("p_start", 255, 1234567890), mkTailPart("p_next", count=2)],
+            "new",
+            [512, 2345678901],
         )
         self.assertEqual(last_value, "p_next")
         self.assertEqual(
-            reorg_list, [("p_next", "(512, 2345678901)"), ("new", "MAXVALUE, MAXVALUE")]
+            reorg_list, [mkPPart("p_next", 512, 2345678901), mkTailPart("new", count=2)]
         )
 
 
