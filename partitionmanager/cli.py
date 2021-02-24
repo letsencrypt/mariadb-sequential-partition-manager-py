@@ -69,6 +69,8 @@ def partition_cmd(args):
         if args.noop:
             logging.info("No-op mode")
             all_results[table] = {"sql": sql_cmd}
+            logging.info("SQL:")
+            logging.info(sql_cmd)
             continue
 
         logging.info("Executing " + sql_cmd)
@@ -104,7 +106,8 @@ def main():
         return
 
     try:
-        args.func(args)
+        output = args.func(args)
+        print(output)
     except Exception:
         logging.warning(f"Couldn't complete command: {args.subparser_name}")
         logging.warning(traceback.format_exc())
