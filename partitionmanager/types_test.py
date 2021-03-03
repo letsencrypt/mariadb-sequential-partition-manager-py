@@ -1,6 +1,7 @@
 import argparse
 import unittest
-from .types import toSqlUrl
+from datetime import timedelta
+from .types import Table, toSqlUrl, SqlInput
 
 
 class TestTypes(unittest.TestCase):
@@ -47,3 +48,27 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(u.username, "username")
         self.assertEqual(u.password, "password")
         self.assertEqual(u.port, 911)
+
+    def test_table(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            Table("invalid'name")
+
+        self.assertEqual(type(Table("name").name), SqlInput)
+
+        t = Table("t")
+        self.assertEqual(None, t.retention)
+
+        with self.assertRaises(argparse.ArgumentTypeError):
+            t.set_retention_from_dict({"something": 1})
+
+        with self.assertRaises(argparse.ArgumentTypeError):
+            t.set_retention_from_dict({"another thing": 1, "days": 30})
+
+        t.set_retention_from_dict(dict())
+        self.assertEqual(None, t.retention)
+
+        with self.assertRaises(TypeError):
+            t.set_retention_from_dict({"days": "thirty"})
+
+        t.set_retention_from_dict({"days": 30})
+        self.assertEqual(timedelta(days=30), t.retention)

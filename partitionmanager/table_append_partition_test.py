@@ -9,6 +9,7 @@ from partitionmanager.types import (
     MismatchedIdException,
     Partition,
     PositionPartition,
+    Table,
     SqlInput,
     TableInformationException,
     UnexpectedPartitionException,
@@ -214,13 +215,13 @@ class TestGetPositions(unittest.TestCase):
         db.response = [{"id": 0}]
 
         with self.assertRaises(ValueError):
-            get_current_positions(db, "table", "id")
+            get_current_positions(db, Table("table"), "id")
 
     def test_get_position_single_column(self):
         db = MockDatabase()
         db.response = [{"id": 1}]
 
-        p = get_current_positions(db, "table", ["id"])
+        p = get_current_positions(db, Table("table"), ["id"])
         self.assertEqual(len(p), 1)
         self.assertEqual(p[0], 1)
 
@@ -228,7 +229,7 @@ class TestGetPositions(unittest.TestCase):
         db = MockDatabase()
         db.response = [{"id": 1, "id2": 2}]
 
-        p = get_current_positions(db, "table", ["id", "id2"])
+        p = get_current_positions(db, Table("table"), ["id", "id2"])
         self.assertEqual(len(p), 2)
         self.assertEqual(p[0], 1)
         self.assertEqual(p[1], 2)

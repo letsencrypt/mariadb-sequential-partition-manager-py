@@ -4,6 +4,7 @@ from partitionmanager.types import (
     MismatchedIdException,
     Partition,
     PositionPartition,
+    Table,
     SqlInput,
     TableInformationException,
     UnexpectedPartitionException,
@@ -13,21 +14,25 @@ import logging
 import re
 
 
-def assert_table_is_compatible(database, table_name):
+def assert_table_is_compatible(database, table):
     """
     Gather the information schema from the database command and parse out the
     autoincrement value.
     """
     db_name = database.db_name()
 
-    if type(db_name) != SqlInput or type(table_name) != SqlInput:
+    if (
+        type(db_name) != SqlInput
+        or type(table) != Table
+        or type(table.name) != SqlInput
+    ):
         raise ValueError("Unexpected type")
     sql_cmd = (
         "SELECT CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES "
-        + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table_name}';"
+        + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
     ).strip()
 
-    assert_table_information_schema_compatible(database.run(sql_cmd), table_name)
+    assert_table_information_schema_compatible(database.run(sql_cmd), table.name)
 
 
 def assert_table_information_schema_compatible(rows, table_name):
@@ -42,23 +47,23 @@ def assert_table_information_schema_compatible(rows, table_name):
         raise TableInformationException(f"Table {table_name} is not partitioned")
 
 
-def get_current_positions(database, table_name, columns):
+def get_current_positions(database, table, columns):
     """
     Get the positions of the columns provided in the given table, return
     as a list in the same order as the provided columns
     """
-    if type(columns) is not list:
-        raise ValueError("columns must be a list")
+    if type(columns) is not list or type(table) is not Table:
+        raise ValueError("columns must be a list and table must be a Table")
 
     order_col = columns[0]
     columns_str = ", ".join([f"`{x}`" for x in columns])
-    sql = f"SELECT {columns_str} FROM `{table_name}` ORDER BY {order_col} DESC LIMIT 1;"
+    sql = f"SELECT {columns_str} FROM `{table.name}` ORDER BY {order_col} DESC LIMIT 1;"
     rows = database.run(sql)
     if len(rows) > 1:
-        raise TableInformationException(f"Expected one result from {table_name}")
+        raise TableInformationException(f"Expected one result from {table.name}")
     if len(rows) == 0:
         raise TableInformationException(
-            f"Table {table_name} appears to be empty. (No results)"
+            f"Table {table.name} appears to be empty. (No results)"
         )
     ordered_positions = list()
     for c in columns:
@@ -66,13 +71,13 @@ def get_current_positions(database, table_name, columns):
     return ordered_positions
 
 
-def get_partition_map(database, table_name):
+def get_partition_map(database, table):
     """
     Gather the partition map via the database command tool.
     """
-    if type(table_name) != SqlInput:
+    if type(table) != Table or type(table.name) != SqlInput:
         raise ValueError("Unexpected type")
-    sql_cmd = f"SHOW CREATE TABLE `{table_name}`;".strip()
+    sql_cmd = f"SHOW CREATE TABLE `{table.name}`;".strip()
     return parse_partition_map(database.run(sql_cmd))
 
 
@@ -180,7 +185,7 @@ def reorganize_partition(partition_list, new_partition_name, partition_positions
 
 
 def format_sql_reorganize_partition_command(
-    table_name, *, partition_to_alter, partition_list
+    table, *, partition_to_alter, partition_list
 ):
     """
     Produce a SQL command to reorganize the partition in table_name to
@@ -194,6 +199,6 @@ def format_sql_reorganize_partition_command(
     partition_update = ", ".join(partition_strings)
 
     return (
-        f"ALTER TABLE `{table_name}` "
+        f"ALTER TABLE `{table.name}` "
         f"REORGANIZE PARTITION `{partition_to_alter}` INTO ({partition_update});"
     )
