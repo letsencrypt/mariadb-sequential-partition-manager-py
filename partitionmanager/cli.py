@@ -123,7 +123,7 @@ def partition_cmd(args):
 
 
 subparsers = parser.add_subparsers(dest="subparser_name")
-partition_parser = subparsers.add_parser("add_partition", help="add a partition")
+partition_parser = subparsers.add_parser("add", help="add partitions")
 partition_parser.add_argument(
     "--noop",
     "-n",
