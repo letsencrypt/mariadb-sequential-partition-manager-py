@@ -16,7 +16,7 @@ def insert_into_file(fp, data):
 def run_partition_cmd_yaml(yaml):
     with tempfile.NamedTemporaryFile() as tmpfile:
         insert_into_file(tmpfile, yaml)
-        args = parser.parse_args(["add_partition", "--config", tmpfile.name])
+        args = parser.parse_args(["add", "--config", tmpfile.name])
         return partition_cmd(args)
 
 
@@ -26,7 +26,7 @@ class TestPartitionCmd(unittest.TestCase):
             [
                 "--mariadb",
                 str(nonexistant_exec),
-                "add_partition",
+                "add",
                 "--noop",
                 "--table",
                 "testtable",
@@ -37,14 +37,7 @@ class TestPartitionCmd(unittest.TestCase):
 
     def test_partition_cmd_noop(self):
         args = parser.parse_args(
-            [
-                "--mariadb",
-                str(fake_exec),
-                "add_partition",
-                "--noop",
-                "--table",
-                "testtable",
-            ]
+            ["--mariadb", str(fake_exec), "add", "--noop", "--table", "testtable"]
         )
         output = partition_cmd(args)
 
@@ -59,7 +52,7 @@ class TestPartitionCmd(unittest.TestCase):
 
     def test_partition_cmd_final(self):
         args = parser.parse_args(
-            ["--mariadb", str(fake_exec), "add_partition", "--table", "testtable"]
+            ["--mariadb", str(fake_exec), "add", "--table", "testtable"]
         )
         output = partition_cmd(args)
 
@@ -82,7 +75,7 @@ class TestPartitionCmd(unittest.TestCase):
             [
                 "--mariadb",
                 str(fake_exec),
-                "add_partition",
+                "add",
                 "--table",
                 "testtable",
                 "another_table",
