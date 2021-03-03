@@ -3,6 +3,7 @@
 import argparse
 import logging
 import traceback
+import yaml
 
 from partitionmanager.table_append_partition import (
     assert_table_is_compatible,
@@ -12,7 +13,7 @@ from partitionmanager.table_append_partition import (
     parition_name_now,
     reorganize_partition,
 )
-from partitionmanager.types import SqlInput, toSqlUrl, TableInformationException
+from partitionmanager.types import SqlInput, Table, toSqlUrl, TableInformationException
 from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
 
 parser = argparse.ArgumentParser(
@@ -38,25 +39,65 @@ group.add_argument(
 )
 
 
+class Config:
+    def __init__(self):
+        self.tables = list()
+        self.dbcmd = SubprocessDatabaseCommand("mariadb")
+        self.noop = False
+
+    def from_argparse(self, args):
+        if args.table:
+            for n in args.table:
+                self.tables.append(Table(n))
+        if args.dburl:
+            self.dbcmd = IntegratedDatabaseCommand(args.dburl)
+        else:
+            self.dbcmd = SubprocessDatabaseCommand(args.mariadb)
+        self.noop = args.noop
+
+    def from_yaml_file(self, file):
+        data = yaml.safe_load(file)
+        if "partitionmanager" not in data:
+            raise TypeError(
+                "Unexpected YAML format: missing top-level partitionmanager"
+            )
+        data = data["partitionmanager"]
+        if "tables" not in data or not isinstance(data["tables"], dict):
+            raise TypeError("Unexpected YAML format: no tables defined")
+        if "noop" in data:
+            self.noop = data["noop"]
+        if "dburl" in data:
+            self.dbcmd = IntegratedDatabaseCommand(data["dburl"])
+        elif "mariadb" in data:
+            self.dbcmd = SubprocessDatabaseCommand(data["mariadb"])
+        for key in data["tables"]:
+            t = Table(key)
+            tabledata = data["tables"][key]
+            if isinstance(tabledata, dict) and "retention" in tabledata:
+                t.set_retention_from_dict(tabledata["retention"])
+
+            self.tables.append(t)
+
+
 def partition_cmd(args):
-    if args.dburl:
-        dbcmd = IntegratedDatabaseCommand(args.dburl)
-    else:
-        dbcmd = SubprocessDatabaseCommand(args.mariadb)
+    conf = Config()
+    conf.from_argparse(args)
+    if args.config:
+        conf.from_yaml_file(args.config)
 
     # Preflight
     try:
-        for table in args.table:
-            assert_table_is_compatible(dbcmd, table)
+        for table in conf.tables:
+            assert_table_is_compatible(conf.dbcmd, table)
     except TableInformationException as tie:
         logging.error(f"Cannot proceed: {tie}")
         return {}
 
     all_results = dict()
-    for table in args.table:
-        map_data = get_partition_map(dbcmd, table)
+    for table in conf.tables:
+        map_data = get_partition_map(conf.dbcmd, table)
 
-        positions = get_current_positions(dbcmd, table, map_data["range_cols"])
+        positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
 
         filled_partition_id, partitions = reorganize_partition(
             map_data["partitions"], parition_name_now(), positions
@@ -66,16 +107,16 @@ def partition_cmd(args):
             table, partition_to_alter=filled_partition_id, partition_list=partitions
         )
 
-        if args.noop:
+        if conf.noop:
             logging.info("No-op mode")
-            all_results[table] = {"sql": sql_cmd}
+            all_results[table.name] = {"sql": sql_cmd}
             logging.info("SQL:")
             logging.info(sql_cmd)
             continue
 
         logging.info("Executing " + sql_cmd)
-        output = dbcmd.run(sql_cmd)
-        all_results[table] = {"sql": sql_cmd, "output": output}
+        output = conf.dbcmd.run(sql_cmd)
+        all_results[table.name] = {"sql": sql_cmd, "output": output}
         logging.info("Results:")
         logging.info(output)
     return all_results
@@ -89,8 +130,12 @@ partition_parser.add_argument(
     action="store_true",
     help="Don't attempt to commit changes, just print",
 )
-partition_parser.add_argument(
-    "--table", "-t", type=SqlInput, nargs="+", help="table names", required=True
+partition_group = partition_parser.add_mutually_exclusive_group()
+partition_group.add_argument(
+    "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
+)
+partition_group.add_argument(
+    "--table", "-t", type=SqlInput, nargs="+", help="table names"
 )
 partition_parser.set_defaults(func=partition_cmd)
 

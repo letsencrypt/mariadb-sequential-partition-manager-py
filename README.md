@@ -15,7 +15,7 @@ Similar tools:
  → pip install --editable .
  → partition-manager --log-level=debug  \
     --mariadb test_tools/fake_mariadb.sh \
-    add_partition --noop --table tablename
+    add --noop --table tablename
 DEBUG:root:Auto_Increment column identified as id
 DEBUG:root:Partition range column identified as id
 DEBUG:root:Found partition before = (100)
@@ -25,6 +25,23 @@ INFO:root:No-op mode
 ALTER TABLE `dbname`.`tablename` REORGANIZE PARTITION `p_20201204` INTO (PARTITION `p_20201204` VALUES LESS THAN (3101009), PARTITION `p_20210122` VALUES LESS THAN MAXVALUE);
 
 ```
+
+You can also use a yaml configuration file with the `--config` parameter of the form:
+```yaml
+partitionmanager:
+  dburl: sql://user:password@localhost/db-name
+  # or
+  # mariadb: /usr/local/bin/mariadb
+  tables:
+    table1:
+      retention:
+        days: 60
+    table2:
+    table3
+      retention:
+        days: 14
+```
+
 
 # TODOs
 

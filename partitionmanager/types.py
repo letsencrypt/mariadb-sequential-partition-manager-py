@@ -1,7 +1,26 @@
 import abc
 import argparse
 import re
+from datetime import timedelta
 from urllib.parse import urlparse
+
+
+class Table:
+    def __init__(self, name):
+        self.name = SqlInput(name)
+        self.retention = None
+
+    def set_retention_days(self, days):
+        self.retention = timedelta(days=days)
+
+    def set_retention_from_dict(self, r):
+        for k, v in r.items():
+            if k == "days":
+                self.set_retention_days(v)
+            else:
+                raise argparse.ArgumentTypeError(
+                    f"Unknown retention period definition: {k}={v}"
+                )
 
 
 class SqlInput(str):

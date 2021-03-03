@@ -19,7 +19,7 @@ setup(
     zip_safe=False,
     include_package_data=True,
     python_requires=">=3.6",
-    install_requires=["PyMySQL >= 1.0.2"],
+    install_requires=["PyMySQL >= 1.0.2", "pyyaml"],
     packages=["partitionmanager"],
     entry_points={"console_scripts": ["partition-manager=partitionmanager.cli:main"]},
 )
