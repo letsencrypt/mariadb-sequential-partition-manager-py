@@ -136,17 +136,15 @@ def parse_partition_map(rows):
     return {"range_cols": range_cols, "partitions": partitions}
 
 
-def evaluate_partition_actions(partitions, date, allowed_lifespan):
+def evaluate_partition_actions(partitions, timestamp, allowed_lifespan):
     tail_part = partitions[-1]
     if not isinstance(tail_part, MaxValuePartition):
         raise UnexpectedPartitionException(tail_part)
     try:
-        tail_part_date = (
-            datetime.strptime(tail_part.name, "p_%Y%m%d")
-            .replace(tzinfo=timezone.utc)
-            .date()
+        tail_part_timestamp = datetime.strptime(tail_part.name, "p_%Y%m%d").replace(
+            tzinfo=timezone.utc
         )
-        lifespan = date - tail_part_date
+        lifespan = timestamp - tail_part_timestamp
         return {
             "do_partition": lifespan >= allowed_lifespan,
             "remaining_lifespan": allowed_lifespan - lifespan,

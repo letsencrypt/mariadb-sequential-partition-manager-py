@@ -52,7 +52,7 @@ class Config:
         self.tables = list()
         self.dbcmd = SubprocessDatabaseCommand("mariadb")
         self.noop = False
-        self.curdate = datetime.now(tz=timezone.utc).date()
+        self.curtime = datetime.now(tz=timezone.utc)
         self.partition_duration = timedelta(days=30)
 
     def from_argparse(self, args):
@@ -63,6 +63,10 @@ class Config:
             self.dbcmd = IntegratedDatabaseCommand(args.dburl)
         else:
             self.dbcmd = SubprocessDatabaseCommand(args.mariadb)
+        if args.days:
+            self.partition_duration = timedelta(days=args.days)
+            if self.partition_duration <= timedelta():
+                raise ValueError("Negative lifespan is not allowed")
         self.noop = args.noop
 
     def from_yaml_file(self, file):
@@ -78,6 +82,8 @@ class Config:
             self.noop = data["noop"]
         if "partition_duration" in data:
             self.partition_duration = retention_from_dict(data["partition_duration"])
+            if self.partition_duration <= timedelta():
+                raise ValueError("Negative lifespan is not allowed")
         if "dburl" in data:
             self.dbcmd = IntegratedDatabaseCommand(data["dburl"])
         elif "mariadb" in data:
@@ -96,6 +102,8 @@ def partition_cmd(args):
     conf.from_argparse(args)
     if args.config:
         conf.from_yaml_file(args.config)
+    if conf.noop:
+        logging.info("No-op mode")
 
     # Preflight
     try:
@@ -110,7 +118,7 @@ def partition_cmd(args):
         map_data = get_partition_map(conf.dbcmd, table)
 
         decision = evaluate_partition_actions(
-            map_data["partitions"], conf.curdate, conf.partition_duration
+            map_data["partitions"], conf.curtime, conf.partition_duration
         )
 
         if not decision["do_partition"]:
@@ -134,17 +142,14 @@ def partition_cmd(args):
         )
 
         if conf.noop:
-            logging.info("No-op mode")
             all_results[table.name] = {"sql": sql_cmd}
-            logging.info("SQL:")
-            logging.info(sql_cmd)
+            logging.info(f"{table} planned SQL: {sql_cmd}")
             continue
 
-        logging.info("Executing " + sql_cmd)
+        logging.info(f"{table} running SQL: {sql_cmd}")
         output = conf.dbcmd.run(sql_cmd)
         all_results[table.name] = {"sql": sql_cmd, "output": output}
-        logging.info("Results:")
-        logging.info(output)
+        logging.info(f"{table} results: {output}")
     return all_results
 
 
@@ -155,6 +160,9 @@ partition_parser.add_argument(
     "-n",
     action="store_true",
     help="Don't attempt to commit changes, just print",
+)
+partition_parser.add_argument(
+    "--days", "-d", type=int, help="Lifetime of each partition in days"
 )
 partition_group = partition_parser.add_mutually_exclusive_group()
 partition_group.add_argument(
@@ -178,7 +186,8 @@ def main():
 
     try:
         output = args.func(args)
-        print(output)
+        for k, v in output.items():
+            print(f"{k}: {v}")
     except Exception:
         logging.warning(f"Couldn't complete command: {args.subparser_name}")
         logging.warning(traceback.format_exc())
