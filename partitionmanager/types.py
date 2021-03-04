@@ -5,22 +5,26 @@ from datetime import timedelta
 from urllib.parse import urlparse
 
 
+def retention_from_dict(r):
+    for k, v in r.items():
+        if k == "days":
+            return timedelta(days=v)
+        else:
+            raise argparse.ArgumentTypeError(
+                f"Unknown retention period definition: {k}={v}"
+            )
+
+
 class Table:
     def __init__(self, name):
         self.name = SqlInput(name)
         self.retention = None
 
-    def set_retention_days(self, days):
-        self.retention = timedelta(days=days)
+    def set_retention(self, ret):
+        self.retention = ret
 
-    def set_retention_from_dict(self, r):
-        for k, v in r.items():
-            if k == "days":
-                self.set_retention_days(v)
-            else:
-                raise argparse.ArgumentTypeError(
-                    f"Unknown retention period definition: {k}={v}"
-                )
+    def __str__(self):
+        return f"Table {self.name}"
 
 
 class SqlInput(str):
