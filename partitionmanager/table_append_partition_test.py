@@ -2,7 +2,7 @@
 
 import unittest
 import argparse
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 from partitionmanager.types import (
     DatabaseCommand,
     DuplicatePartitionException,
@@ -162,7 +162,7 @@ class TestEvaluateShouldPartition(unittest.TestCase):
         ]
         results = parse_partition_map(create_stmt)
         decision = evaluate_partition_actions(
-            results["partitions"], date.today(), timedelta(days=1)
+            results["partitions"], datetime.utcnow(), timedelta(days=1)
         )
         self.assertTrue(decision["do_partition"])
         self.assertEqual(decision["remaining_lifespan"], timedelta())
@@ -182,29 +182,39 @@ class TestEvaluateShouldPartition(unittest.TestCase):
         results = parse_partition_map(create_stmt)
 
         decision = evaluate_partition_actions(
-            results["partitions"], date(2020, 12, 10), timedelta(days=7)
+            results["partitions"],
+            datetime(2020, 12, 10, tzinfo=timezone.utc),
+            timedelta(days=7),
         )
         self.assertFalse(decision["do_partition"])
 
         decision = evaluate_partition_actions(
-            results["partitions"], date(2020, 12, 11), timedelta(days=7)
+            results["partitions"],
+            datetime(2020, 12, 11, tzinfo=timezone.utc),
+            timedelta(days=7),
         )
         self.assertTrue(decision["do_partition"])
 
         decision = evaluate_partition_actions(
-            results["partitions"], date(2020, 12, 12), timedelta(days=7)
+            results["partitions"],
+            datetime(2020, 12, 12, tzinfo=timezone.utc),
+            timedelta(days=7),
         )
         self.assertTrue(decision["do_partition"])
 
         for i in range(6, 1):
             decision = evaluate_partition_actions(
-                results["partitions"], date(2020, 12, 10), timedelta(days=i)
+                results["partitions"],
+                datetime(2020, 12, 10, tzinfo=timezone.utc),
+                timedelta(days=i),
             )
             self.assertFalse(decision["do_partition"])
             self.assertGreater(decision["remaining_lifespan"], timedelta())
 
         decision = evaluate_partition_actions(
-            results["partitions"], date(2020, 12, 10), timedelta(days=1)
+            results["partitions"],
+            datetime(2020, 12, 10, tzinfo=timezone.utc),
+            timedelta(days=1),
         )
         self.assertTrue(decision["do_partition"])
         self.assertLess(decision["remaining_lifespan"], timedelta())
