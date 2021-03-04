@@ -5,15 +5,23 @@ import logging
 import traceback
 import yaml
 
+from datetime import datetime, timedelta, timezone
 from partitionmanager.table_append_partition import (
     assert_table_is_compatible,
+    evaluate_partition_actions,
     format_sql_reorganize_partition_command,
     get_current_positions,
     get_partition_map,
     parition_name_now,
     reorganize_partition,
 )
-from partitionmanager.types import SqlInput, Table, toSqlUrl, TableInformationException
+from partitionmanager.types import (
+    SqlInput,
+    Table,
+    retention_from_dict,
+    toSqlUrl,
+    TableInformationException,
+)
 from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
 
 parser = argparse.ArgumentParser(
@@ -44,6 +52,8 @@ class Config:
         self.tables = list()
         self.dbcmd = SubprocessDatabaseCommand("mariadb")
         self.noop = False
+        self.curdate = datetime.now(tz=timezone.utc).date()
+        self.partition_duration = timedelta(days=30)
 
     def from_argparse(self, args):
         if args.table:
@@ -66,6 +76,8 @@ class Config:
             raise TypeError("Unexpected YAML format: no tables defined")
         if "noop" in data:
             self.noop = data["noop"]
+        if "partition_duration" in data:
+            self.partition_duration = retention_from_dict(data["partition_duration"])
         if "dburl" in data:
             self.dbcmd = IntegratedDatabaseCommand(data["dburl"])
         elif "mariadb" in data:
@@ -74,7 +86,7 @@ class Config:
             t = Table(key)
             tabledata = data["tables"][key]
             if isinstance(tabledata, dict) and "retention" in tabledata:
-                t.set_retention_from_dict(tabledata["retention"])
+                t.set_retention(retention_from_dict(tabledata["retention"]))
 
             self.tables.append(t)
 
@@ -96,6 +108,20 @@ def partition_cmd(args):
     all_results = dict()
     for table in conf.tables:
         map_data = get_partition_map(conf.dbcmd, table)
+
+        decision = evaluate_partition_actions(
+            map_data["partitions"], conf.curdate, conf.partition_duration
+        )
+
+        if not decision["do_partition"]:
+            logging.info(
+                f"{table} does not need to be partitioned. "
+                f"(Next partition: {decision['remaining_lifespan']})"
+            )
+            continue
+        logging.debug(
+            f"{table} is ready to partition (Lifespan: {decision['remaining_lifespan']})"
+        )
 
         positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
 

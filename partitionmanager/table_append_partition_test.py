@@ -2,6 +2,7 @@
 
 import unittest
 import argparse
+from datetime import date, timedelta
 from partitionmanager.types import (
     DatabaseCommand,
     DuplicatePartitionException,
@@ -19,6 +20,7 @@ from partitionmanager.table_append_partition import (
     get_partition_map,
     assert_table_is_compatible,
     assert_table_information_schema_compatible,
+    evaluate_partition_actions,
     parse_partition_map,
     reorganize_partition,
 )
@@ -141,6 +143,71 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
         self.assertEqual(results["partitions"][0], mkPPart("p_start", 255, 1234567890))
         self.assertEqual(results["partitions"][1], mkTailPart("p_next", count=2))
         self.assertEqual(results["range_cols"], ["firstID", "secondID"])
+
+
+class TestEvaluateShouldPartition(unittest.TestCase):
+    def test_partition_without_datestamp(self):
+        create_stmt = [
+            {
+                "Table": "doubleKey",
+                "Create Table": """CREATE TABLE `doubleKey` (
+                `firstID` bigint(20) NOT NULL,
+                `secondID` bigint(20) NOT NULL,
+                PRIMARY KEY (`firstID`,`secondID`),
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8
+              PARTITION BY RANGE (`firstID`, `secondID`)
+              (PARTITION `p_start` VALUES LESS THAN (255, 1234567890),
+               PARTITION `p_next` VALUES LESS THAN (MAXVALUE, MAXVALUE) ENGINE = InnoDB)""",
+            }
+        ]
+        results = parse_partition_map(create_stmt)
+        decision = evaluate_partition_actions(
+            results["partitions"], date.today(), timedelta(days=1)
+        )
+        self.assertTrue(decision["do_partition"])
+        self.assertEqual(decision["remaining_lifespan"], timedelta())
+
+    def test_partition_with_datestamp(self):
+        create_stmt = [
+            {
+                "Table": "apples",
+                "Create Table": """CREATE TABLE `apples` (
+                `id` bigint(20) NOT NULL,
+                PRIMARY KEY (`id`),
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8
+              PARTITION BY RANGE (`id`)
+              (PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)""",
+            }
+        ]
+        results = parse_partition_map(create_stmt)
+
+        decision = evaluate_partition_actions(
+            results["partitions"], date(2020, 12, 10), timedelta(days=7)
+        )
+        self.assertFalse(decision["do_partition"])
+
+        decision = evaluate_partition_actions(
+            results["partitions"], date(2020, 12, 11), timedelta(days=7)
+        )
+        self.assertTrue(decision["do_partition"])
+
+        decision = evaluate_partition_actions(
+            results["partitions"], date(2020, 12, 12), timedelta(days=7)
+        )
+        self.assertTrue(decision["do_partition"])
+
+        for i in range(6, 1):
+            decision = evaluate_partition_actions(
+                results["partitions"], date(2020, 12, 10), timedelta(days=i)
+            )
+            self.assertFalse(decision["do_partition"])
+            self.assertGreater(decision["remaining_lifespan"], timedelta())
+
+        decision = evaluate_partition_actions(
+            results["partitions"], date(2020, 12, 10), timedelta(days=1)
+        )
+        self.assertTrue(decision["do_partition"])
+        self.assertLess(decision["remaining_lifespan"], timedelta())
 
 
 class TestSqlInput(unittest.TestCase):

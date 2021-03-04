@@ -84,8 +84,19 @@ class TestPartitionCmd(unittest.TestCase):
         output = partition_cmd(args)
 
         self.assertEqual(len(output), 2)
-        for k in output.keys():
-            self.assertTrue(k in ["testtable", "another_table"])
+        self.assertSequenceEqual(list(output), ["testtable", "another_table"])
+
+    def test_partition_unpartitioned_table(self):
+        o = run_partition_cmd_yaml(
+            f"""
+partitionmanager:
+    tables:
+        test:
+        unpartitioned:
+    mariadb: {str(fake_exec)}
+"""
+        )
+        self.assertSequenceEqual(list(o), [])
 
     def test_partition_cmd_invalid_yaml(self):
         with self.assertRaises(TypeError):
@@ -133,3 +144,33 @@ partitionmanager:
 """
         )
         self.assertSequenceEqual(list(o), ["test", "test_with_retention"])
+
+    def test_partition_duration_daily(self):
+        o = run_partition_cmd_yaml(
+            f"""
+partitionmanager:
+    partition_duration:
+        days: 1
+    tables:
+        partitioned_last_week:
+        partitioned_yesterday:
+    mariadb: {str(fake_exec)}
+"""
+        )
+        self.assertSequenceEqual(
+            list(o), ["partitioned_last_week", "partitioned_yesterday"]
+        )
+
+    def test_partition_duration_seven_days(self):
+        o = run_partition_cmd_yaml(
+            f"""
+partitionmanager:
+    partition_duration:
+        days: 7
+    tables:
+        partitioned_yesterday:
+        partitioned_last_week:
+    mariadb: {str(fake_exec)}
+"""
+        )
+        self.assertSequenceEqual(list(o), ["partitioned_last_week"])

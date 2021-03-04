@@ -1,7 +1,7 @@
 import argparse
 import unittest
 from datetime import timedelta
-from .types import Table, toSqlUrl, SqlInput
+from .types import Table, toSqlUrl, SqlInput, retention_from_dict
 
 
 class TestTypes(unittest.TestCase):
@@ -59,16 +59,16 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(None, t.retention)
 
         with self.assertRaises(argparse.ArgumentTypeError):
-            t.set_retention_from_dict({"something": 1})
+            retention_from_dict({"something": 1})
 
         with self.assertRaises(argparse.ArgumentTypeError):
-            t.set_retention_from_dict({"another thing": 1, "days": 30})
+            retention_from_dict({"another thing": 1, "days": 30})
 
-        t.set_retention_from_dict(dict())
-        self.assertEqual(None, t.retention)
+        r = retention_from_dict(dict())
+        self.assertEqual(None, r)
 
         with self.assertRaises(TypeError):
-            t.set_retention_from_dict({"days": "thirty"})
+            retention_from_dict({"days": "thirty"})
 
-        t.set_retention_from_dict({"days": 30})
-        self.assertEqual(timedelta(days=30), t.retention)
+        r = retention_from_dict({"days": 30})
+        self.assertEqual(timedelta(days=30), r)

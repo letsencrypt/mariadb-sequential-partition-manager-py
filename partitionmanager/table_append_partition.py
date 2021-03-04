@@ -9,7 +9,7 @@ from partitionmanager.types import (
     TableInformationException,
     UnexpectedPartitionException,
 )
-from datetime import timezone, datetime
+from datetime import datetime, timedelta, timezone
 import logging
 import re
 
@@ -134,6 +134,26 @@ def parse_partition_map(rows):
             partitions.append(MaxValuePartition(part_name, len(range_cols)))
 
     return {"range_cols": range_cols, "partitions": partitions}
+
+
+def evaluate_partition_actions(partitions, date, allowed_lifespan):
+    tail_part = partitions[-1]
+    if not isinstance(tail_part, MaxValuePartition):
+        raise UnexpectedPartitionException(tail_part)
+    try:
+        tail_part_date = (
+            datetime.strptime(tail_part.name, "p_%Y%m%d")
+            .replace(tzinfo=timezone.utc)
+            .date()
+        )
+        lifespan = date - tail_part_date
+        return {
+            "do_partition": lifespan >= allowed_lifespan,
+            "remaining_lifespan": allowed_lifespan - lifespan,
+        }
+    except ValueError as ve:
+        logging.warning(f"Partition {tail_part} is assumed to need partitioning: {ve}")
+        return {"do_partition": True, "remaining_lifespan": timedelta()}
 
 
 def parition_name_now():
