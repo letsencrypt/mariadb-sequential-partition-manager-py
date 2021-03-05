@@ -1,7 +1,7 @@
 import argparse
 import unittest
-from datetime import timedelta
-from .types import Table, toSqlUrl, SqlInput, retention_from_dict
+from datetime import datetime, timedelta, timezone
+from .types import PositionPartition, retention_from_dict, SqlInput, Table, toSqlUrl
 
 
 class TestTypes(unittest.TestCase):
@@ -72,3 +72,14 @@ class TestTypes(unittest.TestCase):
 
         r = retention_from_dict({"days": 30})
         self.assertEqual(timedelta(days=30), r)
+
+
+class TestPartition(unittest.TestCase):
+    def test_partition_timestamps(self):
+        self.assertIsNone(PositionPartition("").timestamp())
+        self.assertIsNone(PositionPartition("not_a_date").timestamp())
+        self.assertIsNone(PositionPartition("p_202012310130").timestamp())
+        self.assertEqual(
+            PositionPartition("p_20201231").timestamp(),
+            datetime(2020, 12, 31, tzinfo=timezone.utc),
+        )
