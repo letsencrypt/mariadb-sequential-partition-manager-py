@@ -1,7 +1,7 @@
 import abc
 import argparse
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 
@@ -85,6 +85,17 @@ class Partition(abc.ABC):
         """
         Return the number of columns this partition represents
         """
+
+    def timestamp(self):
+        """
+        Returns a datetime object representing this partition's
+        date, if the partition is of the form "p_YYYYMMDD", otherwise
+        returns None
+        """
+        try:
+            return datetime.strptime(self.name, "p_%Y%m%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"

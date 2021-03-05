@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from .cli import parser, partition_cmd
+from .cli import parser, partition_cmd, stats_cmd
 
 fake_exec = Path(__file__).absolute().parent.parent / "test_tools/fake_mariadb.sh"
 nonexistant_exec = fake_exec.parent / "not_real"
@@ -174,3 +174,15 @@ partitionmanager:
 """
         )
         self.assertSequenceEqual(list(o), ["partitioned_last_week"])
+
+
+class TestStatsCmd(unittest.TestCase):
+    def test_stats(self):
+        args = parser.parse_args(
+            ["--mariadb", str(fake_exec), "stats", "--table", "partitioned_yesterday"]
+        )
+        r = stats_cmd(args)
+        self.assertEqual(r["partitioned_yesterday"]["partitions"], 2)
+        self.assertLess(r["partitioned_yesterday"]["time_since_last_partition"].days, 2)
+        self.assertNotIn("mean_partition_delta", r["partitioned_yesterday"])
+        self.assertNotIn("max_partition_delta", r["partitioned_yesterday"])

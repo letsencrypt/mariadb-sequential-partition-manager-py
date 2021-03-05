@@ -22,6 +22,7 @@ from partitionmanager.types import (
     toSqlUrl,
     TableInformationException,
 )
+from partitionmanager.stats import get_statistics
 from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
 
 parser = argparse.ArgumentParser(
@@ -63,11 +64,12 @@ class Config:
             self.dbcmd = IntegratedDatabaseCommand(args.dburl)
         else:
             self.dbcmd = SubprocessDatabaseCommand(args.mariadb)
-        if args.days:
+        if "days" in args and args.days:
             self.partition_duration = timedelta(days=args.days)
             if self.partition_duration <= timedelta():
                 raise ValueError("Negative lifespan is not allowed")
-        self.noop = args.noop
+        if "noop" in args:
+            self.noop = args.noop
 
     def from_yaml_file(self, file):
         data = yaml.safe_load(file)
@@ -111,7 +113,7 @@ def partition_cmd(args):
             assert_table_is_compatible(conf.dbcmd, table)
     except TableInformationException as tie:
         logging.error(f"Cannot proceed: {tie}")
-        return {}
+        return dict()
 
     all_results = dict()
     for table in conf.tables:
@@ -172,6 +174,38 @@ partition_group.add_argument(
     "--table", "-t", type=SqlInput, nargs="+", help="table names"
 )
 partition_parser.set_defaults(func=partition_cmd)
+
+
+def stats_cmd(args):
+    conf = Config()
+    conf.from_argparse(args)
+    if args.config:
+        conf.from_yaml_file(args.config)
+
+    # Preflight
+    try:
+        for table in conf.tables:
+            assert_table_is_compatible(conf.dbcmd, table)
+    except TableInformationException as tie:
+        logging.error(f"Cannot proceed: {tie}")
+        return dict()
+
+    all_results = dict()
+    for table in conf.tables:
+        map_data = get_partition_map(conf.dbcmd, table)
+        statistics = get_statistics(map_data["partitions"], conf.curtime, table)
+        all_results[table.name] = statistics
+
+    return all_results
+
+
+stats_parser = subparsers.add_parser("stats", help="get stats for partitions")
+stats_group = stats_parser.add_mutually_exclusive_group()
+stats_group.add_argument(
+    "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
+)
+stats_group.add_argument("--table", "-t", type=SqlInput, nargs="+", help="table names")
+stats_parser.set_defaults(func=stats_cmd)
 
 
 def main():
