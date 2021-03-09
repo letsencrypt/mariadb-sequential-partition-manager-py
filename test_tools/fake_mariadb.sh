@@ -51,11 +51,14 @@ fi
 
 if echo $stdin | grep "SHOW CREATE" >/dev/null; then
   if echo $stdin | grep "partitioned_last_week" >/dev/null; then
-    partName=$(date --utc --date='7 days ago' +p_%Y%m%d)
+    midPartName=$(date --utc --date='37 days ago' +p_%Y%m%d)
+    tailPartName=$(date --utc --date='7 days ago' +p_%Y%m%d)
   elif echo $stdin | grep "partitioned_yesterday" >/dev/null; then
-    partName=$(date --utc --date='yesterday' +p_%Y%m%d)
+    midPartName=$(date --utc --date='31 days ago' +p_%Y%m%d)
+    tailPartName=$(date --utc --date='yesterday' +p_%Y%m%d)
   else
-    partName="p_20201204"
+    midPartName="p_20201105"
+    tailPartName="p_20201204"
   fi
 
 	cat <<EOF
@@ -70,7 +73,8 @@ if echo $stdin | grep "SHOW CREATE" >/dev/null; then
 ) ENGINE=InnoDB AUTO_INCREMENT=3101009 DEFAULT CHARSET=utf8
  PARTITION BY RANGE (\`id\`)
 (PARTITION \`p_start\` VALUES LESS THAN (10) ENGINE = InnoDB,
- PARTITION \`${partName}\` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)</field>
+ PARTITION \`${midPartName}\` VALUES LESS THAN (1000) ENGINE = InnoDB,
+ PARTITION \`${tailPartName}\` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)</field>
   </row>
 </resultset>
 EOF
