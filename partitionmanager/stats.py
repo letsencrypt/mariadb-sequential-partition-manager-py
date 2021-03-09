@@ -1,6 +1,6 @@
 import logging
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from itertools import tee
 from .types import MaxValuePartition, Partition, UnexpectedPartitionException
 
@@ -14,7 +14,6 @@ class PrometheusMetric:
 
 class PrometheusMetrics:
     def __init__(self):
-        self.ts = datetime.utcnow().timestamp() * 1000
         self.metrics = dict()
         self.help = dict()
         self.types = dict()
@@ -39,7 +38,7 @@ class PrometheusMetrics:
                 print(f"# TYPE {name} {self.types[n]}", file=fp)
             for m in metrics:
                 labels = [f'table="{m.table}"']
-                print(f"{name}{{{','.join(labels)}}} {m.data} {int(self.ts)}", file=fp)
+                print(f"{name}{{{','.join(labels)}}} {m.data}", file=fp)
 
 
 def pairwise(iterable):
