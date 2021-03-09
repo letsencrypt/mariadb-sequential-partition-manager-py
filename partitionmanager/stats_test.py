@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime, timedelta, timezone
-from .stats import get_statistics
+from io import StringIO
+from .stats import get_statistics, PrometheusMetrics
 from .types import Table, MaxValuePartition, PositionPartition
 
 
@@ -66,4 +67,56 @@ class TestStatistics(unittest.TestCase):
                 "mean_partition_delta": timedelta(days=7),
                 "max_partition_delta": timedelta(days=7),
             },
+        )
+
+
+class TestPrometheusMetric(unittest.TestCase):
+    def test_rendering(self):
+        exp = PrometheusMetrics()
+        exp.ts = 404
+        exp.add("name", "table_name", 42)
+
+        f = StringIO()
+        exp.render(f)
+        self.assertEqual("partition_name{table=table_name} 42 404\n", f.getvalue())
+
+    def test_rendering_grouping(self):
+        exp = PrometheusMetrics()
+        exp.ts = 404
+        exp.add("name", "table_name", 42)
+        exp.add("second_metric", "table_name", 42)
+        exp.add("name", "other_table", 42)
+
+        f = StringIO()
+        exp.render(f)
+        self.assertEqual(
+            """partition_name{table=table_name} 42 404
+partition_name{table=other_table} 42 404
+partition_second_metric{table=table_name} 42 404
+""",
+            f.getvalue(),
+        )
+
+    def test_descriptions(self):
+        exp = PrometheusMetrics()
+        exp.ts = 404
+        exp.add("name", "table_name", 42)
+        exp.add("second_metric", "table_name", 42)
+        exp.add("name", "other_table", 42)
+
+        exp.describe("second_metric", help_text="help for second_metric", type="type")
+        exp.describe("name", help_text="help for name", type="type")
+
+        f = StringIO()
+        exp.render(f)
+        self.assertEqual(
+            """# HELP partition_name help for name
+# TYPE partition_name type
+partition_name{table=table_name} 42 404
+partition_name{table=other_table} 42 404
+# HELP partition_second_metric help for second_metric
+# TYPE partition_second_metric type
+partition_second_metric{table=table_name} 42 404
+""",
+            f.getvalue(),
         )

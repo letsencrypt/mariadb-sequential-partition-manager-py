@@ -6,6 +6,7 @@ import traceback
 import yaml
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from partitionmanager.table_append_partition import (
     evaluate_partition_actions,
     format_sql_reorganize_partition_command,
@@ -16,7 +17,7 @@ from partitionmanager.table_append_partition import (
     table_is_compatible,
 )
 from partitionmanager.types import SqlInput, Table, retention_from_dict, toSqlUrl
-from partitionmanager.stats import get_statistics
+from partitionmanager.stats import get_statistics, PrometheusMetrics
 from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
 
 parser = argparse.ArgumentParser(
@@ -31,6 +32,9 @@ parser.add_argument(
     default=logging.INFO,
     type=lambda x: getattr(logging, x.upper()),
     help="Configure the logging level.",
+)
+parser.add_argument(
+    "--prometheus-stats", type=Path, help="Path to produce a prometheus statistics file"
 )
 
 group = parser.add_mutually_exclusive_group()
@@ -49,6 +53,7 @@ class Config:
         self.noop = False
         self.curtime = datetime.now(tz=timezone.utc)
         self.partition_duration = timedelta(days=30)
+        self.prometheus_stats_path = None
 
     def from_argparse(self, args):
         if args.table:
@@ -64,6 +69,8 @@ class Config:
                 raise ValueError("Negative lifespan is not allowed")
         if "noop" in args:
             self.noop = args.noop
+        if "prometheus_stats" in args:
+            self.prometheus_stats_path = args.prometheus_stats
 
     def from_yaml_file(self, file):
         data = yaml.safe_load(file)
@@ -91,6 +98,8 @@ class Config:
                 t.set_retention(retention_from_dict(tabledata["retention"]))
 
             self.tables.append(t)
+        if "prometheus_stats" in data:
+            self.prometheus_stats_path = Path(data["prometheus_stats"])
 
 
 def config_from_args(args):
@@ -195,6 +204,52 @@ def stats_cmd(args):
         map_data = get_partition_map(conf.dbcmd, table)
         statistics = get_statistics(map_data["partitions"], conf.curtime, table)
         all_results[table.name] = statistics
+
+    if conf.prometheus_stats_path:
+        metrics = PrometheusMetrics()
+        metrics.describe(
+            "total", help_text="Total number of partitions", type="counter"
+        )
+        metrics.describe(
+            "time_since_last_partitioned_seconds",
+            help_text="How many seconds since the last partition was created",
+            type="gauge",
+        )
+        metrics.describe(
+            "mean_delta_seconds",
+            help_text="Mean seconds between partitions",
+            type="gauge",
+        )
+        metrics.describe(
+            "max_delta_seconds",
+            help_text="Maximum seconds between partitions",
+            type="gauge",
+        )
+
+        for table, results in all_results.items():
+            if "partitions" in results:
+                metrics.add("total", table, results["partitions"])
+            if "time_since_last_partition" in results:
+                metrics.add(
+                    "time_since_last_partitioned_seconds",
+                    table,
+                    results["time_since_last_partition"].total_seconds(),
+                )
+            if "mean_partition_delta" in results:
+                metrics.add(
+                    "mean_delta_seconds",
+                    table,
+                    results["mean_partition_delta"].total_seconds(),
+                )
+            if "max_partition_delta" in results:
+                metrics.add(
+                    "max_delta_seconds",
+                    table,
+                    results["max_partition_delta"].total_seconds(),
+                )
+
+        with conf.prometheus_stats_path.open(mode="w", encoding="utf-8") as sf:
+            metrics.render(sf)
 
     return all_results
 
