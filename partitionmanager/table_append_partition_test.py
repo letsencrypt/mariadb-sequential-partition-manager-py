@@ -18,8 +18,8 @@ from partitionmanager.types import (
 from partitionmanager.table_append_partition import (
     get_current_positions,
     get_partition_map,
-    assert_table_is_compatible,
-    assert_table_information_schema_compatible,
+    table_is_compatible,
+    table_information_schema_is_compatible,
     evaluate_partition_actions,
     parse_partition_map,
     reorganize_partition,
@@ -43,28 +43,27 @@ class TestTypeEnforcement(unittest.TestCase):
             get_partition_map(MockDatabase(), "")
 
     def test_get_autoincrement(self):
-        with self.assertRaises(ValueError):
-            assert_table_is_compatible(MockDatabase(), "")
+        self.assertEqual(
+            table_is_compatible(MockDatabase(), ""), "Unexpected table type: "
+        )
 
 
 class TestParseTableInformationSchema(unittest.TestCase):
     def test_not_partitioned_and_unexpected(self):
         info = [{"CREATE_OPTIONS": "exfoliated, disenchanted"}]
-        with self.assertRaises(TableInformationException):
-            assert_table_information_schema_compatible(info, "extable")
+        self.assertIsNotNone(table_information_schema_is_compatible(info, "extable"))
 
     def test_not_partitioned(self):
         info = [{"CREATE_OPTIONS": "exfoliated"}]
-        with self.assertRaises(TableInformationException):
-            assert_table_information_schema_compatible(info, "extable")
+        self.assertIsNotNone(table_information_schema_is_compatible(info, "extable"))
 
     def test_normal(self):
         info = [{"CREATE_OPTIONS": "partitioned"}]
-        assert_table_information_schema_compatible(info, "table")
+        self.assertIsNone(table_information_schema_is_compatible(info, "table"))
 
     def test_normal_multiple_create_options(self):
         info = [{"CREATE_OPTIONS": "magical, partitioned"}]
-        assert_table_information_schema_compatible(info, "table")
+        self.assertIsNone(table_information_schema_is_compatible(info, "table"))
 
 
 class TestParsePartitionMap(unittest.TestCase):
