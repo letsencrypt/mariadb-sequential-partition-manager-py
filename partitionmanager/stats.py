@@ -74,7 +74,9 @@ def get_statistics(partitions, current_timestamp, table):
         raise UnexpectedPartitionException(tail_part)
 
     if tail_part.timestamp():
-        results["time_since_last_partition"] = current_timestamp - tail_part.timestamp()
+        results["time_since_newest_partition"] = (
+            current_timestamp - tail_part.timestamp()
+        )
 
     for p in partitions:
         if p.timestamp():
@@ -83,6 +85,11 @@ def get_statistics(partitions, current_timestamp, table):
 
     if not head_part or head_part == tail_part:
         return results
+
+    if head_part.timestamp():
+        results["time_since_oldest_partition"] = (
+            current_timestamp - head_part.timestamp()
+        )
 
     if head_part.timestamp() and tail_part.timestamp():
         results["mean_partition_delta"] = (

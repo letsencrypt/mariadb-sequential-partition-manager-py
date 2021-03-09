@@ -211,8 +211,13 @@ def stats_cmd(args):
             "total", help_text="Total number of partitions", type="counter"
         )
         metrics.describe(
-            "time_since_last_partitioned_seconds",
-            help_text="How many seconds since the last partition was created",
+            "time_since_newest_partition_seconds",
+            help_text="The age in seconds of the last partition for the table",
+            type="gauge",
+        )
+        metrics.describe(
+            "time_since_oldest_partition_seconds",
+            help_text="The age in seconds of the first partition for the table",
             type="gauge",
         )
         metrics.describe(
@@ -229,11 +234,17 @@ def stats_cmd(args):
         for table, results in all_results.items():
             if "partitions" in results:
                 metrics.add("total", table, results["partitions"])
-            if "time_since_last_partition" in results:
+            if "time_since_newest_partition" in results:
                 metrics.add(
-                    "time_since_last_partitioned_seconds",
+                    "time_since_newest_partition_seconds",
                     table,
-                    results["time_since_last_partition"].total_seconds(),
+                    results["time_since_newest_partition"].total_seconds(),
+                )
+            if "time_since_oldest_partition" in results:
+                metrics.add(
+                    "time_since_oldest_partition_seconds",
+                    table,
+                    results["time_since_oldest_partition"].total_seconds(),
                 )
             if "mean_partition_delta" in results:
                 metrics.add(

@@ -29,7 +29,7 @@ class TestStatistics(unittest.TestCase):
             [MaxValuePartition("p_19480113", 1)], ts, Table("single_part")
         )
         self.assertEqual(
-            s, {"partitions": 1, "time_since_last_partition": timedelta(days=365)}
+            s, {"partitions": 1, "time_since_newest_partition": timedelta(days=365)}
         )
 
     def test_statistics_two_partitions(self):
@@ -42,7 +42,8 @@ class TestStatistics(unittest.TestCase):
             s,
             {
                 "partitions": 2,
-                "time_since_last_partition": timedelta(days=11),
+                "time_since_newest_partition": timedelta(days=11),
+                "time_since_oldest_partition": timedelta(days=377),
                 "mean_partition_delta": timedelta(days=366),
                 "max_partition_delta": timedelta(days=366),
             },
@@ -63,7 +64,8 @@ class TestStatistics(unittest.TestCase):
             s,
             {
                 "partitions": 53,
-                "time_since_last_partition": timedelta(days=14),
+                "time_since_newest_partition": timedelta(days=14),
+                "time_since_oldest_partition": timedelta(days=378),
                 "mean_partition_delta": timedelta(days=7),
                 "max_partition_delta": timedelta(days=7),
             },
