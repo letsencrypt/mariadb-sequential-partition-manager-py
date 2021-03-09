@@ -7,21 +7,15 @@ import yaml
 
 from datetime import datetime, timedelta, timezone
 from partitionmanager.table_append_partition import (
-    assert_table_is_compatible,
     evaluate_partition_actions,
     format_sql_reorganize_partition_command,
     get_current_positions,
     get_partition_map,
     parition_name_now,
     reorganize_partition,
+    table_is_compatible,
 )
-from partitionmanager.types import (
-    SqlInput,
-    Table,
-    retention_from_dict,
-    toSqlUrl,
-    TableInformationException,
-)
+from partitionmanager.types import SqlInput, Table, retention_from_dict, toSqlUrl
 from partitionmanager.stats import get_statistics
 from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
 
@@ -99,20 +93,33 @@ class Config:
             self.tables.append(t)
 
 
-def partition_cmd(args):
+def config_from_args(args):
     conf = Config()
     conf.from_argparse(args)
     if args.config:
         conf.from_yaml_file(args.config)
+    return conf
+
+
+def all_configured_tables_are_compatible(conf):
+    problems = dict()
+    for table in conf.tables:
+        problem = table_is_compatible(conf.dbcmd, table)
+        if problem:
+            problems[table.name] = problem
+            logging.error(f"Cannot proceed: {table} {problem}")
+
+    return len(problems) == 0
+
+
+def partition_cmd(args):
+    conf = config_from_args(args)
+
     if conf.noop:
         logging.info("No-op mode")
 
     # Preflight
-    try:
-        for table in conf.tables:
-            assert_table_is_compatible(conf.dbcmd, table)
-    except TableInformationException as tie:
-        logging.error(f"Cannot proceed: {tie}")
+    if not all_configured_tables_are_compatible(conf):
         return dict()
 
     all_results = dict()
@@ -177,17 +184,10 @@ partition_parser.set_defaults(func=partition_cmd)
 
 
 def stats_cmd(args):
-    conf = Config()
-    conf.from_argparse(args)
-    if args.config:
-        conf.from_yaml_file(args.config)
+    conf = config_from_args(args)
 
     # Preflight
-    try:
-        for table in conf.tables:
-            assert_table_is_compatible(conf.dbcmd, table)
-    except TableInformationException as tie:
-        logging.error(f"Cannot proceed: {tie}")
+    if not all_configured_tables_are_compatible(conf):
         return dict()
 
     all_results = dict()

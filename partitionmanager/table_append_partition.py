@@ -14,7 +14,7 @@ import logging
 import re
 
 
-def assert_table_is_compatible(database, table):
+def table_is_compatible(database, table):
     """
     Gather the information schema from the database command and parse out the
     autoincrement value.
@@ -26,25 +26,27 @@ def assert_table_is_compatible(database, table):
         or type(table) != Table
         or type(table.name) != SqlInput
     ):
-        raise ValueError("Unexpected type")
+        return f"Unexpected table type: {table}"
     sql_cmd = (
         "SELECT CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES "
         + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
     ).strip()
 
-    assert_table_information_schema_compatible(database.run(sql_cmd), table.name)
+    return table_information_schema_is_compatible(database.run(sql_cmd), table.name)
 
 
-def assert_table_information_schema_compatible(rows, table_name):
+def table_information_schema_is_compatible(rows, table_name):
     """
     Parse a table information schema, validating options
     """
     if len(rows) != 1:
-        raise TableInformationException(f"Unable to read information for {table_name}")
+        return f"Unable to read information for {table_name}"
 
     options = rows[0]
     if "partitioned" not in options["CREATE_OPTIONS"]:
-        raise TableInformationException(f"Table {table_name} is not partitioned")
+        return f"Table {table_name} is not partitioned"
+
+    return None
 
 
 def get_current_positions(database, table, columns):
