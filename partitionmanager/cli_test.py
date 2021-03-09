@@ -189,7 +189,12 @@ class TestStatsCmd(unittest.TestCase):
         )
         r = stats_cmd(args)
         self.assertEqual(r["partitioned_yesterday"]["partitions"], 3)
-        self.assertLess(r["partitioned_yesterday"]["time_since_last_partition"].days, 2)
+        self.assertLess(
+            r["partitioned_yesterday"]["time_since_newest_partition"].days, 2
+        )
+        self.assertLess(
+            r["partitioned_yesterday"]["time_since_oldest_partition"].days, 32
+        )
         self.assertGreater(r["partitioned_yesterday"]["mean_partition_delta"].days, 2)
         self.assertGreater(r["partitioned_yesterday"]["max_partition_delta"].days, 2)
 
