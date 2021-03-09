@@ -114,7 +114,7 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
                 `secondID` bigint(20) NOT NULL,
                 PRIMARY KEY (`firstID`,`secondID`),
               ) ENGINE=InnoDB DEFAULT CHARSET=utf8
-              PARTITION BY RANGE (`firstID`, `secondID`)
+              PARTITION BY RANGE COLUMNS(`firstID`, `secondID`)
               (PARTITION `p_start` VALUES LESS THAN (MAXVALUE, MAXVALUE) ENGINE = InnoDB)""",
             }
         ]
@@ -132,7 +132,7 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
                 `secondID` bigint(20) NOT NULL,
                 PRIMARY KEY (`firstID`,`secondID`),
               ) ENGINE=InnoDB DEFAULT CHARSET=utf8
-              PARTITION BY RANGE (`firstID`, `secondID`)
+              PARTITION BY RANGE  COLUMNS(`firstID`, `secondID`)
               (PARTITION `p_start` VALUES LESS THAN (255, 1234567890),
                PARTITION `p_next` VALUES LESS THAN (MAXVALUE, MAXVALUE) ENGINE = InnoDB)""",
             }
@@ -142,6 +142,52 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
         self.assertEqual(results["partitions"][0], mkPPart("p_start", 255, 1234567890))
         self.assertEqual(results["partitions"][1], mkTailPart("p_next", count=2))
         self.assertEqual(results["range_cols"], ["firstID", "secondID"])
+
+    def test_missing_part_definition(self):
+        create_stmt = [
+            {
+                "Table": "doubleKey",
+                "Create Table": """CREATE TABLE `doubleKey` (
+                `firstID` bigint(20) NOT NULL,
+                `secondID` bigint(20) NOT NULL,
+                PRIMARY KEY (`firstID`,`secondID`),
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8
+              (PARTITION `p_start` VALUES LESS THAN (255, 1234567890),
+               PARTITION `p_next` VALUES LESS THAN (MAXVALUE, MAXVALUE) ENGINE = InnoDB)""",
+            }
+        ]
+        with self.assertRaises(TableInformationException):
+            parse_partition_map(create_stmt)
+
+    def test_missing_part_definition_and_just_tail(self):
+        create_stmt = [
+            {
+                "Table": "doubleKey",
+                "Create Table": """CREATE TABLE `doubleKey` (
+                `firstID` bigint(20) NOT NULL,
+                `secondID` bigint(20) NOT NULL,
+                PRIMARY KEY (`firstID`,`secondID`),
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8
+              (PARTITION `p_next` VALUES LESS THAN (MAXVALUE, MAXVALUE) ENGINE = InnoDB)""",
+            }
+        ]
+        with self.assertRaises(TableInformationException):
+            parse_partition_map(create_stmt)
+
+    def test_missing_part_tail(self):
+        create_stmt = [
+            {
+                "Table": "doubleKey",
+                "Create Table": """CREATE TABLE `doubleKey` (
+                `firstID` bigint(20) NOT NULL,
+                `secondID` bigint(20) NOT NULL,
+                PRIMARY KEY (`firstID`,`secondID`),
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8
+              PARTITION BY RANGE  COLUMNS(`firstID`, `secondID`)""",
+            }
+        ]
+        with self.assertRaises(UnexpectedPartitionException):
+            parse_partition_map(create_stmt)
 
 
 class TestEvaluateShouldPartition(unittest.TestCase):
@@ -154,7 +200,7 @@ class TestEvaluateShouldPartition(unittest.TestCase):
                 `secondID` bigint(20) NOT NULL,
                 PRIMARY KEY (`firstID`,`secondID`),
               ) ENGINE=InnoDB DEFAULT CHARSET=utf8
-              PARTITION BY RANGE (`firstID`, `secondID`)
+              PARTITION BY RANGE  COLUMNS(`firstID`, `secondID`)
               (PARTITION `p_start` VALUES LESS THAN (255, 1234567890),
                PARTITION `p_next` VALUES LESS THAN (MAXVALUE, MAXVALUE) ENGINE = InnoDB)""",
             }

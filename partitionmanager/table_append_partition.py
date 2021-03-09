@@ -88,12 +88,14 @@ def parse_partition_map(rows):
     Read a partition statement from a table creation string and produce Partition
     objets for each partition.
     """
-    partition_range = re.compile(r"[ ]*PARTITION BY RANGE \(([\w,` ]+)\)")
+    partition_range = re.compile(
+        r"[ ]*PARTITION BY RANGE\s+(COLUMNS)?\((?P<cols>[\w,` ]+)\)"
+    )
     partition_member = re.compile(
-        r"[ (]*PARTITION `(\w+)` VALUES LESS THAN \(([\d, ]+)\)"
+        r"[ (]*PARTITION\s+`(?P<name>\w+)` VALUES LESS THAN \((?P<cols>[\d, ]+)\)"
     )
     partition_tail = re.compile(
-        r"[ (]*PARTITION `(\w+)` VALUES LESS THAN \(?(MAXVALUE[, ]*)+\)?"
+        r"[ (]*PARTITION\s+`(?P<name>\w+)` VALUES LESS THAN \(?(MAXVALUE[, ]*)+\)?"
     )
 
     range_cols = None
@@ -107,15 +109,21 @@ def parse_partition_map(rows):
     for l in options["Create Table"].split("\n"):
         range_match = partition_range.match(l)
         if range_match:
-            range_cols = [x.strip("` ") for x in range_match.group(1).split(",")]
+            range_cols = [x.strip("` ") for x in range_match.group("cols").split(",")]
             logging.debug(f"Partition range columns: {range_cols}")
 
         member_match = partition_member.match(l)
         if member_match:
-            part_name, part_vals_str = member_match.group(1, 2)
+            part_name = member_match.group("name")
+            part_vals_str = member_match.group("cols")
             logging.debug(f"Found partition {part_name} = {part_vals_str}")
 
             part_vals = [int(x.strip("` ")) for x in part_vals_str.split(",")]
+
+            if range_cols is None:
+                raise TableInformationException(
+                    "Processing partitions, but the partition definition wasn't found."
+                )
 
             if len(part_vals) != len(range_cols):
                 logging.error(
@@ -131,9 +139,16 @@ def parse_partition_map(rows):
 
         member_tail = partition_tail.match(l)
         if member_tail:
-            part_name = member_tail.group(1)
+            if range_cols is None:
+                raise TableInformationException(
+                    "Processing tail, but the partition definition wasn't found."
+                )
+            part_name = member_tail.group("name")
             logging.debug(f"Found tail partition named {part_name}")
             partitions.append(MaxValuePartition(part_name, len(range_cols)))
+
+    if not partitions or not isinstance(partitions[-1], MaxValuePartition):
+        raise UnexpectedPartitionException("There was no tail partition")
 
     return {"range_cols": range_cols, "partitions": partitions}
 
