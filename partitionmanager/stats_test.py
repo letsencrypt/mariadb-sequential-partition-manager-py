@@ -80,7 +80,7 @@ class TestPrometheusMetric(unittest.TestCase):
 
         f = StringIO()
         exp.render(f)
-        self.assertEqual("partition_name{table=table_name} 42 404\n", f.getvalue())
+        self.assertEqual('partition_name{table="table_name"} 42 404\n', f.getvalue())
 
     def test_rendering_grouping(self):
         exp = PrometheusMetrics()
@@ -92,9 +92,9 @@ class TestPrometheusMetric(unittest.TestCase):
         f = StringIO()
         exp.render(f)
         self.assertEqual(
-            """partition_name{table=table_name} 42 404
-partition_name{table=other_table} 42 404
-partition_second_metric{table=table_name} 42 404
+            """partition_name{table="table_name"} 42 404
+partition_name{table="other_table"} 42 404
+partition_second_metric{table="table_name"} 42 404
 """,
             f.getvalue(),
         )
@@ -114,11 +114,11 @@ partition_second_metric{table=table_name} 42 404
         self.assertEqual(
             """# HELP partition_name help for name
 # TYPE partition_name type
-partition_name{table=table_name} 42 404
-partition_name{table=other_table} 42 404
+partition_name{table="table_name"} 42 404
+partition_name{table="other_table"} 42 404
 # HELP partition_second_metric help for second_metric
 # TYPE partition_second_metric type
-partition_second_metric{table=table_name} 42 404
+partition_second_metric{table="table_name"} 42 404
 """,
             f.getvalue(),
         )
