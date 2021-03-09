@@ -123,7 +123,45 @@ def all_configured_tables_are_compatible(conf):
 
 def partition_cmd(args):
     conf = config_from_args(args)
+    return do_partition(conf)
 
+
+subparsers = parser.add_subparsers(dest="subparser_name")
+partition_parser = subparsers.add_parser("add", help="add partitions")
+partition_parser.add_argument(
+    "--noop",
+    "-n",
+    action="store_true",
+    help="Don't attempt to commit changes, just print",
+)
+partition_parser.add_argument(
+    "--days", "-d", type=int, help="Lifetime of each partition in days"
+)
+partition_group = partition_parser.add_mutually_exclusive_group()
+partition_group.add_argument(
+    "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
+)
+partition_group.add_argument(
+    "--table", "-t", type=SqlInput, nargs="+", help="table names"
+)
+partition_parser.set_defaults(func=partition_cmd)
+
+
+def stats_cmd(args):
+    conf = config_from_args(args)
+    return do_stats(conf)
+
+
+stats_parser = subparsers.add_parser("stats", help="get stats for partitions")
+stats_group = stats_parser.add_mutually_exclusive_group()
+stats_group.add_argument(
+    "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
+)
+stats_group.add_argument("--table", "-t", type=SqlInput, nargs="+", help="table names")
+stats_parser.set_defaults(func=stats_cmd)
+
+
+def do_partition(conf):
     if conf.noop:
         logging.info("No-op mode")
 
@@ -168,33 +206,14 @@ def partition_cmd(args):
         output = conf.dbcmd.run(sql_cmd)
         all_results[table.name] = {"sql": sql_cmd, "output": output}
         logging.info(f"{table} results: {output}")
+
+    if conf.prometheus_stats_path:
+        do_stats(conf)
+
     return all_results
 
 
-subparsers = parser.add_subparsers(dest="subparser_name")
-partition_parser = subparsers.add_parser("add", help="add partitions")
-partition_parser.add_argument(
-    "--noop",
-    "-n",
-    action="store_true",
-    help="Don't attempt to commit changes, just print",
-)
-partition_parser.add_argument(
-    "--days", "-d", type=int, help="Lifetime of each partition in days"
-)
-partition_group = partition_parser.add_mutually_exclusive_group()
-partition_group.add_argument(
-    "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
-)
-partition_group.add_argument(
-    "--table", "-t", type=SqlInput, nargs="+", help="table names"
-)
-partition_parser.set_defaults(func=partition_cmd)
-
-
-def stats_cmd(args):
-    conf = config_from_args(args)
-
+def do_stats(conf):
     # Preflight
     if not all_configured_tables_are_compatible(conf):
         return dict()
@@ -263,15 +282,6 @@ def stats_cmd(args):
             metrics.render(sf)
 
     return all_results
-
-
-stats_parser = subparsers.add_parser("stats", help="get stats for partitions")
-stats_group = stats_parser.add_mutually_exclusive_group()
-stats_group.add_argument(
-    "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
-)
-stats_group.add_argument("--table", "-t", type=SqlInput, nargs="+", help="table names")
-stats_parser.set_defaults(func=stats_cmd)
 
 
 def main():
