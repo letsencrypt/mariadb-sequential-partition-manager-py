@@ -29,6 +29,8 @@ class PrometheusMetrics:
         self.types[name] = type
 
     def render(self, fp):
+        # Format specification:
+        # https://prometheus.io/docs/instrumenting/exposition_formats/
         for n, metrics in self.metrics.items():
             name = f"partition_{n}"
             if n in self.help:
@@ -36,7 +38,7 @@ class PrometheusMetrics:
             if n in self.types:
                 print(f"# TYPE {name} {self.types[n]}", file=fp)
             for m in metrics:
-                labels = [f"table={m.table}"]
+                labels = [f'table="{m.table}"']
                 print(f"{name}{{{','.join(labels)}}} {m.data} {int(self.ts)}", file=fp)
 
 
