@@ -55,9 +55,6 @@ def get_statistics(partitions, current_timestamp, table):
     if not partitions:
         return results
 
-    head_part = partitions[0]
-    tail_part = partitions[-1]
-
     for p in partitions:
         if not isinstance(p, Partition):
             logging.warning(
@@ -65,6 +62,9 @@ def get_statistics(partitions, current_timestamp, table):
                 + f"that included a non-Partition entry: {p}"
             )
             raise UnexpectedPartitionException(p)
+
+    head_part = None
+    tail_part = partitions[-1]
 
     if not isinstance(tail_part, MaxValuePartition):
         logging.warning(
@@ -76,7 +76,12 @@ def get_statistics(partitions, current_timestamp, table):
     if tail_part.timestamp():
         results["time_since_last_partition"] = current_timestamp - tail_part.timestamp()
 
-    if head_part == tail_part:
+    for p in partitions:
+        if p.timestamp():
+            head_part = p
+            break
+
+    if not head_part or head_part == tail_part:
         return results
 
     if head_part.timestamp() and tail_part.timestamp():

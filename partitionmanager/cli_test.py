@@ -188,10 +188,10 @@ class TestStatsCmd(unittest.TestCase):
             ["--mariadb", str(fake_exec), "stats", "--table", "partitioned_yesterday"]
         )
         r = stats_cmd(args)
-        self.assertEqual(r["partitioned_yesterday"]["partitions"], 2)
+        self.assertEqual(r["partitioned_yesterday"]["partitions"], 3)
         self.assertLess(r["partitioned_yesterday"]["time_since_last_partition"].days, 2)
-        self.assertNotIn("mean_partition_delta", r["partitioned_yesterday"])
-        self.assertNotIn("max_partition_delta", r["partitioned_yesterday"])
+        self.assertGreater(r["partitioned_yesterday"]["mean_partition_delta"].days, 2)
+        self.assertGreater(r["partitioned_yesterday"]["max_partition_delta"].days, 2)
 
 
 class TestHelpers(unittest.TestCase):
