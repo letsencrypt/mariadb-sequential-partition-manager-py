@@ -96,6 +96,10 @@ class Config:
             tabledata = data["tables"][key]
             if isinstance(tabledata, dict) and "retention" in tabledata:
                 t.set_retention(retention_from_dict(tabledata["retention"]))
+            if isinstance(tabledata, dict) and "partition_duration" in tabledata:
+                t.set_partition_duration(
+                    retention_from_dict(tabledata["partition_duration"])
+                )
 
             self.tables.append(t)
         if "prometheus_stats" in data:
@@ -173,8 +177,12 @@ def do_partition(conf):
     for table in conf.tables:
         map_data = get_partition_map(conf.dbcmd, table)
 
+        duration = conf.partition_duration
+        if table.partition_duration:
+            duration = table.partition_duration
+
         decision = evaluate_partition_actions(
-            map_data["partitions"], conf.curtime, conf.partition_duration
+            map_data["partitions"], conf.curtime, duration
         )
 
         if not decision["do_partition"]:
