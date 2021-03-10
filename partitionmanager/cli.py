@@ -88,7 +88,7 @@ class Config:
             if self.partition_duration <= timedelta():
                 raise ValueError("Negative lifespan is not allowed")
         if "dburl" in data:
-            self.dbcmd = IntegratedDatabaseCommand(data["dburl"])
+            self.dbcmd = IntegratedDatabaseCommand(toSqlUrl(data["dburl"]))
         elif "mariadb" in data:
             self.dbcmd = SubprocessDatabaseCommand(data["mariadb"])
         for key in data["tables"]:

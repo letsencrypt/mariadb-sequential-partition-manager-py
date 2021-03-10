@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import pymysql
 from datetime import datetime, timezone
 from pathlib import Path
 from .cli import (
@@ -198,6 +199,18 @@ partitionmanager:
         self.assertSequenceEqual(
             list(o), ["partitioned_yesterday", "partitioned_last_week"]
         )
+
+    def test_partition_with_db_url(self):
+        with self.assertRaises(pymysql.err.OperationalError):
+            run_partition_cmd_yaml(
+                """
+partitionmanager:
+    tables:
+        test:
+        unpartitioned:
+    dburl: sql://user@localhost:9999/fake_database
+"""
+            )
 
 
 class TestStatsCmd(unittest.TestCase):
