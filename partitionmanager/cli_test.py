@@ -181,6 +181,24 @@ partitionmanager:
         )
         self.assertSequenceEqual(list(o), ["partitioned_last_week"])
 
+    def test_partition_duration_different_per_table(self):
+        o = run_partition_cmd_yaml(
+            f"""
+partitionmanager:
+    partition_duration:
+        days: 7
+    tables:
+        partitioned_yesterday:
+            partition_duration:
+                days: 1
+        partitioned_last_week:
+    mariadb: {str(fake_exec)}
+"""
+        )
+        self.assertSequenceEqual(
+            list(o), ["partitioned_yesterday", "partitioned_last_week"]
+        )
+
 
 class TestStatsCmd(unittest.TestCase):
     def test_stats(self):

@@ -32,12 +32,17 @@ partitionmanager:
   dburl: sql://user:password@localhost/db-name
   # or
   # mariadb: /usr/local/bin/mariadb
+  partition_duration:
+    days: 7
+
   tables:
     table1:
       retention:
         days: 60
     table2:
-    table3
+      partition_duration:
+        days: 30
+    table3:
       retention:
         days: 14
 ```
