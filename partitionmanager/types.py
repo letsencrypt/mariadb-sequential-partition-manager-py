@@ -19,13 +19,13 @@ class Table:
     def __init__(self, name):
         self.name = SqlInput(name)
         self.retention = None
-        self.partition_duration = None
+        self.partition_period = None
 
     def set_retention(self, ret):
         self.retention = ret
 
-    def set_partition_duration(self, dur):
-        self.partition_duration = dur
+    def set_partition_period(self, dur):
+        self.partition_period = dur
 
     def __str__(self):
         return f"Table {self.name}"
