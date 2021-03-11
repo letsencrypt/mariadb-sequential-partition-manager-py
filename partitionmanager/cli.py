@@ -173,6 +173,13 @@ def do_partition(conf):
     if not all_configured_tables_are_compatible(conf):
         return dict()
 
+    metrics = PrometheusMetrics()
+    metrics.describe(
+        "alter_time_seconds",
+        help_text="Time in seconds to complete the ALTER command",
+        type="gauge",
+    )
+
     all_results = dict()
     for table in conf.tables:
         map_data = get_partition_map(conf.dbcmd, table)
@@ -211,17 +218,23 @@ def do_partition(conf):
             continue
 
         logging.info(f"{table} running SQL: {sql_cmd}")
+        time_start = datetime.utcnow()
         output = conf.dbcmd.run(sql_cmd)
+        time_end = datetime.utcnow()
+
         all_results[table.name] = {"sql": sql_cmd, "output": output}
         logging.info(f"{table} results: {output}")
+        metrics.add(
+            "alter_time_seconds", table.name, (time_end - time_start).total_seconds()
+        )
 
     if conf.prometheus_stats_path:
-        do_stats(conf)
+        do_stats(conf, metrics)
 
     return all_results
 
 
-def do_stats(conf):
+def do_stats(conf, metrics=PrometheusMetrics()):
     # Preflight
     if not all_configured_tables_are_compatible(conf):
         return dict()
@@ -233,7 +246,6 @@ def do_stats(conf):
         all_results[table.name] = statistics
 
     if conf.prometheus_stats_path:
-        metrics = PrometheusMetrics()
         metrics.describe(
             "total", help_text="Total number of partitions", type="counter"
         )
