@@ -171,7 +171,7 @@ def evaluate_partition_actions(partitions, timestamp, allowed_lifespan):
         return {"do_partition": True, "remaining_lifespan": timedelta()}
 
 
-def parition_name_now():
+def partition_name_now():
     """
     Format a partition name for now
     """

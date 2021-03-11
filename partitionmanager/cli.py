@@ -12,7 +12,7 @@ from partitionmanager.table_append_partition import (
     format_sql_reorganize_partition_command,
     get_current_positions,
     get_partition_map,
-    parition_name_now,
+    partition_name_now,
     reorganize_partition,
     table_is_compatible,
 )
@@ -205,7 +205,7 @@ def do_partition(conf):
         positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
 
         filled_partition_id, partitions = reorganize_partition(
-            map_data["partitions"], parition_name_now(), positions
+            map_data["partitions"], partition_name_now(), positions
         )
 
         sql_cmd = format_sql_reorganize_partition_command(
