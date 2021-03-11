@@ -52,7 +52,7 @@ class Config:
         self.dbcmd = SubprocessDatabaseCommand("mariadb")
         self.noop = False
         self.curtime = datetime.now(tz=timezone.utc)
-        self.partition_duration = timedelta(days=30)
+        self.partition_period = timedelta(days=30)
         self.prometheus_stats_path = None
 
     def from_argparse(self, args):
@@ -64,8 +64,8 @@ class Config:
         else:
             self.dbcmd = SubprocessDatabaseCommand(args.mariadb)
         if "days" in args and args.days:
-            self.partition_duration = timedelta(days=args.days)
-            if self.partition_duration <= timedelta():
+            self.partition_period = timedelta(days=args.days)
+            if self.partition_period <= timedelta():
                 raise ValueError("Negative lifespan is not allowed")
         if "noop" in args:
             self.noop = args.noop
@@ -83,9 +83,9 @@ class Config:
             raise TypeError("Unexpected YAML format: no tables defined")
         if "noop" in data:
             self.noop = data["noop"]
-        if "partition_duration" in data:
-            self.partition_duration = retention_from_dict(data["partition_duration"])
-            if self.partition_duration <= timedelta():
+        if "partition_period" in data:
+            self.partition_period = retention_from_dict(data["partition_period"])
+            if self.partition_period <= timedelta():
                 raise ValueError("Negative lifespan is not allowed")
         if "dburl" in data:
             self.dbcmd = IntegratedDatabaseCommand(toSqlUrl(data["dburl"]))
@@ -96,9 +96,9 @@ class Config:
             tabledata = data["tables"][key]
             if isinstance(tabledata, dict) and "retention" in tabledata:
                 t.set_retention(retention_from_dict(tabledata["retention"]))
-            if isinstance(tabledata, dict) and "partition_duration" in tabledata:
-                t.set_partition_duration(
-                    retention_from_dict(tabledata["partition_duration"])
+            if isinstance(tabledata, dict) and "partition_period" in tabledata:
+                t.set_partition_period(
+                    retention_from_dict(tabledata["partition_period"])
                 )
 
             self.tables.append(t)
@@ -184,9 +184,9 @@ def do_partition(conf):
     for table in conf.tables:
         map_data = get_partition_map(conf.dbcmd, table)
 
-        duration = conf.partition_duration
-        if table.partition_duration:
-            duration = table.partition_duration
+        duration = conf.partition_period
+        if table.partition_period:
+            duration = table.partition_period
 
         decision = evaluate_partition_actions(
             map_data["partitions"], conf.curtime, duration

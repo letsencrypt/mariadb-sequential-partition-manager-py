@@ -3,7 +3,7 @@
 
 This tool partitions and manages MariaDB tables by sequential IDs.
 
-Note that reorganizing partitions is not a fast operation on ext4 filesystems; it is fast on xfs and zfs. Adding partitions in the first place with InnoDB requires a full table copy.
+Note that reorganizing partitions is not a fast operation on ext4 filesystems; it is fast on xfs and zfs, but only when the partition being edited contains no rows. Adding partitions in the first place with InnoDB requires a full table copy.
 
 Similar tools:
 * https://github.com/davidburger/gomypartition, intended for tables with date-based partitions
@@ -32,7 +32,7 @@ partitionmanager:
   dburl: sql://user:password@localhost/db-name
   # or
   # mariadb: /usr/local/bin/mariadb
-  partition_duration:
+  partition_period:
     days: 7
 
   tables:
@@ -40,7 +40,7 @@ partitionmanager:
       retention:
         days: 60
     table2:
-      partition_duration:
+      partition_period:
         days: 30
     table3:
       retention:
