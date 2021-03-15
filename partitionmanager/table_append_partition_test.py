@@ -16,13 +16,14 @@ from partitionmanager.types import (
     UnexpectedPartitionException,
 )
 from partitionmanager.table_append_partition import (
+    evaluate_partition_actions,
     get_current_positions,
     get_partition_map,
-    table_is_compatible,
-    table_information_schema_is_compatible,
-    evaluate_partition_actions,
     parse_partition_map,
     reorganize_partition,
+    split_partitions_around_positions,
+    table_information_schema_is_compatible,
+    table_is_compatible,
 )
 
 from .types_test import mkPPart, mkTailPart
@@ -346,6 +347,69 @@ class TestGetPositions(unittest.TestCase):
         self.assertEqual(len(p), 2)
         self.assertEqual(p[0], 1)
         self.assertEqual(p[1], 2)
+
+
+class TestPartitionAlgorithm(unittest.TestCase):
+    def test_split(self):
+        with self.assertRaises(UnexpectedPartitionException):
+            split_partitions_around_positions(
+                [mkPPart("a", 1), mkTailPart("z")], [10, 10]
+            )
+        with self.assertRaises(UnexpectedPartitionException):
+            split_partitions_around_positions(
+                [mkPPart("a", 1, 1), mkTailPart("z")], [10, 10]
+            )
+        with self.assertRaises(UnexpectedPartitionException):
+            split_partitions_around_positions(
+                [mkPPart("a", 1), mkTailPart("z", count=2)], [10, 10]
+            )
+
+        self.assertEqual(
+            split_partitions_around_positions(
+                [mkPPart("a", 1), mkPPart("b", 2), mkTailPart("z")], [10]
+            ),
+            ([mkPPart("a", 1), mkPPart("b", 2)], [mkTailPart("z")]),
+        )
+
+        self.assertEqual(
+            split_partitions_around_positions(
+                [mkPPart("a", 1), mkPPart("b", 10), mkTailPart("z")], [10]
+            ),
+            ([mkPPart("a", 1)], [mkPPart("b", 10), mkTailPart("z")]),
+        )
+        self.assertEqual(
+            split_partitions_around_positions(
+                [mkPPart("a", 1), mkPPart("b", 11), mkTailPart("z")], [10]
+            ),
+            ([mkPPart("a", 1)], [mkPPart("b", 11), mkTailPart("z")]),
+        )
+
+        self.assertEqual(
+            split_partitions_around_positions(
+                [mkPPart("a", 1), mkPPart("b", 11), mkPPart("c", 11), mkTailPart("z")],
+                [10],
+            ),
+            ([mkPPart("a", 1)], [mkPPart("b", 11), mkPPart("c", 11), mkTailPart("z")]),
+        )
+
+        self.assertEqual(
+            split_partitions_around_positions(
+                [mkPPart("a", 1), mkPPart("b", 11), mkPPart("c", 11), mkTailPart("z")],
+                [0],
+            ),
+            (
+                [],
+                [mkPPart("a", 1), mkPPart("b", 11), mkPPart("c", 11), mkTailPart("z")],
+            ),
+        )
+
+        self.assertEqual(
+            split_partitions_around_positions(
+                [mkPPart("a", 1), mkPPart("b", 11), mkPPart("c", 11), mkTailPart("z")],
+                [200],
+            ),
+            ([mkPPart("a", 1), mkPPart("b", 11), mkPPart("c", 11)], [mkTailPart("z")]),
+        )
 
 
 if __name__ == "__main__":

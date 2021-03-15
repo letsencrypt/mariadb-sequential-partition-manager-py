@@ -103,6 +103,11 @@ class TestPartition(unittest.TestCase):
             datetime(2020, 12, 31, tzinfo=timezone.utc),
         )
 
+        self.assertLess(mkPPart("a", 9), mkPPart("b", 11))
+        self.assertLess(mkPPart("a", 10), mkPPart("b", 11))
+        self.assertFalse(mkPPart("a", 11) < mkPPart("b", 11))
+        self.assertFalse(mkPPart("a", 12) < mkPPart("b", 11))
+
         self.assertLess(mkPPart("a", 10, 10), mkTailPart("b", count=2))
         with self.assertRaises(UnexpectedPartitionException):
             mkPPart("a", 10, 10) < mkTailPart("b", count=1)

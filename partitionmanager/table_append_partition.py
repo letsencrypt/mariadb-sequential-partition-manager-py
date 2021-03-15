@@ -178,6 +178,37 @@ def partition_name_now():
     return datetime.now(tz=timezone.utc).strftime("p_%Y%m%d")
 
 
+def split_partitions_around_positions(partition_list, current_positions):
+    """
+    Split a partition_list into those that are before current_positions
+    and those which are after.
+    """
+    for p in partition_list:
+        if not isinstance(p, Partition):
+            raise UnexpectedPartitionException(p)
+    if type(current_positions) is not list:
+        raise ValueError()
+
+    less_than_partitions = list()
+    greater_or_equal_partitions = list()
+
+    for p in partition_list:
+        if p < current_positions:
+            less_than_partitions.append(p)
+        else:
+            greater_or_equal_partitions.append(p)
+
+    return less_than_partitions, greater_or_equal_partitions
+
+
+def plan_partition_changes(partition_list, current_positions):
+    """
+    """
+    non_empty_partitions, empty_partitions = split_partitions_around_positions(
+        partition_list, current_positions
+    )
+
+
 def reorganize_partition(partition_list, new_partition_name, partition_positions):
     """
     From a partial partitions list of Partition types add a new partition at the

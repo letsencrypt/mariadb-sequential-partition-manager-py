@@ -180,6 +180,24 @@ class MaxValuePartition(Partition):
     def values(self):
         return ", ".join(["MAXVALUE"] * self.count)
 
+    def __lt__(self, other):
+        """
+        MaxValuePartitions are always greater than every other partition
+        """
+        if isinstance(other, list):
+            if self.count != len(other):
+                raise UnexpectedPartitionException(
+                    f"Expected {self.count} columns but list has {len(other)}."
+                )
+            return False
+        if isinstance(other, Partition):
+            if self.count != other.num_columns:
+                raise UnexpectedPartitionException(
+                    f"Expected {self.count} columns but list has {other.num_columns}."
+                )
+            return False
+        return ValueError()
+
     def __eq__(self, other):
         if isinstance(other, MaxValuePartition):
             return self._name == other._name and self.count == other.count
