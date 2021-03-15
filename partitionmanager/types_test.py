@@ -1,7 +1,26 @@
 import argparse
 import unittest
 from datetime import datetime, timedelta, timezone
-from .types import PositionPartition, retention_from_dict, SqlInput, Table, toSqlUrl
+from .types import (
+    MaxValuePartition,
+    PositionPartition,
+    retention_from_dict,
+    SqlInput,
+    Table,
+    toSqlUrl,
+    UnexpectedPartitionException,
+)
+
+
+def mkPPart(name, *pos):
+    p = PositionPartition(name)
+    for x in pos:
+        p.add_position(x)
+    return p
+
+
+def mkTailPart(name, count=1):
+    return MaxValuePartition(name, count)
 
 
 class TestTypes(unittest.TestCase):
@@ -83,3 +102,19 @@ class TestPartition(unittest.TestCase):
             PositionPartition("p_20201231").timestamp(),
             datetime(2020, 12, 31, tzinfo=timezone.utc),
         )
+
+        self.assertLess(mkPPart("a", 10, 10), mkTailPart("b", count=2))
+        with self.assertRaises(UnexpectedPartitionException):
+            mkPPart("a", 10, 10) < mkTailPart("b", count=1)
+
+        self.assertFalse(mkPPart("a", 10, 10) < mkPPart("b", 11, 10))
+        self.assertFalse(mkPPart("a", 10, 10) < mkPPart("b", 10, 11))
+        self.assertLess(mkPPart("a", 10, 10), mkPPart("b", 11, 11))
+        self.assertFalse(mkPPart("a", 10, 10) < [10, 11])
+        self.assertFalse(mkPPart("a", 10, 10) < [11, 10])
+        self.assertLess(mkPPart("a", 10, 10), [11, 11])
+
+        with self.assertRaises(UnexpectedPartitionException):
+            mkPPart("a", 10, 10) < mkPPart("b", 11, 11, 11)
+        with self.assertRaises(UnexpectedPartitionException):
+            mkPPart("a", 10, 10, 10) < mkPPart("b", 11, 11)

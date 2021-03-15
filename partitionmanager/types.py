@@ -131,6 +131,28 @@ class PositionPartition(Partition):
     def values(self):
         return "(" + ", ".join([str(x) for x in self.positions]) + ")"
 
+    def __lt__(self, other):
+        if isinstance(other, MaxValuePartition):
+            if len(self.positions) != other.num_columns:
+                raise UnexpectedPartitionException(
+                    f"Expected {len(self.positions)} columns but "
+                    f"partition has {other.num_columns}."
+                )
+            return True
+        other_positions = None
+        if isinstance(other, list):
+            other_positions = other
+        elif isinstance(other, PositionPartition):
+            other_positions = other.positions
+        if not other_positions or len(self.positions) != len(other_positions):
+            raise UnexpectedPartitionException(
+                f"Expected {len(self.positions)} columns but partition has {other_positions}."
+            )
+        for v_mine, v_other in zip(self.positions, other_positions):
+            if v_mine >= v_other:
+                return False
+        return True
+
     def __eq__(self, other):
         if isinstance(other, PositionPartition):
             return self._name == other._name and self.positions == other.positions

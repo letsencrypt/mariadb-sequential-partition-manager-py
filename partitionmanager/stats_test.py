@@ -2,14 +2,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from io import StringIO
 from .stats import get_statistics, PrometheusMetrics
-from .types import Table, MaxValuePartition, PositionPartition
-
-
-def mkPPart(name, *pos):
-    p = PositionPartition(name)
-    for x in pos:
-        p.add_position(x)
-    return p
+from .types import Table, MaxValuePartition
+from .types_test import mkPPart
 
 
 ts = datetime(1949, 1, 12, tzinfo=timezone.utc)

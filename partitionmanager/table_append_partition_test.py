@@ -25,6 +25,8 @@ from partitionmanager.table_append_partition import (
     reorganize_partition,
 )
 
+from .types_test import mkPPart, mkTailPart
+
 
 class MockDatabase(DatabaseCommand):
     def __init__(self):
@@ -277,17 +279,6 @@ class TestSqlInput(unittest.TestCase):
     def test_okay(self):
         SqlInput("my_table")
         SqlInput("zz-table")
-
-
-def mkPPart(name, *pos):
-    p = PositionPartition(name)
-    for x in pos:
-        p.add_position(x)
-    return p
-
-
-def mkTailPart(name, count=1):
-    return MaxValuePartition(name, count)
 
 
 class TestReorganizePartitions(unittest.TestCase):
