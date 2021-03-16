@@ -226,10 +226,21 @@ def get_position_increase_per_day(p1, p2):
 
 
 def generate_weights(count):
+    """
+    Generate a static list of geometricly-decreasing values, starting from
+    10,000 to give a high ceiling. It could be dynamic, but eh.
+    """
     return [10_000 / x for x in range(count, 0, -1)]
 
 
 def get_weighted_position_increase_per_day_for_partitions(partitions):
+    """
+    For the provided list of partitions, uses the get_position_increase_per_day
+    method to generate a list position increment rates in positions/day, then
+    uses a geometric weight to make more recent rates influence the outcome
+    more, and returns a final list of weighted partition-position-increase-per-
+    day, with one entry per column.
+    """
     pos_rates = [
         get_position_increase_per_day(p1, p2) for p1, p2 in pairwise(partitions)
     ]
@@ -247,6 +258,9 @@ def get_weighted_position_increase_per_day_for_partitions(partitions):
 
 def plan_partition_changes(partition_list, current_positions):
     """
+    Produces a list of partitions that should be modified or created in order
+    to meet the supplied table requirements, using a guess as to the rate of
+    fill.
     """
     non_empty_partitions, empty_partitions = split_partitions_around_positions(
         partition_list, current_positions
