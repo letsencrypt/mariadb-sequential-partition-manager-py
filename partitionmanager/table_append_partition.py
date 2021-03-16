@@ -161,18 +161,16 @@ def evaluate_partition_actions(partitions, timestamp, allowed_lifespan):
     tail_part = partitions[-1]
     if not isinstance(tail_part, MaxValuePartition):
         raise UnexpectedPartitionException(tail_part)
-    try:
-        tail_part_timestamp = datetime.strptime(tail_part.name, "p_%Y%m%d").replace(
-            tzinfo=timezone.utc
-        )
-        lifespan = timestamp - tail_part_timestamp
-        return {
-            "do_partition": lifespan >= allowed_lifespan,
-            "remaining_lifespan": allowed_lifespan - lifespan,
-        }
-    except ValueError as ve:
-        logging.warning(f"Partition {tail_part} is assumed to need partitioning: {ve}")
+
+    if not tail_part.timestamp():
+        logging.warning(f"Partition {tail_part} is assumed to need partitioning")
         return {"do_partition": True, "remaining_lifespan": timedelta()}
+
+    lifespan = timestamp - tail_part.timestamp()
+    return {
+        "do_partition": lifespan >= allowed_lifespan,
+        "remaining_lifespan": allowed_lifespan - lifespan,
+    }
 
 
 def partition_name_now():
