@@ -242,3 +242,11 @@ class TableInformationException(Exception):
     """
 
     pass
+
+
+class NoEmptyPartitionsAvailableException(Exception):
+    """
+    Raised if no empty partitions are available to safely modify.
+    """
+
+    pass

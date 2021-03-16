@@ -19,6 +19,7 @@ from partitionmanager.table_append_partition import (
     evaluate_partition_actions,
     get_current_positions,
     get_partition_map,
+    get_position_increase_per_day,
     parse_partition_map,
     reorganize_partition,
     split_partitions_around_positions,
@@ -425,6 +426,39 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 [19, 500],
             ),
             ([mkPPart("a", 10, 10)], [mkPPart("b", 20, 20), mkTailPart("z", count=2)]),
+        )
+
+    def test_get_position_increase_per_day(self):
+        with self.assertRaises(ValueError):
+            get_position_increase_per_day(
+                mkTailPart("p_20201231"), mkPPart("p_20210101", 42)
+            )
+        with self.assertRaises(ValueError):
+            get_position_increase_per_day(
+                mkPPart("p_20211231", 99), mkPPart("p_20210101", 42)
+            )
+        with self.assertRaises(ValueError):
+            get_position_increase_per_day(
+                mkPPart("p_20201231", 1, 99), mkPPart("p_20210101", 42)
+            )
+
+        self.assertEqual(
+            get_position_increase_per_day(
+                mkPPart("p_20201231", 0), mkPPart("p_20210101", 100)
+            ),
+            [100],
+        )
+        self.assertEqual(
+            get_position_increase_per_day(
+                mkPPart("p_20201231", 0), mkPPart("p_20210410", 100)
+            ),
+            [1],
+        )
+        self.assertEqual(
+            get_position_increase_per_day(
+                mkPPart("p_20201231", 0, 10), mkPPart("p_20210410", 100, 1000)
+            ),
+            [1, 9.9],
         )
 
 

@@ -2,15 +2,17 @@ from partitionmanager.types import (
     DuplicatePartitionException,
     MaxValuePartition,
     MismatchedIdException,
+    NoEmptyPartitionsAvailableException,
     Partition,
     PositionPartition,
-    Table,
     SqlInput,
+    Table,
     TableInformationException,
     UnexpectedPartitionException,
 )
 from datetime import datetime, timedelta, timezone
 import logging
+import operator
 import re
 
 
@@ -201,12 +203,34 @@ def split_partitions_around_positions(partition_list, current_positions):
     return less_than_partitions, greater_or_equal_partitions
 
 
+def get_position_increase_per_day(p1, p2):
+    """
+    Return a list containing the change in positions between p1 and p2 divided
+    by the number of days between them, as "position increase per day", or raise
+    ValueError if p1 is not before p2, or if either p1 or p2 does not have a
+    position. For partitions with only a single position, this will be a list of
+    size 1.
+    """
+    if not isinstance(p1, PositionPartition) or not isinstance(p2, PositionPartition):
+        raise ValueError("Both partitions must be PositionPartition type")
+    if p1.timestamp() >= p2.timestamp():
+        raise ValueError("p1 must be before p2")
+    if p1.num_columns != p2.num_columns:
+        raise ValueError("p1 and p2 must have the same number of columns")
+    delta_time = p2.timestamp() - p1.timestamp()
+    delta_days = delta_time / timedelta(days=1)
+    delta_positions = list(map(operator.sub, p2.positions, p1.positions))
+    return list(map(lambda pos: pos / delta_days, delta_positions))
+
+
 def plan_partition_changes(partition_list, current_positions):
     """
     """
     non_empty_partitions, empty_partitions = split_partitions_around_positions(
         partition_list, current_positions
     )
+    if not empty_partitions:
+        raise NoEmptyPartitionsAvailableException()
 
 
 def reorganize_partition(partition_list, new_partition_name, partition_positions):
