@@ -17,9 +17,11 @@ from partitionmanager.types import (
 )
 from partitionmanager.table_append_partition import (
     evaluate_partition_actions,
+    generate_weights,
     get_current_positions,
     get_partition_map,
     get_position_increase_per_day,
+    get_weighted_position_increase_per_day_for_partitions,
     parse_partition_map,
     reorganize_partition,
     split_partitions_around_positions,
@@ -459,6 +461,53 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 mkPPart("p_20201231", 0, 10), mkPPart("p_20210410", 100, 1000)
             ),
             [1, 9.9],
+        )
+
+    def test_generate_weights(self):
+        self.assertEqual(generate_weights(1), [10000])
+        self.assertEqual(generate_weights(3), [10000 / 3, 5000, 10000])
+
+    def test_get_weighted_position_increase_per_day_for_partitions(self):
+        self.assertEqual(
+            get_weighted_position_increase_per_day_for_partitions(
+                [mkPPart("p_20201231", 0), mkPPart("p_20210101", 100)]
+            ),
+            [100],
+        )
+        self.assertEqual(
+            get_weighted_position_increase_per_day_for_partitions(
+                [mkPPart("p_20201231", 0), mkPPart("p_20210410", 100)]
+            ),
+            [1],
+        )
+        self.assertEqual(
+            get_weighted_position_increase_per_day_for_partitions(
+                [mkPPart("p_20201231", 50, 50), mkPPart("p_20210410", 100, 500)]
+            ),
+            [0.5, 4.5],
+        )
+        self.assertEqual(
+            get_weighted_position_increase_per_day_for_partitions(
+                [
+                    mkPPart("p_20200922", 0),
+                    mkPPart("p_20201231", 100),  # rate = 1/day
+                    mkPPart("p_20210410", 1100),  # rate = 10/day
+                ]
+            ),
+            [7],
+        )
+
+    def test_big_weighting(self):
+        self.assertEqual(
+            get_weighted_position_increase_per_day_for_partitions(
+                [
+                    mkPPart("p_20200922", 0),
+                    mkPPart("p_20201231", 100),  # 1/day
+                    mkPPart("p_20210410", 1100),  # 10/day
+                    mkPPart("p_20210719", 101100),  # 1,000/day
+                ]
+            ),
+            [548.3636363636364],
         )
 
 

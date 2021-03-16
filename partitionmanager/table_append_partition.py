@@ -10,6 +10,8 @@ from partitionmanager.types import (
     TableInformationException,
     UnexpectedPartitionException,
 )
+from .tools import pairwise
+
 from datetime import datetime, timedelta, timezone
 import logging
 import operator
@@ -221,6 +223,26 @@ def get_position_increase_per_day(p1, p2):
     delta_days = delta_time / timedelta(days=1)
     delta_positions = list(map(operator.sub, p2.positions, p1.positions))
     return list(map(lambda pos: pos / delta_days, delta_positions))
+
+
+def generate_weights(count):
+    return [10_000 / x for x in range(count, 0, -1)]
+
+
+def get_weighted_position_increase_per_day_for_partitions(partitions):
+    pos_rates = [
+        get_position_increase_per_day(p1, p2) for p1, p2 in pairwise(partitions)
+    ]
+    weights = generate_weights(len(pos_rates))
+
+    # Initialize a list with a zero for each position
+    weighted_sums = [0] * partitions[0].num_columns
+
+    for p_r, weight in zip(pos_rates, weights):
+        for idx, val in enumerate(p_r):
+            weighted_sums[idx] += val * weight
+
+    return list(map(lambda x: x / sum(weights), weighted_sums))
 
 
 def plan_partition_changes(partition_list, current_positions):
