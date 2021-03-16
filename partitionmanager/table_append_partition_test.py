@@ -411,6 +411,22 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ([mkPPart("a", 1), mkPPart("b", 11), mkPPart("c", 11)], [mkTailPart("z")]),
         )
 
+        self.assertEqual(
+            split_partitions_around_positions(
+                [mkPPart("a", 1, 100), mkPPart("b", 2, 200), mkTailPart("z", count=2)],
+                [10, 1000],
+            ),
+            ([mkPPart("a", 1, 100), mkPPart("b", 2, 200)], [mkTailPart("z", count=2)]),
+        )
+
+        self.assertEqual(
+            split_partitions_around_positions(
+                [mkPPart("a", 10, 10), mkPPart("b", 20, 20), mkTailPart("z", count=2)],
+                [19, 500],
+            ),
+            ([mkPPart("a", 10, 10)], [mkPPart("b", 20, 20), mkTailPart("z", count=2)]),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -180,8 +180,8 @@ def partition_name_now():
 
 def split_partitions_around_positions(partition_list, current_positions):
     """
-    Split a partition_list into those that are before current_positions
-    and those which are after.
+    Split a partition_list into those for which _all_ values are less than
+    current_positions, and all the others.
     """
     for p in partition_list:
         if not isinstance(p, Partition):
