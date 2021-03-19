@@ -276,7 +276,7 @@ def predict_forward(current_positions, rate_of_change, duration):
         )
 
     increase = list(map(lambda x: x * duration / timedelta(days=1), rate_of_change))
-    predicted_positions = [p + i for p, i in zip(current_positions, increase)]
+    predicted_positions = [int(p + i) for p, i in zip(current_positions, increase)]
     for old, new in zip(current_positions, predicted_positions):
         assert new >= old, f"Always predict forward, {new} < {old}"
     return predicted_positions

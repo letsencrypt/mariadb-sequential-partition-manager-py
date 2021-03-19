@@ -568,13 +568,39 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 2,
             ),
             [
-                ChangedPartition(mkPPart("p_20201231", 100)).set_position([350.0]),
+                ChangedPartition(mkPPart("p_20201231", 100)).set_position([350]),
                 ChangedPartition(mkPPart("p_20210102", 200))
-                .set_position([700.0])
+                .set_position([700])
                 .set_timestamp(datetime(2021, 1, 7, tzinfo=timezone.utc)),
                 ChangedPartition(mkTailPart("future"))
-                .set_position([1050.0])
+                .set_position([1050])
                 .set_timestamp(datetime(2021, 1, 14, tzinfo=timezone.utc)),
+            ],
+        )
+
+        self.assertEqual(
+            plan_partition_changes(
+                [
+                    mkPPart("p_20201231", 100),
+                    mkPPart("p_20210102", 200),
+                    mkTailPart("future"),
+                ],
+                [199],
+                datetime(2021, 1, 3, tzinfo=timezone.utc),
+                timedelta(days=7),
+                3,
+            ),
+            [
+                ChangedPartition(mkPPart("p_20210102", 200)).set_position([302]),
+                ChangedPartition(mkTailPart("future"))
+                .set_position([422])
+                .set_timestamp(datetime(2021, 1, 9, tzinfo=timezone.utc)),
+                NewPartition()
+                .set_position([542])
+                .set_timestamp(datetime(2021, 1, 16, tzinfo=timezone.utc)),
+                NewPartition()
+                .set_position([662])
+                .set_timestamp(datetime(2021, 1, 23, tzinfo=timezone.utc)),
             ],
         )
 
