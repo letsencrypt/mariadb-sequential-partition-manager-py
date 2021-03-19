@@ -121,8 +121,9 @@ class PositionPartition(Partition):
     def name(self):
         return self._name
 
-    def add_position(self, position):
-        self.positions.append(int(position))
+    def set_position(self, positions):
+        self.positions = list(map(lambda p: int(p), positions))
+        return self
 
     @property
     def num_columns(self):
@@ -202,6 +203,119 @@ class MaxValuePartition(Partition):
         if isinstance(other, MaxValuePartition):
             return self._name == other._name and self.count == other.count
         return False
+
+
+class InstantPartition(PositionPartition):
+    """
+    Represent a partition at the current moment, used for rate calculations
+    as a stand-in that only exists for the purposes of the rate calculation
+    itself.
+    """
+
+    def __init__(self, now, positions):
+        self._name = "Instant"
+        self.instant = now
+        self.positions = positions
+
+    def timestamp(self):
+        return self.instant
+
+
+class ModifiedPartition(abc.ABC):
+    def __init__(self):
+        self.num_columns = None
+        self.positions = None
+        self._timestamp = None
+
+    def set_timestamp(self, timestamp):
+        """
+        Set the timestamp to be used for the modified partition. This
+        effectively changes the partition's name.
+        """
+        self._timestamp = timestamp
+        return self
+
+    def set_position(self, pos):
+        """
+        Set the position of this modified partition. If this partition
+        changes an existing partition, the positions of both must have
+        identical length.
+        """
+        if not isinstance(pos, list):
+            raise ValueError()
+        if self.num_columns is not None and len(pos) != self.num_columns:
+            raise UnexpectedPartitionException(
+                f"Expected {self.num_columns} columns but list has {len(pos)}."
+            )
+        self.positions = pos
+        return self
+
+    def timestamp(self):
+        return self._timestamp
+
+    @abc.abstractmethod
+    def as_partition(self):
+        """
+        Return a Partition object representing this modified Partition
+        """
+
+    def __repr__(self):
+        return f"{type(self).__name__}<{str(self)}>"
+
+    def __eq__(self, other):
+        if isinstance(other, ModifiedPartition):
+            return (
+                type(self) == type(other)
+                and self.positions == other.positions
+                and self._timestamp == other._timestamp
+            )
+        return False
+
+
+class ChangedPartition(ModifiedPartition):
+    """
+    Represents modifications to a given Partition
+    """
+
+    def __init__(self, old_part):
+        if not isinstance(old_part, Partition):
+            raise ValueError()
+        super().__init__()
+        self.old = old_part
+        self.num_columns = self.old.num_columns
+        self._timestamp = self.old.timestamp()
+        self.positions = (
+            self.old.positions if isinstance(old_part, PositionPartition) else None
+        )
+
+    def as_partition(self):
+        return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(
+            self.positions
+        )
+
+    def __str__(self):
+        return f"{self.old} => {self.positions} {self._timestamp}"
+
+
+class NewPartition(ModifiedPartition):
+    """
+    Represents a wholly new Partition to be constructed
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def as_partition(self):
+        if not self._timestamp:
+            raise ValueError()
+        if self.positions:
+            return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(
+                self.positions
+            )
+        raise ValueError("Positions not set, and not configured for MaxValue")
+
+    def __str__(self):
+        return f"Add: {self.positions} {self._timestamp}"
 
 
 class MismatchedIdException(Exception):

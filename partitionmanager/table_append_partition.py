@@ -1,7 +1,10 @@
 from partitionmanager.types import (
+    ChangedPartition,
     DuplicatePartitionException,
+    InstantPartition,
     MaxValuePartition,
     MismatchedIdException,
+    NewPartition,
     NoEmptyPartitionsAvailableException,
     Partition,
     PositionPartition,
@@ -135,10 +138,7 @@ def parse_partition_map(rows):
                 )
                 raise MismatchedIdException("Partition columns mismatch")
 
-            pos_part = PositionPartition(part_name)
-            for v in part_vals:
-                pos_part.add_position(v)
-
+            pos_part = PositionPartition(part_name).set_position(part_vals)
             partitions.append(pos_part)
 
         member_tail = partition_tail.match(l)
@@ -183,7 +183,8 @@ def partition_name_now():
 def split_partitions_around_positions(partition_list, current_positions):
     """
     Split a partition_list into those for which _all_ values are less than
-    current_positions, and all the others.
+    current_positions, a single partition whose values contain current_positions,
+    and a list of all the others.
     """
     for p in partition_list:
         if not isinstance(p, Partition):
@@ -200,7 +201,10 @@ def split_partitions_around_positions(partition_list, current_positions):
         else:
             greater_or_equal_partitions.append(p)
 
-    return less_than_partitions, greater_or_equal_partitions
+    # The active partition is always the first in the list of greater_or_equal
+    active_partition = greater_or_equal_partitions.pop(0)
+
+    return less_than_partitions, active_partition, greater_or_equal_partitions
 
 
 def get_position_increase_per_day(p1, p2):
@@ -239,6 +243,9 @@ def get_weighted_position_increase_per_day_for_partitions(partitions):
     more, and returns a final list of weighted partition-position-increase-per-
     day, with one entry per column.
     """
+    if not partitions:
+        raise ValueError("Partition list must not be empty")
+
     pos_rates = [
         get_position_increase_per_day(p1, p2) for p1, p2 in pairwise(partitions)
     ]
@@ -254,17 +261,108 @@ def get_weighted_position_increase_per_day_for_partitions(partitions):
     return list(map(lambda x: x / sum(weights), weighted_sums))
 
 
-def plan_partition_changes(partition_list, current_positions):
+def predict_forward(current_positions, rate_of_change, duration):
+    """
+    Move current_positions forward a given duration at the provided rates of
+    change. The rate and the duration must be compatible units, and both the
+    positions and the rate must be lists of the same size.
+    """
+    if len(current_positions) != len(rate_of_change):
+        raise ValueError("Expected identical list sizes")
+
+    for neg_rate in filter(lambda r: r < 0, rate_of_change):
+        raise ValueError(
+            f"Can't predict forward with a negative rate of change: {neg_rate}"
+        )
+
+    increase = list(map(lambda x: x * duration / timedelta(days=1), rate_of_change))
+    predicted_positions = [p + i for p, i in zip(current_positions, increase)]
+    for old, new in zip(current_positions, predicted_positions):
+        assert new >= old, f"Always predict forward, {new} < {old}"
+    return predicted_positions
+
+
+def plan_partition_changes(
+    partition_list,
+    current_positions,
+    evaluation_time,
+    allowed_lifespan,
+    num_empty_partitions,
+):
     """
     Produces a list of partitions that should be modified or created in order
-    to meet the supplied table requirements, using a guess as to the rate of
+    to meet the supplied table requirements, using an estimate as to the rate of
     fill.
     """
-    non_empty_partitions, empty_partitions = split_partitions_around_positions(
+    filled_partitions, active_partition, empty_partitions = split_partitions_around_positions(
         partition_list, current_positions
     )
     if not empty_partitions:
         raise NoEmptyPartitionsAvailableException()
+    if not active_partition:
+        raise Exception("Active Partition can't be None")
+    if active_partition.timestamp() >= evaluation_time:
+        raise ValueError(
+            f"Evaluation time ({evaluation_time}) must be after "
+            f"the active partition {active_partition}."
+        )
+
+    # This bit of weirdness is a fencepost issue: The partition list is strictly
+    # increasing until we get to "now" and the active partition. "Now" actually
+    # takes place _after_ active partition's start date (naturally), but
+    # contains a position that is before the top of active, by definition. For
+    # the rate processing to work, we need to cross the "now" and the active
+    # partition's dates and positions.
+    rate_relevant_partitions = filled_partitions + [
+        InstantPartition(active_partition.timestamp(), current_positions),
+        InstantPartition(evaluation_time, active_partition.positions),
+    ]
+    rates = get_weighted_position_increase_per_day_for_partitions(
+        rate_relevant_partitions
+    )
+
+    active_lifespan = evaluation_time - active_partition.timestamp()
+    remaining_active_lifespan = allowed_lifespan - active_lifespan
+
+    new_pos = None
+    if remaining_active_lifespan < timedelta(hours=1):
+        # We're out of time, let's move the active partition to cut-over in 10
+        # minutes
+        new_pos = predict_forward(current_positions, rates, timedelta(minutes=10))
+    else:
+        # Adjust the active partition's desired end position
+        new_pos = predict_forward(current_positions, rates, remaining_active_lifespan)
+
+    logging.info(
+        f"Moving {active_partition} from {active_partition.positions} to {new_pos}"
+    )
+    changed_partitions = [ChangedPartition(active_partition).set_position(new_pos)]
+
+    # Adjust each of the empty partitions
+    for partition in empty_partitions:
+        last_changed = changed_partitions[-1]
+        partition_start_time = last_changed.timestamp() + allowed_lifespan
+        changed_part_pos = predict_forward(
+            last_changed.positions, rates, allowed_lifespan
+        )
+        changed_partitions.append(
+            ChangedPartition(partition)
+            .set_position(changed_part_pos)
+            .set_timestamp(partition_start_time)
+        )
+
+    # Ensure we have the required number of empty partitions
+    while len(changed_partitions) < num_empty_partitions + 1:
+        last_changed = changed_partitions[-1]
+        partition_start_time = last_changed.timestamp() + allowed_lifespan
+        new_part_pos = predict_forward(last_changed.positions, rates, allowed_lifespan)
+        changed_partitions.append(
+            NewPartition()
+            .set_position(new_part_pos)
+            .set_timestamp(partition_start_time)
+        )
+
+    return changed_partitions
 
 
 def reorganize_partition(partition_list, new_partition_name, partition_positions):
@@ -298,9 +396,9 @@ def reorganize_partition(partition_list, new_partition_name, partition_positions
             + f" but expected {num_partition_ids}"
         )
 
-    altered_partition = PositionPartition(tail_part.name)
-    for p in partition_positions:
-        altered_partition.add_position(p)
+    altered_partition = PositionPartition(tail_part.name).set_position(
+        partition_positions
+    )
 
     new_partition = MaxValuePartition(new_partition_name, num_partition_ids)
 

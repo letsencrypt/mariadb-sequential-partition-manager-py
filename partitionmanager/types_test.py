@@ -1,8 +1,11 @@
 import argparse
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from .types import (
+    ChangedPartition,
+    InstantPartition,
     MaxValuePartition,
+    NewPartition,
     PositionPartition,
     retention_from_dict,
     SqlInput,
@@ -13,10 +16,7 @@ from .types import (
 
 
 def mkPPart(name, *pos):
-    p = PositionPartition(name)
-    for x in pos:
-        p.add_position(x)
-    return p
+    return PositionPartition(name).set_position(pos)
 
 
 def mkTailPart(name, count=1):
@@ -92,6 +92,90 @@ class TestTypes(unittest.TestCase):
         r = retention_from_dict({"days": 30})
         self.assertEqual(timedelta(days=30), r)
 
+    def test_changed_partition(self):
+        with self.assertRaises(ValueError):
+            ChangedPartition("bob")
+
+        with self.assertRaises(ValueError):
+            ChangedPartition(PositionPartition("p_20201231")).set_position(2)
+
+        with self.assertRaises(UnexpectedPartitionException):
+            ChangedPartition(PositionPartition("p_20210101")).set_position([1, 2, 3, 4])
+
+        c = ChangedPartition(PositionPartition("p_20210101").set_position([1, 2, 3, 4]))
+        c.set_timestamp(date(2021, 1, 2))
+        y = c.set_position([10, 10, 10, 10])
+        self.assertEqual(c, y)
+
+        self.assertEqual(c.timestamp(), date(2021, 1, 2))
+        self.assertEqual(c.positions, [10, 10, 10, 10])
+
+        self.assertEqual(
+            c.as_partition(),
+            PositionPartition("p_20210102").set_position([10, 10, 10, 10]),
+        )
+
+        c_max = ChangedPartition(MaxValuePartition("p_20210101", count=1)).set_position(
+            [1949]
+        )
+        self.assertEqual(c_max.timestamp(), datetime(2021, 1, 1, tzinfo=timezone.utc))
+        self.assertEqual(c_max.positions, [1949])
+
+        self.assertEqual(
+            ChangedPartition(
+                PositionPartition("p_20210101").set_position([1, 2, 3, 4])
+            ),
+            ChangedPartition(
+                PositionPartition("p_20210101").set_position([1, 2, 3, 4])
+            ),
+        )
+
+        self.assertNotEqual(
+            ChangedPartition(
+                PositionPartition("p_20210101").set_position([1, 2, 4, 4])
+            ),
+            ChangedPartition(
+                PositionPartition("p_20210101").set_position([1, 2, 3, 4])
+            ),
+        )
+
+        self.assertNotEqual(
+            ChangedPartition(
+                PositionPartition("p_20210101").set_position([1, 2, 3, 4])
+            ),
+            ChangedPartition(
+                PositionPartition("p_20210102").set_position([1, 2, 3, 4])
+            ),
+        )
+
+    def test_new_partition(self):
+        with self.assertRaises(ValueError):
+            NewPartition().as_partition()
+
+        with self.assertRaises(ValueError):
+            NewPartition().set_timestamp(date(2021, 12, 31)).as_partition()
+
+        self.assertEqual(
+            NewPartition()
+            .set_position([3])
+            .set_timestamp(date(2021, 12, 31))
+            .as_partition(),
+            PositionPartition("p_20211231").set_position([3]),
+        )
+
+        self.assertEqual(
+            NewPartition()
+            .set_position([1, 1, 1])
+            .set_timestamp(date(1994, 1, 1))
+            .as_partition(),
+            PositionPartition("p_19940101").set_position([1, 1, 1]),
+        )
+
+        self.assertEqual(
+            NewPartition().set_position([3]).set_timestamp(date(2021, 12, 31)),
+            NewPartition().set_position([3]).set_timestamp(date(2021, 12, 31)),
+        )
+
 
 class TestPartition(unittest.TestCase):
     def test_partition_timestamps(self):
@@ -123,3 +207,11 @@ class TestPartition(unittest.TestCase):
             mkPPart("a", 10, 10) < mkPPart("b", 11, 11, 11)
         with self.assertRaises(UnexpectedPartitionException):
             mkPPart("a", 10, 10, 10) < mkPPart("b", 11, 11)
+
+    def test_instant_partition(self):
+        now = datetime.utcnow()
+
+        ip = InstantPartition(now, [1, 2])
+        self.assertEqual(ip.positions, [1, 2])
+        self.assertEqual(ip.name, "Instant")
+        self.assertEqual(ip.timestamp(), now)
