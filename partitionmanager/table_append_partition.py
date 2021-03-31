@@ -261,7 +261,7 @@ def get_weighted_position_increase_per_day_for_partitions(partitions):
     return list(map(lambda x: x / sum(weights), weighted_sums))
 
 
-def predict_forward(current_positions, rate_of_change, duration):
+def predict_forward_position(current_positions, rate_of_change, duration):
     """
     Move current_positions forward a given duration at the provided rates of
     change. The rate and the duration must be compatible units, and both the
@@ -282,6 +282,30 @@ def predict_forward(current_positions, rate_of_change, duration):
     return predicted_positions
 
 
+def predict_forward_time(current_positions, end_positions, rates, evaluation_time):
+    """
+    Given the current_positions and the rates, determine the timestamp of when
+    the positions will reach ALL end_positions.
+    """
+    if not len(current_positions) == len(end_positions) == len(rates):
+        raise ValueError("Expected identical list sizes")
+
+    for neg_rate in filter(lambda r: r < 0, rates):
+        raise ValueError(
+            f"Can't predict forward with a negative rate of change: {neg_rate}"
+        )
+
+    days_remaining = [
+        (end - now) / rate
+        for now, end, rate in zip(current_positions, end_positions, rates)
+    ]
+
+    if max(days_remaining) < 0:
+        raise ValueError(f"All values are negative: {days_remaining}")
+
+    return evaluation_time + (max(days_remaining) * timedelta(days=1))
+
+
 def plan_partition_changes(
     partition_list,
     current_positions,
@@ -294,6 +318,8 @@ def plan_partition_changes(
     to meet the supplied table requirements, using an estimate as to the rate of
     fill.
     """
+    log = logging.getLogger("plan_partition_changes")
+
     filled_partitions, active_partition, empty_partitions = split_partitions_around_positions(
         partition_list, current_positions
     )
@@ -321,48 +347,104 @@ def plan_partition_changes(
         rate_relevant_partitions
     )
 
+    results = list()
+
     active_lifespan = evaluation_time - active_partition.timestamp()
     remaining_active_lifespan = allowed_lifespan - active_lifespan
 
-    new_pos = None
     if remaining_active_lifespan < timedelta(hours=1):
         # We're out of time, let's move the active partition to cut-over in 10
         # minutes
-        new_pos = predict_forward(current_positions, rates, timedelta(minutes=10))
+        new_pos = predict_forward_position(
+            current_positions, rates, timedelta(minutes=10)
+        )
+        log.info(
+            f"Low on time, urgently moving {active_partition} from "
+            f"{active_partition.positions} to {new_pos} to change-over in "
+            "approximately 10m"
+        )
+        results.append(
+            ChangedPartition(active_partition).set_position(new_pos).set_important()
+        )
     else:
-        # Adjust the active partition's desired end position
-        new_pos = predict_forward(current_positions, rates, remaining_active_lifespan)
+        # We need to include active_partition in the list even though we're not
+        # actually changing it
+        results.append(ChangedPartition(active_partition))
 
-    logging.info(
-        f"Moving {active_partition} from {active_partition.positions} to {new_pos}"
-    )
-    changed_partitions = [ChangedPartition(active_partition).set_position(new_pos)]
+    assert len(results) == 1, f"There must be exactly one partition: {results}"
 
     # Adjust each of the empty partitions
     for partition in empty_partitions:
-        last_changed = changed_partitions[-1]
+        last_changed = results[-1]
         partition_start_time = last_changed.timestamp() + allowed_lifespan
-        changed_part_pos = predict_forward(
+        changed_part_pos = predict_forward_position(
             last_changed.positions, rates, allowed_lifespan
         )
-        changed_partitions.append(
+
+        changed_partition = (
             ChangedPartition(partition)
             .set_position(changed_part_pos)
             .set_timestamp(partition_start_time)
         )
 
+        if isinstance(partition, PositionPartition):
+            # If we took no action, at rates, what timestamp would we reach the
+            # end of active_partition? If this doesn't match the partition's
+            # name, then this is an important change.
+            changeover_time = predict_forward_time(
+                last_changed.positions, partition.positions, rates, evaluation_time
+            )
+
+            if changeover_time.date() != partition.timestamp().date():
+                log.info(
+                    f"Changeover predicted at {changeover_time.date()} which is "
+                    f"not {partition.timestamp().date()}. This change will be "
+                    f"marked as important to ensure that {partition} is moved "
+                    f"to {changed_part_pos} and {partition_start_time:%Y-%m-%d}"
+                )
+                changed_partition.set_important()
+
+        results.append(changed_partition)
+
     # Ensure we have the required number of empty partitions
-    while len(changed_partitions) < num_empty_partitions + 1:
-        last_changed = changed_partitions[-1]
+    while len(results) < num_empty_partitions + 1:
+        last_changed = results[-1]
         partition_start_time = last_changed.timestamp() + allowed_lifespan
-        new_part_pos = predict_forward(last_changed.positions, rates, allowed_lifespan)
-        changed_partitions.append(
+        new_part_pos = predict_forward_position(
+            last_changed.positions, rates, allowed_lifespan
+        )
+        results.append(
             NewPartition()
             .set_position(new_part_pos)
             .set_timestamp(partition_start_time)
         )
 
-    return changed_partitions
+    return results
+
+
+def evaluate_partition_changes(altered_partitions):
+    """
+    Evaluate the list from plan_partition_changes and determine if the set of
+    changes should be performed - if all the changes are minor, they shouldn't
+    be run. Returns True if the changeset should run, otherwise logs the reason
+    for skipping and returns False
+    """
+    log = logging.getLogger("evaluate_partition_changes")
+    for p in altered_partitions:
+        if isinstance(p, NewPartition):
+            log.debug(f"{p} is new")
+            return True
+
+        if isinstance(p, ChangedPartition):
+            if p.timestamp() != p.old.timestamp():
+                log.debug(f"{p} has an updated timestamp vs {p.old}")
+                return True
+
+            if p.important():
+                log.debug(f"{p} is marked important")
+                return True
+
+    return False
 
 
 def reorganize_partition(partition_list, new_partition_name, partition_positions):

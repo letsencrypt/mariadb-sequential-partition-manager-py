@@ -130,10 +130,28 @@ class TestTypes(unittest.TestCase):
             ),
         )
 
+        self.assertEqual(
+            ChangedPartition(
+                PositionPartition("p_20210101").set_position([1, 2, 3, 4])
+            ).set_important(),
+            ChangedPartition(
+                PositionPartition("p_20210101").set_position([1, 2, 3, 4])
+            ).set_important(),
+        )
+
         self.assertNotEqual(
             ChangedPartition(
                 PositionPartition("p_20210101").set_position([1, 2, 4, 4])
             ),
+            ChangedPartition(
+                PositionPartition("p_20210101").set_position([1, 2, 3, 4])
+            ),
+        )
+
+        self.assertNotEqual(
+            ChangedPartition(
+                PositionPartition("p_20210101").set_position([1, 2, 3, 4])
+            ).set_important(),
             ChangedPartition(
                 PositionPartition("p_20210101").set_position([1, 2, 3, 4])
             ),

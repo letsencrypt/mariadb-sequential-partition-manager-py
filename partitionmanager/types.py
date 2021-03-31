@@ -226,6 +226,7 @@ class ModifiedPartition(abc.ABC):
         self.num_columns = None
         self.positions = None
         self._timestamp = None
+        self._important = False
 
     def set_timestamp(self, timestamp):
         """
@@ -250,8 +251,15 @@ class ModifiedPartition(abc.ABC):
         self.positions = pos
         return self
 
+    def set_important(self):
+        self._important = True
+        return self
+
     def timestamp(self):
         return self._timestamp
+
+    def important(self):
+        return self._important
 
     @abc.abstractmethod
     def as_partition(self):
@@ -268,6 +276,7 @@ class ModifiedPartition(abc.ABC):
                 type(self) == type(other)
                 and self.positions == other.positions
                 and self._timestamp == other._timestamp
+                and self._important == other._important
             )
         return False
 
@@ -294,7 +303,8 @@ class ChangedPartition(ModifiedPartition):
         )
 
     def __str__(self):
-        return f"{self.old} => {self.positions} {self._timestamp}"
+        imp = "[!!]" if self.important() else ""
+        return f"{self.old} => {self.positions} {imp} {self._timestamp}"
 
 
 class NewPartition(ModifiedPartition):
@@ -304,6 +314,7 @@ class NewPartition(ModifiedPartition):
 
     def __init__(self):
         super().__init__()
+        self.set_important()
 
     def as_partition(self):
         if not self._timestamp:
