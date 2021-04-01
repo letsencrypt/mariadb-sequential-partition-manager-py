@@ -1,7 +1,6 @@
 import tempfile
 import unittest
 import pymysql
-from datetime import datetime, timezone
 from pathlib import Path
 from .cli import (
     all_configured_tables_are_compatible,
@@ -48,12 +47,14 @@ class TestPartitionCmd(unittest.TestCase):
         )
         output = partition_cmd(args)
 
-        expectedDate = datetime.now(tz=timezone.utc).strftime("p_%Y%m%d")
-
         self.assertEqual(
-            "ALTER TABLE `testtable` REORGANIZE PARTITION `p_20201204` INTO "
-            + f"(PARTITION `p_20201204` VALUES LESS THAN (3101009), PARTITION `{expectedDate}` "
-            + "VALUES LESS THAN MAXVALUE);",
+            (
+                "ALTER TABLE `testtable` REORGANIZE PARTITION `p_20201105` INTO "
+                "(PARTITION `p_20201105` VALUES LESS THAN (150));\n"
+                "ALTER TABLE `testtable` REORGANIZE PARTITION `p_20201204` INTO "
+                "(PARTITION `p_20201205` VALUES LESS THAN (172), "
+                "PARTITION `p_20210104` VALUES LESS THAN MAXVALUE);"
+            ),
             output["testtable"]["sql"],
         )
 
@@ -63,15 +64,19 @@ class TestPartitionCmd(unittest.TestCase):
         )
         output = partition_cmd(args)
 
-        expectedDate = datetime.now(tz=timezone.utc).strftime("p_%Y%m%d")
-
         self.assertEqual(
             {
                 "testtable": {
                     "output": [],
-                    "sql": "ALTER TABLE `testtable` REORGANIZE PARTITION `p_20201204` "
-                    + "INTO (PARTITION `p_20201204` VALUES LESS THAN (3101009), "
-                    + f"PARTITION `{expectedDate}` VALUES LESS THAN MAXVALUE);",
+                    "sql": (
+                        "ALTER TABLE `testtable` REORGANIZE PARTITION "
+                        "`p_20201105` INTO "
+                        "(PARTITION `p_20201105` VALUES LESS THAN (150));\n"
+                        "ALTER TABLE `testtable` REORGANIZE PARTITION "
+                        "`p_20201204` INTO "
+                        "(PARTITION `p_20201205` VALUES LESS THAN (172), "
+                        "PARTITION `p_20210104` VALUES LESS THAN MAXVALUE);"
+                    ),
                 }
             },
             output,
@@ -172,6 +177,7 @@ partitionmanager:
         o = run_partition_cmd_yaml(
             f"""
 partitionmanager:
+    num_empty: 1
     partition_period:
         days: 7
     tables:
@@ -180,7 +186,7 @@ partitionmanager:
     mariadb: {str(fake_exec)}
 """
         )
-        self.assertSequenceEqual(list(o), ["partitioned_last_week"])
+        self.assertSequenceEqual(list(o), [])
 
     def test_partition_period_different_per_table(self):
         o = run_partition_cmd_yaml(
@@ -224,7 +230,7 @@ class TestStatsCmd(unittest.TestCase):
             r["partitioned_yesterday"]["time_since_newest_partition"].days, 2
         )
         self.assertLess(
-            r["partitioned_yesterday"]["time_since_oldest_partition"].days, 32
+            r["partitioned_yesterday"]["time_since_oldest_partition"].days, 43
         )
         self.assertGreater(r["partitioned_yesterday"]["mean_partition_delta"].days, 2)
         self.assertGreater(r["partitioned_yesterday"]["max_partition_delta"].days, 2)

@@ -103,9 +103,11 @@ class TestTypes(unittest.TestCase):
             ChangedPartition(PositionPartition("p_20210101")).set_position([1, 2, 3, 4])
 
         c = ChangedPartition(PositionPartition("p_20210101").set_position([1, 2, 3, 4]))
+        self.assertFalse(c.has_modifications)
         c.set_timestamp(date(2021, 1, 2))
         y = c.set_position([10, 10, 10, 10])
         self.assertEqual(c, y)
+        self.assertTrue(c.has_modifications)
 
         self.assertEqual(c.timestamp(), date(2021, 1, 2))
         self.assertEqual(c.positions, [10, 10, 10, 10])
@@ -165,13 +167,29 @@ class TestTypes(unittest.TestCase):
                 PositionPartition("p_20210102").set_position([1, 2, 3, 4])
             ),
         )
+        self.assertEqual(
+            ChangedPartition(PositionPartition("p_20210101").set_position([1, 2, 3, 4]))
+            .set_as_max_value()
+            .as_partition(),
+            NewPartition()
+            .set_columns(4)
+            .set_timestamp(date(2021, 1, 1))
+            .as_partition(),
+        )
 
     def test_new_partition(self):
         with self.assertRaises(ValueError):
             NewPartition().as_partition()
 
-        with self.assertRaises(ValueError):
-            NewPartition().set_timestamp(date(2021, 12, 31)).as_partition()
+        self.assertEqual(
+            NewPartition()
+            .set_columns(5)
+            .set_timestamp(date(2021, 12, 31))
+            .as_partition(),
+            MaxValuePartition("p_20211231", count=5),
+        )
+
+        self.assertFalse(NewPartition().has_modifications)
 
         self.assertEqual(
             NewPartition()
@@ -192,6 +210,14 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(
             NewPartition().set_position([3]).set_timestamp(date(2021, 12, 31)),
             NewPartition().set_position([3]).set_timestamp(date(2021, 12, 31)),
+        )
+
+        self.assertEqual(
+            NewPartition()
+            .set_position([99, 999])
+            .set_timestamp(date(2021, 12, 31))
+            .set_as_max_value(),
+            NewPartition().set_columns(2).set_timestamp(date(2021, 12, 31)),
         )
 
 

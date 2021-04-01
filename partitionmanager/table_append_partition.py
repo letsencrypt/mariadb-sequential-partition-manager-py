@@ -4,6 +4,7 @@ from partitionmanager.types import (
     InstantPartition,
     MaxValuePartition,
     MismatchedIdException,
+    ModifiedPartition,
     NewPartition,
     NoEmptyPartitionsAvailableException,
     Partition,
@@ -13,9 +14,9 @@ from partitionmanager.types import (
     TableInformationException,
     UnexpectedPartitionException,
 )
-from .tools import pairwise
+from .tools import pairwise, iter_show_end
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 import logging
 import operator
 import re
@@ -171,13 +172,6 @@ def evaluate_partition_actions(partitions, timestamp, allowed_lifespan):
         "do_partition": lifespan >= allowed_lifespan,
         "remaining_lifespan": allowed_lifespan - lifespan,
     }
-
-
-def partition_name_now():
-    """
-    Format a partition name for now
-    """
-    return datetime.now(tz=timezone.utc).strftime("p_%Y%m%d")
 
 
 def split_partitions_around_positions(partition_list, current_positions):
@@ -373,6 +367,8 @@ def plan_partition_changes(
 
     assert len(results) == 1, f"There must be exactly one partition: {results}"
 
+    affected_max_value_partition = False
+
     # Adjust each of the empty partitions
     for partition in empty_partitions:
         last_changed = results[-1]
@@ -404,6 +400,11 @@ def plan_partition_changes(
                 )
                 changed_partition.set_important()
 
+        if isinstance(partition, MaxValuePartition):
+            # If we are changing any MaxValuePartitions, then we need to
+            # ensure there's a MaxValuePartition on the end.
+            affected_max_value_partition = True
+
         results.append(changed_partition)
 
     # Ensure we have the required number of empty partitions
@@ -418,6 +419,11 @@ def plan_partition_changes(
             .set_position(new_part_pos)
             .set_timestamp(partition_start_time)
         )
+
+    if affected_max_value_partition:
+        results[-1].set_as_max_value()
+
+    log.debug(f"Planned {results}")
 
     return results
 
@@ -447,62 +453,50 @@ def evaluate_partition_changes(altered_partitions):
     return False
 
 
-def reorganize_partition(partition_list, new_partition_name, partition_positions):
-    """
-    From a partial partitions list of Partition types add a new partition at the
-    partition_positions, which must be a list.
-    """
-    if type(partition_positions) is not list:
-        raise ValueError()
-
-    num_partition_ids = partition_list[0].num_columns
-
-    tail_part = partition_list.pop()
-    if not isinstance(tail_part, MaxValuePartition):
-        raise UnexpectedPartitionException(tail_part)
-    if tail_part.name == new_partition_name:
-        raise DuplicatePartitionException(tail_part)
-
-    # Check any remaining partitions in the list after popping off the tail
-    # to make sure each entry has the same number of partition IDs as the first
-    # entry.
-    for p in partition_list:
-        if len(p.positions) != num_partition_ids:
-            raise MismatchedIdException(
-                "Didn't get the same number of partition IDs: "
-                + f"{p} has {len(p)} while expected {num_partition_ids}"
-            )
-    if len(partition_positions) != num_partition_ids:
-        raise MismatchedIdException(
-            f"Provided {len(partition_positions)} partition IDs,"
-            + f" but expected {num_partition_ids}"
-        )
-
-    altered_partition = PositionPartition(tail_part.name).set_position(
-        partition_positions
-    )
-
-    new_partition = MaxValuePartition(new_partition_name, num_partition_ids)
-
-    reorganized_list = [altered_partition, new_partition]
-    return altered_partition.name, reorganized_list
-
-
-def format_sql_reorganize_partition_command(
-    table, *, partition_to_alter, partition_list
-):
+def generate_sql_reorganize_partition_commands(table, changes):
     """
     Produce a SQL command to reorganize the partition in table_name to
-    match the new partition_list.
+    match the new changes list.
     """
-    partition_strings = list()
-    for p in partition_list:
-        if not isinstance(p, Partition):
-            raise UnexpectedPartitionException(p)
-        partition_strings.append(f"PARTITION `{p.name}` VALUES LESS THAN {p.values()}")
-    partition_update = ", ".join(partition_strings)
+    log = logging.getLogger("generate_sql_reorganize_partition_commands")
 
-    return (
-        f"ALTER TABLE `{table.name}` "
-        f"REORGANIZE PARTITION `{partition_to_alter}` INTO ({partition_update});"
-    )
+    modified_partitions = list()
+    new_partitions = list()
+
+    for p in changes:
+        if not isinstance(p, ModifiedPartition):
+            raise UnexpectedPartitionException(p)
+        if isinstance(p, NewPartition):
+            new_partitions.append(p)
+        else:
+            modified_partitions.append(p)
+
+    # If there's not at least one modification, bail out
+    if not new_partitions and not list(
+        filter(lambda x: x.has_modifications, modified_partitions)
+    ):
+        raise ValueError()
+
+    new_part_list = list()
+    partition_names_set = set()
+    for modified_partition, is_final in iter_show_end(modified_partitions):
+        new_part_list = [modified_partition.as_partition()]
+        if is_final:
+            new_part_list.extend([p.as_partition() for p in new_partitions])
+
+        partition_strings = list()
+        for part in new_part_list:
+            if part.name in partition_names_set:
+                raise DuplicatePartitionException(f"Duplicate {part}")
+            log.debug(f"Adding {part.name} for {part}")
+            partition_names_set.add(part.name)
+
+            partition_strings.append(
+                f"PARTITION `{part.name}` VALUES LESS THAN {part.values()}"
+            )
+        partition_update = ", ".join(partition_strings)
+
+        yield (
+            f"ALTER TABLE `{table.name}` "
+            f"REORGANIZE PARTITION `{modified_partition.old.name}` INTO ({partition_update});"
+        )

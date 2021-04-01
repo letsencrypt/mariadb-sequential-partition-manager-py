@@ -8,12 +8,11 @@ import yaml
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from partitionmanager.table_append_partition import (
-    evaluate_partition_actions,
-    format_sql_reorganize_partition_command,
+    evaluate_partition_changes,
+    generate_sql_reorganize_partition_commands,
     get_current_positions,
     get_partition_map,
-    partition_name_now,
-    reorganize_partition,
+    plan_partition_changes,
     table_is_compatible,
 )
 from partitionmanager.types import SqlInput, Table, retention_from_dict, toSqlUrl
@@ -51,6 +50,7 @@ class Config:
         self.tables = list()
         self.dbcmd = SubprocessDatabaseCommand("mariadb")
         self.noop = False
+        self.num_empty = 2
         self.curtime = datetime.now(tz=timezone.utc)
         self.partition_period = timedelta(days=30)
         self.prometheus_stats_path = None
@@ -87,6 +87,8 @@ class Config:
             self.partition_period = retention_from_dict(data["partition_period"])
             if self.partition_period <= timedelta():
                 raise ValueError("Negative lifespan is not allowed")
+        if "num_empty" in data:
+            self.num_empty = int(data["num_empty"])
         if "dburl" in data:
             self.dbcmd = IntegratedDatabaseCommand(toSqlUrl(data["dburl"]))
         elif "mariadb" in data:
@@ -166,8 +168,9 @@ stats_parser.set_defaults(func=stats_cmd)
 
 
 def do_partition(conf):
+    log = logging.getLogger("partition")
     if conf.noop:
-        logging.info("No-op mode")
+        log.info("No-op mode")
 
     # Preflight
     if not all_configured_tables_are_compatible(conf):
@@ -188,41 +191,31 @@ def do_partition(conf):
         if table.partition_period:
             duration = table.partition_period
 
-        decision = evaluate_partition_actions(
-            map_data["partitions"], conf.curtime, duration
-        )
-
-        if not decision["do_partition"]:
-            logging.info(
-                f"{table} does not need to be partitioned. "
-                f"(Next partition: {decision['remaining_lifespan']})"
-            )
-            continue
-        logging.debug(
-            f"{table} is ready to partition (Lifespan: {decision['remaining_lifespan']})"
-        )
-
         positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
 
-        filled_partition_id, partitions = reorganize_partition(
-            map_data["partitions"], partition_name_now(), positions
+        partition_changes = plan_partition_changes(
+            map_data["partitions"], positions, conf.curtime, duration, conf.num_empty
         )
 
-        sql_cmd = format_sql_reorganize_partition_command(
-            table, partition_to_alter=filled_partition_id, partition_list=partitions
-        )
+        if not evaluate_partition_changes(partition_changes):
+            log.info(f"{table} does not need to be modified currently.")
+            continue
+        log.debug(f"{table} has changes waiting.")
+
+        sql_cmds = generate_sql_reorganize_partition_commands(table, partition_changes)
+        composite_sql_command = "\n".join(sql_cmds)
 
         if conf.noop:
-            all_results[table.name] = {"sql": sql_cmd}
-            logging.info(f"{table} planned SQL: {sql_cmd}")
+            all_results[table.name] = {"sql": composite_sql_command}
+            logging.info(f"{table} planned SQL: {composite_sql_command}")
             continue
 
-        logging.info(f"{table} running SQL: {sql_cmd}")
+        logging.info(f"{table} running SQL: {composite_sql_command}")
         time_start = datetime.utcnow()
-        output = conf.dbcmd.run(sql_cmd)
+        output = conf.dbcmd.run(composite_sql_command)
         time_end = datetime.utcnow()
 
-        all_results[table.name] = {"sql": sql_cmd, "output": output}
+        all_results[table.name] = {"sql": composite_sql_command, "output": output}
         logging.info(f"{table} results: {output}")
         metrics.add(
             "alter_time_seconds", table.name, (time_end - time_start).total_seconds()

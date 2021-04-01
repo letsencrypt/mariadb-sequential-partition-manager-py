@@ -252,20 +252,45 @@ class ModifiedPartition(abc.ABC):
         return self
 
     def set_important(self):
+        """
+        Indicate this is an important partition.
+        """
         self._important = True
         return self
 
     def timestamp(self):
+        """
+        The timestamp of this partition.
+        """
         return self._timestamp
 
     def important(self):
+        """
+        Whether this modified Partition is itself important enough to ensure
+        commitment.
+        """
         return self._important
 
+    @property
     @abc.abstractmethod
+    def has_modifications(self):
+        """
+        True if this partition modifies another partition.
+        """
+
+    def set_as_max_value(self):
+        self.num_columns = len(self.positions)
+        self.positions = None
+        return self
+
     def as_partition(self):
-        """
-        Return a Partition object representing this modified Partition
-        """
+        if not self._timestamp:
+            raise ValueError()
+        if self.positions:
+            return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(
+                self.positions
+            )
+        return MaxValuePartition(f"p_{self._timestamp:%Y%m%d}", count=self.num_columns)
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"
@@ -293,13 +318,16 @@ class ChangedPartition(ModifiedPartition):
         self.old = old_part
         self.num_columns = self.old.num_columns
         self._timestamp = self.old.timestamp()
-        self.positions = (
+        self._old_positions = (
             self.old.positions if isinstance(old_part, PositionPartition) else None
         )
+        self.positions = self._old_positions
 
-    def as_partition(self):
-        return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(
-            self.positions
+    @property
+    def has_modifications(self):
+        return (
+            self.positions != self._old_positions
+            or self._timestamp != self.old.timestamp()
         )
 
     def __str__(self):
@@ -316,14 +344,13 @@ class NewPartition(ModifiedPartition):
         super().__init__()
         self.set_important()
 
-    def as_partition(self):
-        if not self._timestamp:
-            raise ValueError()
-        if self.positions:
-            return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(
-                self.positions
-            )
-        raise ValueError("Positions not set, and not configured for MaxValue")
+    def set_columns(self, count):
+        self.num_columns = count
+        return self
+
+    @property
+    def has_modifications(self):
+        return False
 
     def __str__(self):
         return f"Add: {self.positions} {self._timestamp}"

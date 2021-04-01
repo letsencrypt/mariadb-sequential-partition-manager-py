@@ -34,6 +34,7 @@ partitionmanager:
   # mariadb: /usr/local/bin/mariadb
   partition_period:
     days: 7
+  num_empty: 2
 
   tables:
     table1:
