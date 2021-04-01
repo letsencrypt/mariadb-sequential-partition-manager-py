@@ -206,7 +206,7 @@ def do_partition(conf):
         composite_sql_command = "\n".join(sql_cmds)
 
         if conf.noop:
-            all_results[table.name] = {"sql": composite_sql_command}
+            all_results[table.name] = {"sql": composite_sql_command, "noop": True}
             logging.info(f"{table} planned SQL: {composite_sql_command}")
             continue
 

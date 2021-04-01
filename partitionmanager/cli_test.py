@@ -1,10 +1,12 @@
 import tempfile
 import unittest
 import pymysql
+from datetime import datetime, timezone
 from pathlib import Path
 from .cli import (
     all_configured_tables_are_compatible,
     config_from_args,
+    do_partition,
     parser,
     partition_cmd,
     stats_cmd,
@@ -26,7 +28,15 @@ def run_partition_cmd_yaml(yaml):
         return partition_cmd(args)
 
 
+def partition_cmd_at_time(args, time):
+    conf = config_from_args(args)
+    conf.curtime = time
+    return do_partition(conf)
+
+
 class TestPartitionCmd(unittest.TestCase):
+    maxDiff = None
+
     def test_partition_cmd_no_exec(self):
         args = parser.parse_args(
             [
@@ -43,38 +53,39 @@ class TestPartitionCmd(unittest.TestCase):
 
     def test_partition_cmd_noop(self):
         args = parser.parse_args(
-            ["--mariadb", str(fake_exec), "add", "--noop", "--table", "testtable"]
+            ["--mariadb", str(fake_exec), "add", "--noop", "--table", "testtable_noop"]
         )
-        output = partition_cmd(args)
+        output = partition_cmd_at_time(args, datetime(2020, 11, 8, tzinfo=timezone.utc))
 
         self.assertEqual(
-            (
-                "ALTER TABLE `testtable` REORGANIZE PARTITION `p_20201105` INTO "
-                "(PARTITION `p_20201105` VALUES LESS THAN (150));\n"
-                "ALTER TABLE `testtable` REORGANIZE PARTITION `p_20201204` INTO "
-                "(PARTITION `p_20201205` VALUES LESS THAN (172), "
-                "PARTITION `p_20210104` VALUES LESS THAN MAXVALUE);"
-            ),
-            output["testtable"]["sql"],
+            {
+                "testtable_noop": {
+                    "sql": (
+                        "ALTER TABLE `testtable_noop` REORGANIZE PARTITION "
+                        "`p_20201204` INTO "
+                        "(PARTITION `p_20201205` VALUES LESS THAN (548), "
+                        "PARTITION `p_20210104` VALUES LESS THAN MAXVALUE);"
+                    ),
+                    "noop": True,
+                }
+            },
+            output,
         )
 
     def test_partition_cmd_final(self):
         args = parser.parse_args(
-            ["--mariadb", str(fake_exec), "add", "--table", "testtable"]
+            ["--mariadb", str(fake_exec), "add", "--table", "testtable_commit"]
         )
-        output = partition_cmd(args)
+        output = partition_cmd_at_time(args, datetime(2020, 11, 8, tzinfo=timezone.utc))
 
         self.assertEqual(
             {
-                "testtable": {
+                "testtable_commit": {
                     "output": [],
                     "sql": (
-                        "ALTER TABLE `testtable` REORGANIZE PARTITION "
-                        "`p_20201105` INTO "
-                        "(PARTITION `p_20201105` VALUES LESS THAN (150));\n"
-                        "ALTER TABLE `testtable` REORGANIZE PARTITION "
+                        "ALTER TABLE `testtable_commit` REORGANIZE PARTITION "
                         "`p_20201204` INTO "
-                        "(PARTITION `p_20201205` VALUES LESS THAN (172), "
+                        "(PARTITION `p_20201205` VALUES LESS THAN (548), "
                         "PARTITION `p_20210104` VALUES LESS THAN MAXVALUE);"
                     ),
                 }

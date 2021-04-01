@@ -638,6 +638,68 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
+    def test_plan_partition_changes_long_delay(self):
+        planned = plan_partition_changes(
+            [
+                mkPPart("p_20210101", 100),
+                mkPPart("p_20210415", 200),
+                mkTailPart("future"),
+            ],
+            [50],
+            datetime(2021, 3, 31, tzinfo=timezone.utc),
+            timedelta(days=7),
+            2,
+        )
+
+        self.assertEqual(
+            planned,
+            [
+                ChangedPartition(mkPPart("p_20210101", 50)).set_important(),
+                ChangedPartition(mkPPart("p_20210415", 200))
+                .set_position([53])
+                .set_timestamp(datetime(2021, 3, 31, tzinfo=timezone.utc))
+                .set_important(),
+                ChangedPartition(mkTailPart("future"))
+                .set_position([800])
+                .set_timestamp(datetime(2021, 4, 7, tzinfo=timezone.utc))
+                .set_as_max_value(),
+            ],
+        )
+
+    def test_plan_partition_changes_bespoke_names(self):
+        planned = plan_partition_changes(
+            [mkPPart("p_start", 100), mkTailPart("p_future")],
+            [50],
+            datetime(2021, 1, 6, tzinfo=timezone.utc),
+            timedelta(days=7),
+            2,
+        )
+
+        self.assertEqual(
+            planned,
+            [
+                ChangedPartition(mkPPart("p_start", 100)),
+                ChangedPartition(mkTailPart("p_future"))
+                .set_position([170])
+                .set_timestamp(datetime(2021, 1, 8, tzinfo=timezone.utc)),
+                NewPartition()
+                .set_columns(1)
+                .set_timestamp(datetime(2021, 1, 15, tzinfo=timezone.utc)),
+            ],
+        )
+
+        output = list(
+            generate_sql_reorganize_partition_commands(Table("table"), planned)
+        )
+        self.assertEqual(
+            output,
+            [
+                "ALTER TABLE `table` REORGANIZE PARTITION `p_future` INTO "
+                "(PARTITION `p_20210108` VALUES LESS THAN (170), "
+                "PARTITION `p_20210115` VALUES LESS THAN MAXVALUE);"
+            ],
+        )
+
     def test_plan_partition_changes(self):
         with self.assertLogs("plan_partition_changes", level="INFO") as logctx:
             planned = plan_partition_changes(
@@ -808,10 +870,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 )
             ),
             [
-                "ALTER TABLE `table` REORGANIZE PARTITION `p_20210102` INTO "
-                "(PARTITION `p_20210116` VALUES LESS THAN (500));",
                 "ALTER TABLE `table` REORGANIZE PARTITION `p_20210120` INTO "
                 "(PARTITION `p_20210214` VALUES LESS THAN (2000));",
+                "ALTER TABLE `table` REORGANIZE PARTITION `p_20210102` INTO "
+                "(PARTITION `p_20210116` VALUES LESS THAN (500));",
             ],
         )
 
@@ -906,12 +968,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             list(generate_sql_reorganize_partition_commands(Table("water"), planned)),
             [
-                "ALTER TABLE `water` REORGANIZE PARTITION `p_20201231` INTO "
-                "(PARTITION `p_20201231` VALUES LESS THAN (100));",
-                "ALTER TABLE `water` REORGANIZE PARTITION `p_20210104` INTO "
-                "(PARTITION `p_20210107` VALUES LESS THAN (450));",
                 "ALTER TABLE `water` REORGANIZE PARTITION `future` INTO "
                 "(PARTITION `p_20210114` VALUES LESS THAN MAXVALUE);",
+                "ALTER TABLE `water` REORGANIZE PARTITION `p_20210104` INTO "
+                "(PARTITION `p_20210107` VALUES LESS THAN (450));",
             ],
         )
 

@@ -90,15 +90,28 @@ class Partition(abc.ABC):
         Return the number of columns this partition represents
         """
 
+    @property
+    def has_time(self):
+        if "start" in self.name:
+            return False
+        return True
+
     def timestamp(self):
         """
         Returns a datetime object representing this partition's
         date, if the partition is of the form "p_YYYYMMDD", otherwise
         returns None
         """
+
         try:
             return datetime.strptime(self.name, "p_%Y%m%d").replace(tzinfo=timezone.utc)
         except ValueError:
+            if "start" in self.name:
+                # Gotta start somewhere, for partitions named things like
+                # "p_start". This has the downside of causing abnormally-low
+                # rate of change calculations, but they fall off quickly
+                # for subsequent partitions
+                return datetime(2021, 1, 1, tzinfo=timezone.utc)
             return None
 
     def __repr__(self):

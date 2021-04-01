@@ -212,9 +212,9 @@ def get_position_increase_per_day(p1, p2):
     if not isinstance(p1, PositionPartition) or not isinstance(p2, PositionPartition):
         raise ValueError("Both partitions must be PositionPartition type")
     if p1.timestamp() >= p2.timestamp():
-        raise ValueError("p1 must be before p2")
+        raise ValueError(f"p1 {p1} must be before p2 {p2}")
     if p1.num_columns != p2.num_columns:
-        raise ValueError("p1 and p2 must have the same number of columns")
+        raise ValueError(f"p1 {p1} and p2 {p2} must have the same number of columns")
     delta_time = p2.timestamp() - p1.timestamp()
     delta_days = delta_time / timedelta(days=1)
     delta_positions = list(map(operator.sub, p2.positions, p1.positions))
@@ -300,6 +300,16 @@ def predict_forward_time(current_positions, end_positions, rates, evaluation_tim
     return evaluation_time + (max(days_remaining) * timedelta(days=1))
 
 
+def calculate_start_time(last_changed_time, evaluation_time, allowed_lifespan):
+    """
+    Partition start times should never be in the past.
+    """
+    partition_start_time = last_changed_time + allowed_lifespan
+    if partition_start_time < evaluation_time:
+        return evaluation_time
+    return partition_start_time
+
+
 def plan_partition_changes(
     partition_list,
     current_positions,
@@ -321,6 +331,7 @@ def plan_partition_changes(
         raise NoEmptyPartitionsAvailableException()
     if not active_partition:
         raise Exception("Active Partition can't be None")
+
     if active_partition.timestamp() >= evaluation_time:
         raise ValueError(
             f"Evaluation time ({evaluation_time}) must be after "
@@ -357,12 +368,13 @@ def plan_partition_changes(
             f"{active_partition.positions} to {new_pos} to change-over in "
             "approximately 10m"
         )
+
         results.append(
             ChangedPartition(active_partition).set_position(new_pos).set_important()
         )
     else:
         # We need to include active_partition in the list even though we're not
-        # actually changing it
+        # actually changing it.
         results.append(ChangedPartition(active_partition))
 
     assert len(results) == 1, f"There must be exactly one partition: {results}"
@@ -372,7 +384,9 @@ def plan_partition_changes(
     # Adjust each of the empty partitions
     for partition in empty_partitions:
         last_changed = results[-1]
-        partition_start_time = last_changed.timestamp() + allowed_lifespan
+        partition_start_time = calculate_start_time(
+            last_changed.timestamp(), evaluation_time, allowed_lifespan
+        )
         changed_part_pos = predict_forward_position(
             last_changed.positions, rates, allowed_lifespan
         )
@@ -410,7 +424,10 @@ def plan_partition_changes(
     # Ensure we have the required number of empty partitions
     while len(results) < num_empty_partitions + 1:
         last_changed = results[-1]
-        partition_start_time = last_changed.timestamp() + allowed_lifespan
+        partition_start_time = calculate_start_time(
+            last_changed.timestamp(), evaluation_time, allowed_lifespan
+        )
+
         new_part_pos = predict_forward_position(
             last_changed.positions, rates, allowed_lifespan
         )
@@ -479,10 +496,20 @@ def generate_sql_reorganize_partition_commands(table, changes):
 
     new_part_list = list()
     partition_names_set = set()
-    for modified_partition, is_final in iter_show_end(modified_partitions):
+
+    for modified_partition, is_final in reversed(
+        list(iter_show_end(modified_partitions))
+    ):
+        # We reverse the iterator so that we always alter the furthest-out partitions
+        # first, so that we are always increasing the number of empty partitions
+        # before (potentially) moving the end position near the active one
         new_part_list = [modified_partition.as_partition()]
         if is_final:
             new_part_list.extend([p.as_partition() for p in new_partitions])
+
+        # If there's not at least one modification, skip
+        if not is_final and not modified_partition.has_modifications:
+            continue
 
         partition_strings = list()
         for part in new_part_list:

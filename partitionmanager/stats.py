@@ -65,7 +65,7 @@ def get_statistics(partitions, current_timestamp, table):
         )
         raise UnexpectedPartitionException(tail_part)
 
-    if tail_part.timestamp():
+    if tail_part.has_time and tail_part.timestamp():
         results["time_since_newest_partition"] = (
             current_timestamp - tail_part.timestamp()
         )
