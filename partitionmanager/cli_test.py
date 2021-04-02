@@ -7,7 +7,7 @@ from .cli import (
     all_configured_tables_are_compatible,
     config_from_args,
     do_partition,
-    parser,
+    PARSER,
     partition_cmd,
     stats_cmd,
 )
@@ -24,7 +24,7 @@ def insert_into_file(fp, data):
 def run_partition_cmd_yaml(yaml):
     with tempfile.NamedTemporaryFile() as tmpfile:
         insert_into_file(tmpfile, yaml)
-        args = parser.parse_args(["add", "--config", tmpfile.name])
+        args = PARSER.parse_args(["add", "--config", tmpfile.name])
         return partition_cmd(args)
 
 
@@ -38,7 +38,7 @@ class TestPartitionCmd(unittest.TestCase):
     maxDiff = None
 
     def test_partition_cmd_no_exec(self):
-        args = parser.parse_args(
+        args = PARSER.parse_args(
             [
                 "--mariadb",
                 str(nonexistant_exec),
@@ -52,7 +52,7 @@ class TestPartitionCmd(unittest.TestCase):
             partition_cmd(args)
 
     def test_partition_cmd_noop(self):
-        args = parser.parse_args(
+        args = PARSER.parse_args(
             ["--mariadb", str(fake_exec), "add", "--noop", "--table", "testtable_noop"]
         )
         output = partition_cmd_at_time(args, datetime(2020, 11, 8, tzinfo=timezone.utc))
@@ -73,7 +73,7 @@ class TestPartitionCmd(unittest.TestCase):
         )
 
     def test_partition_cmd_final(self):
-        args = parser.parse_args(
+        args = PARSER.parse_args(
             ["--mariadb", str(fake_exec), "add", "--table", "testtable_commit"]
         )
         output = partition_cmd_at_time(args, datetime(2020, 11, 8, tzinfo=timezone.utc))
@@ -94,7 +94,7 @@ class TestPartitionCmd(unittest.TestCase):
         )
 
     def test_partition_cmd_several_tables(self):
-        args = parser.parse_args(
+        args = PARSER.parse_args(
             [
                 "--mariadb",
                 str(fake_exec),
@@ -232,7 +232,7 @@ partitionmanager:
 
 class TestStatsCmd(unittest.TestCase):
     def test_stats(self):
-        args = parser.parse_args(
+        args = PARSER.parse_args(
             ["--mariadb", str(fake_exec), "stats", "--table", "partitioned_yesterday"]
         )
         r = stats_cmd(args)
@@ -249,14 +249,14 @@ class TestStatsCmd(unittest.TestCase):
 
 class TestHelpers(unittest.TestCase):
     def test_all_configured_tables_are_compatible_one(self):
-        args = parser.parse_args(
+        args = PARSER.parse_args(
             ["--mariadb", str(fake_exec), "stats", "--table", "partitioned_yesterday"]
         )
         config = config_from_args(args)
         self.assertTrue(all_configured_tables_are_compatible(config))
 
     def test_all_configured_tables_are_compatible_three(self):
-        args = parser.parse_args(
+        args = PARSER.parse_args(
             [
                 "--mariadb",
                 str(fake_exec),
@@ -271,7 +271,7 @@ class TestHelpers(unittest.TestCase):
         self.assertTrue(all_configured_tables_are_compatible(config))
 
     def test_all_configured_tables_are_compatible_three_one_unpartitioned(self):
-        args = parser.parse_args(
+        args = PARSER.parse_args(
             [
                 "--mariadb",
                 str(fake_exec),
@@ -286,7 +286,7 @@ class TestHelpers(unittest.TestCase):
         self.assertFalse(all_configured_tables_are_compatible(config))
 
     def test_all_configured_tables_are_compatible_unpartitioned(self):
-        args = parser.parse_args(
+        args = PARSER.parse_args(
             ["--mariadb", str(fake_exec), "stats", "--table", "unpartitioned"]
         )
         config = config_from_args(args)

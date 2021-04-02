@@ -1,3 +1,7 @@
+"""
+Classes and types used across the Partition Manager
+"""
+
 import abc
 import argparse
 import re
@@ -14,10 +18,9 @@ def retention_from_dict(r):
     for k, v in r.items():
         if k == "days":
             return timedelta(days=v)
-        else:
-            raise argparse.ArgumentTypeError(
-                f"Unknown retention period definition: {k}={v}"
-            )
+        raise argparse.ArgumentTypeError(
+            f"Unknown retention period definition: {k}={v}"
+        )
 
 
 class Table:
@@ -31,9 +34,19 @@ class Table:
         self.partition_period = None
 
     def set_retention(self, ret):
+        """
+        Sets the retention period as a timedelta for this table
+        """
+        if not isinstance(ret, timedelta):
+            raise ValueError("Must be a timedelta")
         self.retention = ret
 
     def set_partition_period(self, dur):
+        """
+        Sets the partition period as a timedelta for this table
+        """
+        if not isinstance(dur, timedelta):
+            raise ValueError("Must be a timedelta")
         self.partition_period = dur
 
     def __str__(self):
@@ -48,7 +61,7 @@ class SqlInput(str):
 
     valid_form = re.compile(r"^[A-Z0-9_-]+$", re.IGNORECASE)
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args):
         if len(args) != 1:
             raise argparse.ArgumentTypeError(f"{args} is not a single argument")
         if not SqlInput.valid_form.match(args[0]):
@@ -75,10 +88,22 @@ def toSqlUrl(urlstring):
 
 
 class DatabaseCommand(abc.ABC):
+    """
+    Abstract class which can run SQL commands and return the results in a
+    minimal form.
+    """
+
     @abc.abstractmethod
-    def run(self, sql):
+    def run(self, sql_cmd):
         """
-        Run the sql, returning the results or raising an Exception
+        Run the sql, returning the results as a list of python-ized types, or
+        raising an Exception
+        """
+
+    @abc.abstractmethod
+    def db_name(self):
+        """
+        Return the current database name
         """
 
 
@@ -114,6 +139,11 @@ class Partition(abc.ABC):
 
     @property
     def has_time(self):
+        """
+        True if the partition has a timestamp, e.g. if timestamp() can be
+        reasonably assumed to be non-None. Doesn't gaurantee, as this only
+        allows for names to be of the form p_start or p_YYYY[MM[DD]].
+        """
         if "start" in self.name:
             return False
         return True
@@ -168,7 +198,10 @@ class PositionPartition(Partition):
         return self._name
 
     def set_position(self, positions):
-        self.positions = list(map(lambda p: int(p), positions))
+        """
+        Set the position list for this partition.
+        """
+        self.positions = [int(p) for p in positions]
         return self
 
     @property
@@ -202,7 +235,7 @@ class PositionPartition(Partition):
 
     def __eq__(self, other):
         if isinstance(other, PositionPartition):
-            return self._name == other._name and self.positions == other.positions
+            return self.name == other.name and self.positions == other.positions
         return False
 
 
@@ -247,7 +280,7 @@ class MaxValuePartition(Partition):
 
     def __eq__(self, other):
         if isinstance(other, MaxValuePartition):
-            return self._name == other._name and self.count == other.count
+            return self.name == other.name and self.count == other.count
         return False
 
 
@@ -259,7 +292,7 @@ class InstantPartition(PositionPartition):
     """
 
     def __init__(self, now, positions):
-        self._name = "Instant"
+        super().__init__("Instant")
         self.instant = now
         self.positions = positions
 
@@ -331,11 +364,19 @@ class PlannedPartition(abc.ABC):
         """
 
     def set_as_max_value(self):
+        """
+        Make this partition represent MAXVALUE and be represented by a
+        MaxValuePartition by the as_partition method.
+        """
         self.num_columns = len(self.positions)
         self.positions = None
         return self
 
     def as_partition(self):
+        """
+        Convert this from a Planned Partition to a Partition, which can then be
+        rendered into a SQL ALTER.
+        """
         if not self._timestamp:
             raise ValueError()
         if self.positions:
@@ -350,10 +391,10 @@ class PlannedPartition(abc.ABC):
     def __eq__(self, other):
         if isinstance(other, PlannedPartition):
             return (
-                type(self) == type(other)
+                isinstance(self, type(other))
                 and self.positions == other.positions
-                and self._timestamp == other._timestamp
-                and self._important == other._important
+                and self.timestamp() == other.timestamp()
+                and self.important() == other.important()
             )
         return False
 
@@ -397,6 +438,10 @@ class NewPlannedPartition(PlannedPartition):
         self.set_important()
 
     def set_columns(self, count):
+        """
+        Set the number of columns needed to represent a position for this
+        partition.
+        """
         self.num_columns = count
         return self
 
@@ -413,15 +458,11 @@ class MismatchedIdException(Exception):
     Raised if the partition map doesn't use the primary key as its range id.
     """
 
-    pass
-
 
 class TruncatedDatabaseResultException(Exception):
     """
     Raised if the XML schema truncated over a subprocess interaction
     """
-
-    pass
 
 
 class DuplicatePartitionException(Exception):
@@ -429,15 +470,11 @@ class DuplicatePartitionException(Exception):
     Raise if a partition being created already exists.
     """
 
-    pass
-
 
 class UnexpectedPartitionException(Exception):
     """
     Raised when the partition map is unexpected.
     """
-
-    pass
 
 
 class TableInformationException(Exception):
@@ -445,12 +482,8 @@ class TableInformationException(Exception):
     Raised when the table's status doesn't include the information we need.
     """
 
-    pass
-
 
 class NoEmptyPartitionsAvailableException(Exception):
     """
     Raised if no empty partitions are available to safely modify.
     """
-
-    pass

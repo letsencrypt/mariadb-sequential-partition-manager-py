@@ -1,10 +1,15 @@
+"""
+Interact with SQL databases.
+"""
+
+from collections import defaultdict
 import logging
-import pymysql
-import pymysql.cursors
 import subprocess
 import xml.parsers.expat
 
-from collections import defaultdict
+import pymysql
+import pymysql.cursors
+
 from partitionmanager.types import (
     DatabaseCommand,
     TruncatedDatabaseResultException,
@@ -59,6 +64,7 @@ class XmlResult:
         self.current_row = None
         self.current_field = None
         self.current_elements = list()
+        self.statement = None
 
     def parse(self, data):
         """
@@ -70,7 +76,7 @@ class XmlResult:
         self.rows = list()
         self.xmlparser.Parse(data)
 
-        if len(self.current_elements) > 0:
+        if self.current_elements:
             raise TruncatedDatabaseResultException(
                 f"These XML tags are unclosed: {self.current_elements}"
             )

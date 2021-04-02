@@ -1,12 +1,14 @@
-#!/usr/bin/env python3
+"""
+Interface for running the partition manager from a CLI.
+"""
 
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 import argparse
 import logging
 import traceback
 import yaml
 
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from partitionmanager.table_append_partition import (
     evaluate_partition_changes,
     generate_sql_reorganize_partition_commands,
@@ -25,26 +27,26 @@ from partitionmanager.types import (
 from partitionmanager.stats import get_statistics, PrometheusMetrics
 from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
 
-parser = argparse.ArgumentParser(
+PARSER = argparse.ArgumentParser(
     description="""
     In already-partitioned tables with an auto_increment key as the partition,
     add a new partition at the current auto_increment value.
 """
 )
 
-parser.add_argument(
+PARSER.add_argument(
     "--log-level",
     default=logging.INFO,
     type=lambda x: getattr(logging, x.upper()),
     help="Configure the logging level.",
 )
-parser.add_argument(
+PARSER.add_argument(
     "--prometheus-stats", type=Path, help="Path to produce a prometheus statistics file"
 )
 
-group = parser.add_mutually_exclusive_group()
-group.add_argument("--mariadb", default="mariadb", help="Path to mariadb command")
-group.add_argument(
+GROUP = PARSER.add_mutually_exclusive_group()
+GROUP.add_argument("--mariadb", default="mariadb", help="Path to mariadb command")
+GROUP.add_argument(
     "--dburl",
     type=toSqlUrl,
     help="DB connection url, such as sql://user:pass@10.0.0.1:3306/database",
@@ -68,6 +70,10 @@ class Config:
         self.prometheus_stats_path = None
 
     def from_argparse(self, args):
+        """
+        Populate this config from an argparse result. Overwrites only what
+        is set by argparse.
+        """
         if args.table:
             for n in args.table:
                 self.tables.append(Table(n))
@@ -85,6 +91,10 @@ class Config:
             self.prometheus_stats_path = args.prometheus_stats
 
     def from_yaml_file(self, file):
+        """
+        Populate this config from the yaml in the file-like object supplied.
+        Overwrites only what is set by the yaml.
+        """
         data = yaml.safe_load(file)
         if "partitionmanager" not in data:
             raise TypeError(
@@ -106,21 +116,25 @@ class Config:
         elif "mariadb" in data:
             self.dbcmd = SubprocessDatabaseCommand(data["mariadb"])
         for key in data["tables"]:
-            t = Table(key)
+            tab = Table(key)
             tabledata = data["tables"][key]
             if isinstance(tabledata, dict) and "retention" in tabledata:
-                t.set_retention(retention_from_dict(tabledata["retention"]))
+                tab.set_retention(retention_from_dict(tabledata["retention"]))
             if isinstance(tabledata, dict) and "partition_period" in tabledata:
-                t.set_partition_period(
+                tab.set_partition_period(
                     retention_from_dict(tabledata["partition_period"])
                 )
 
-            self.tables.append(t)
+            self.tables.append(tab)
         if "prometheus_stats" in data:
             self.prometheus_stats_path = Path(data["prometheus_stats"])
 
 
 def config_from_args(args):
+    """
+    Helper that produces a Config from the arguments, including loading any
+    referenced YAML after the argparse completes.
+    """
     conf = Config()
     conf.from_argparse(args)
     if args.config:
@@ -145,43 +159,51 @@ def all_configured_tables_are_compatible(conf):
 
 
 def partition_cmd(args):
+    """
+    Helper for argparse that runs do_partition on the config that results from
+    the CLI arguments.
+    """
     conf = config_from_args(args)
     return do_partition(conf)
 
 
-subparsers = parser.add_subparsers(dest="subparser_name")
-partition_parser = subparsers.add_parser("add", help="add partitions")
-partition_parser.add_argument(
+SUBPARSERS = PARSER.add_subparsers(dest="subparser_name")
+PARTITION_PARSER = SUBPARSERS.add_parser("add", help="add partitions")
+PARTITION_PARSER.add_argument(
     "--noop",
     "-n",
     action="store_true",
     help="Don't attempt to commit changes, just print",
 )
-partition_parser.add_argument(
+PARTITION_PARSER.add_argument(
     "--days", "-d", type=int, help="Lifetime of each partition in days"
 )
-partition_group = partition_parser.add_mutually_exclusive_group()
-partition_group.add_argument(
+PARTITION_GROUP = PARTITION_PARSER.add_mutually_exclusive_group()
+PARTITION_GROUP.add_argument(
     "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
 )
-partition_group.add_argument(
+PARTITION_GROUP.add_argument(
     "--table", "-t", type=SqlInput, nargs="+", help="table names"
 )
-partition_parser.set_defaults(func=partition_cmd)
+PARTITION_PARSER.set_defaults(func=partition_cmd)
 
 
 def stats_cmd(args):
+    """
+    Helper for argparse that runs do_stats on the config that results from the
+    CLI arguments.
+    """
     conf = config_from_args(args)
     return do_stats(conf)
 
 
-stats_parser = subparsers.add_parser("stats", help="get stats for partitions")
-stats_group = stats_parser.add_mutually_exclusive_group()
-stats_group.add_argument(
+STATS_PARSER = SUBPARSERS.add_parser("stats", help="get stats for partitions")
+STATS_GROUP = STATS_PARSER.add_mutually_exclusive_group()
+STATS_GROUP.add_argument(
     "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
 )
-stats_group.add_argument("--table", "-t", type=SqlInput, nargs="+", help="table names")
-stats_parser.set_defaults(func=stats_cmd)
+STATS_GROUP.add_argument("--table", "-t", type=SqlInput, nargs="+", help="table names")
+STATS_PARSER.set_defaults(func=stats_cmd)
 
 
 def do_partition(conf):
@@ -202,7 +224,7 @@ def do_partition(conf):
     metrics.describe(
         "alter_time_seconds",
         help_text="Time in seconds to complete the ALTER command",
-        type="gauge",
+        type_name="gauge",
     )
 
     all_results = dict()
@@ -280,27 +302,27 @@ def do_stats(conf, metrics=PrometheusMetrics()):
 
     if conf.prometheus_stats_path:
         metrics.describe(
-            "total", help_text="Total number of partitions", type="counter"
+            "total", help_text="Total number of partitions", type_name="counter"
         )
         metrics.describe(
             "time_since_newest_partition_seconds",
             help_text="The age in seconds of the last partition for the table",
-            type="gauge",
+            type_name="gauge",
         )
         metrics.describe(
             "time_since_oldest_partition_seconds",
             help_text="The age in seconds of the first partition for the table",
-            type="gauge",
+            type_name="gauge",
         )
         metrics.describe(
             "mean_delta_seconds",
             help_text="Mean seconds between partitions",
-            type="gauge",
+            type_name="gauge",
         )
         metrics.describe(
             "max_delta_seconds",
             help_text="Maximum seconds between partitions",
-            type="gauge",
+            type_name="gauge",
         )
 
         for table, results in all_results.items():
@@ -331,8 +353,8 @@ def do_stats(conf, metrics=PrometheusMetrics()):
                     results["max_partition_delta"].total_seconds(),
                 )
 
-        with conf.prometheus_stats_path.open(mode="w", encoding="utf-8") as sf:
-            metrics.render(sf)
+        with conf.prometheus_stats_path.open(mode="w", encoding="utf-8") as fp:
+            metrics.render(fp)
 
     return all_results
 
@@ -341,19 +363,20 @@ def main():
     """
     Start here.
     """
-    args = parser.parse_args()
+    args = PARSER.parse_args()
     logging.basicConfig(level=args.log_level)
     if "func" not in args:
-        parser.print_help()
+        PARSER.print_help()
         return
 
     try:
         output = args.func(args)
-        for k, v in output.items():
-            print(f"{k}: {v}")
-    except Exception:
+        for key, val in output.items():
+            print(f"{key}: {val}")
+    except Exception as e:
         logging.warning(f"Couldn't complete command: {args.subparser_name}")
         logging.warning(traceback.format_exc())
+        raise e
 
 
 if __name__ == "__main__":

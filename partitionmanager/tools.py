@@ -1,3 +1,7 @@
+"""
+Tools for working with iterators. Helpers.
+"""
+
 from itertools import tee
 
 

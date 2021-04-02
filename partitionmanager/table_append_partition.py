@@ -1,3 +1,12 @@
+"""
+Design and perform partition management.
+"""
+
+from datetime import timedelta
+import logging
+import operator
+import re
+
 from partitionmanager.types import (
     ChangePlannedPartition,
     DuplicatePartitionException,
@@ -16,11 +25,6 @@ from partitionmanager.types import (
 )
 from .tools import pairwise, iter_show_end
 
-from datetime import timedelta
-import logging
-import operator
-import re
-
 
 def table_is_compatible(database, table):
     """
@@ -30,9 +34,9 @@ def table_is_compatible(database, table):
     db_name = database.db_name()
 
     if (
-        type(db_name) != SqlInput
-        or type(table) != Table
-        or type(table.name) != SqlInput
+        not isinstance(db_name, SqlInput)
+        or not isinstance(table, Table)
+        or not isinstance(table.name, SqlInput)
     ):
         return f"Unexpected table type: {table}"
     sql_cmd = (
@@ -62,7 +66,7 @@ def get_current_positions(database, table, columns):
     Get the positions of the columns provided in the given table, return
     as a list in the same order as the provided columns
     """
-    if type(columns) is not list or type(table) is not Table:
+    if not isinstance(columns, list) or not isinstance(table, Table):
         raise ValueError("columns must be a list and table must be a Table")
 
     order_col = columns[0]
@@ -71,7 +75,7 @@ def get_current_positions(database, table, columns):
     rows = database.run(sql)
     if len(rows) > 1:
         raise TableInformationException(f"Expected one result from {table.name}")
-    if len(rows) == 0:
+    if not rows:
         raise TableInformationException(
             f"Table {table.name} appears to be empty. (No results)"
         )
@@ -85,7 +89,7 @@ def get_partition_map(database, table):
     """
     Gather the partition map via the database command tool.
     """
-    if type(table) != Table or type(table.name) != SqlInput:
+    if not isinstance(table, Table) or not isinstance(table.name, SqlInput):
         raise ValueError("Unexpected type")
     sql_cmd = f"SHOW CREATE TABLE `{table.name}`;"
     return parse_partition_map(database.run(sql_cmd))
@@ -160,24 +164,6 @@ def parse_partition_map(rows):
     return {"range_cols": range_cols, "partitions": partitions}
 
 
-def evaluate_partition_actions(partitions, timestamp, allowed_lifespan):
-    log = logging.getLogger("evaluate_partition_actions")
-
-    tail_part = partitions[-1]
-    if not isinstance(tail_part, MaxValuePartition):
-        raise UnexpectedPartitionException(tail_part)
-
-    if not tail_part.timestamp():
-        log.warning(f"Partition {tail_part} is assumed to need partitioning")
-        return {"do_partition": True, "remaining_lifespan": timedelta()}
-
-    lifespan = timestamp - tail_part.timestamp()
-    return {
-        "do_partition": lifespan >= allowed_lifespan,
-        "remaining_lifespan": allowed_lifespan - lifespan,
-    }
-
-
 def split_partitions_around_positions(partition_list, current_positions):
     """
     Split a partition_list into those for which _all_ values are less than
@@ -187,7 +173,7 @@ def split_partitions_around_positions(partition_list, current_positions):
     for p in partition_list:
         if not isinstance(p, Partition):
             raise UnexpectedPartitionException(p)
-    if type(current_positions) is not list:
+    if not isinstance(current_positions, list):
         raise ValueError()
 
     less_than_partitions = list()

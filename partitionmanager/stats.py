@@ -1,3 +1,7 @@
+"""
+Statistics-gathering tooling.
+"""
+
 import logging
 
 from datetime import timedelta
@@ -34,12 +38,12 @@ class PrometheusMetrics:
             self.metrics[name] = list()
         self.metrics[name].append(PrometheusMetric(name, table, data))
 
-    def describe(self, name, help_text=None, type=None):
+    def describe(self, name, help_text=None, type_name=None):
         """
         Add optional descriptive and type data for a given metric name.
         """
         self.help[name] = help_text
-        self.types[name] = type
+        self.types[name] = type_name
 
     def render(self, fp):
         """
@@ -82,7 +86,7 @@ def get_statistics(partitions, current_timestamp, table):
     if not isinstance(tail_part, MaxValuePartition):
         log.warning(
             f"{table} get_statistics called with a partition list tail "
-            + f"that wasn't a MaxValuePartition: {p}"
+            + f"that wasn't a MaxValuePartition: {tail_part}"
         )
         raise UnexpectedPartitionException(tail_part)
 
