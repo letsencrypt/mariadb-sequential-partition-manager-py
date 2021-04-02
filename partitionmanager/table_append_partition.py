@@ -211,6 +211,9 @@ def get_position_increase_per_day(p1, p2):
     """
     if not isinstance(p1, PositionPartition) or not isinstance(p2, PositionPartition):
         raise ValueError("Both partitions must be PositionPartition type")
+    if None in (p1.timestamp(), p2.timestamp()):
+        # An empty list skips this pair in get_weighted_position_increase
+        return list()
     if p1.timestamp() >= p2.timestamp():
         raise ValueError(f"p1 {p1} must be before p2 {p2}")
     if p1.num_columns != p2.num_columns:

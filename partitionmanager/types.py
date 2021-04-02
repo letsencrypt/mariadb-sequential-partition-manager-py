@@ -106,13 +106,24 @@ class Partition(abc.ABC):
         try:
             return datetime.strptime(self.name, "p_%Y%m%d").replace(tzinfo=timezone.utc)
         except ValueError:
-            if "start" in self.name:
-                # Gotta start somewhere, for partitions named things like
-                # "p_start". This has the downside of causing abnormally-low
-                # rate of change calculations, but they fall off quickly
-                # for subsequent partitions
-                return datetime(2021, 1, 1, tzinfo=timezone.utc)
-            return None
+            pass
+        try:
+            return datetime.strptime(self.name, "p_%Y%m").replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+        try:
+            return datetime.strptime(self.name, "p_%Y").replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+
+        if "start" in self.name:
+            # Gotta start somewhere, for partitions named things like
+            # "p_start". This has the downside of causing abnormally-low
+            # rate of change calculations, but they fall off quickly
+            # for subsequent partitions
+            return datetime(2021, 1, 1, tzinfo=timezone.utc)
+
+        return None
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"

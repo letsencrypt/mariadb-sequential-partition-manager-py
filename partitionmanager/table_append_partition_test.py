@@ -666,6 +666,47 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
+    def test_plan_partition_changes_short_names(self):
+        planned = plan_partition_changes(
+            [
+                mkPPart("p_2019", 1912499867),
+                mkPPart("p_2020", 8890030931),
+                mkPPart("p_20210125", 12010339136),
+                mkTailPart("p_future"),
+            ],
+            [10810339136],
+            datetime(2021, 1, 30, tzinfo=timezone.utc),
+            timedelta(days=7),
+            2,
+        )
+
+        self.assertEqual(
+            planned,
+            [
+                ChangedPartition(mkPPart("p_20210125", 12010339136)).set_position(
+                    [12010339136]
+                ),
+                ChangedPartition(mkTailPart("p_future"))
+                .set_position([12960433003])
+                .set_timestamp(datetime(2021, 2, 1, tzinfo=timezone.utc)),
+                NewPartition()
+                .set_columns(1)
+                .set_timestamp(datetime(2021, 2, 8, tzinfo=timezone.utc)),
+            ],
+        )
+
+        output = list(
+            generate_sql_reorganize_partition_commands(Table("table"), planned)
+        )
+        self.assertEqual(
+            output,
+            [
+                "ALTER TABLE `table` REORGANIZE PARTITION `p_future` INTO "
+                "(PARTITION `p_20210201` VALUES LESS THAN (12960433003), "
+                "PARTITION `p_20210208` VALUES LESS THAN MAXVALUE);"
+            ],
+        )
+
     def test_plan_partition_changes_bespoke_names(self):
         planned = plan_partition_changes(
             [mkPPart("p_start", 100), mkTailPart("p_future")],
