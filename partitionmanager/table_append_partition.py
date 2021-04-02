@@ -87,7 +87,7 @@ def get_partition_map(database, table):
     """
     if type(table) != Table or type(table.name) != SqlInput:
         raise ValueError("Unexpected type")
-    sql_cmd = f"SHOW CREATE TABLE `{table.name}`;".strip()
+    sql_cmd = f"SHOW CREATE TABLE `{table.name}`;"
     return parse_partition_map(database.run(sql_cmd))
 
 
