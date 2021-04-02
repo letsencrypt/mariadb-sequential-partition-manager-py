@@ -350,34 +350,9 @@ def plan_partition_changes(
         rate_relevant_partitions
     )
 
-    results = list()
-
-    active_lifespan = evaluation_time - active_partition.timestamp()
-    remaining_active_lifespan = allowed_lifespan - active_lifespan
-
-    if remaining_active_lifespan < timedelta(hours=1):
-        # We're out of time, let's move the active partition to cut-over in 10
-        # minutes
-        new_pos = predict_forward_position(
-            current_positions, rates, timedelta(minutes=10)
-        )
-        log.info(
-            f"Low on time, urgently moving {active_partition} from "
-            f"{active_partition.positions} to {new_pos} to change-over in "
-            "approximately 10m"
-        )
-
-        results.append(
-            ChangePlannedPartition(active_partition)
-            .set_position(new_pos)
-            .set_important()
-        )
-    else:
-        # We need to include active_partition in the list even though we're not
-        # actually changing it.
-        results.append(ChangePlannedPartition(active_partition))
-
-    assert len(results) == 1, f"There must be exactly one partition: {results}"
+    # We need to include active_partition in the list for the subsequent
+    # calculations even though we're not actually changing it.
+    results = [ChangePlannedPartition(active_partition)]
 
     affected_max_value_partition = False
 

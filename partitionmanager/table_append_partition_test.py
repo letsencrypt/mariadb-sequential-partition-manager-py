@@ -494,28 +494,23 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             logctx.output,
             [
-                "INFO:plan_partition_changes:Low on time, urgently moving "
-                "p_20201231: (100) from [100] to [50] to change-over in "
-                "approximately 10m",
-                "INFO:plan_partition_changes:Changeover predicted at 2021-01-07 "
+                "INFO:plan_partition_changes:Changeover predicted at 2021-01-05 "
                 "which is not 2021-01-02. This change will be marked as "
-                "important to ensure that p_20210102: (200) is moved to [100] "
-                "and 2021-01-02",
+                "important to ensure that p_20210102: (200) is moved to [150] "
+                "and 2021-01-02"
             ],
         )
 
         self.assertEqual(
             planned,
             [
-                ChangePlannedPartition(mkPPart("p_20201231", 100))
-                .set_position([50])
-                .set_important(),
+                ChangePlannedPartition(mkPPart("p_20201231", 100)),
                 ChangePlannedPartition(mkPPart("p_20210102", 200))
-                .set_position([100])
+                .set_position([150])
                 .set_timestamp(datetime(2021, 1, 2, tzinfo=timezone.utc))
                 .set_important(),
                 ChangePlannedPartition(mkTailPart("future"))
-                .set_position([150])
+                .set_position([200])
                 .set_timestamp(datetime(2021, 1, 4, tzinfo=timezone.utc)),
                 NewPlannedPartition()
                 .set_columns(1)
@@ -578,9 +573,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             planned,
             [
-                ChangePlannedPartition(mkPPart("p_20210101", 50)).set_important(),
+                ChangePlannedPartition(mkPPart("p_20210101", 100)),
                 ChangePlannedPartition(mkPPart("p_20210415", 200))
-                .set_position([53])
+                .set_position([103])
                 .set_timestamp(datetime(2021, 3, 31, tzinfo=timezone.utc))
                 .set_important(),
                 ChangePlannedPartition(mkTailPart("future"))
