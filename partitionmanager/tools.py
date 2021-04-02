@@ -3,7 +3,7 @@ from itertools import tee
 
 def pairwise(iterable):
     """
-    iterable -> (s0,s1), (s1,s2), (s2, s3), ...
+    iterable -> (s0,s1), (s1,s2), (s2, s3), ... (s_n-1, s_n).
     """
     a, b = tee(iterable)
     next(b, None)
@@ -12,7 +12,7 @@ def pairwise(iterable):
 
 def iter_show_end(iterable):
     """
-    iterable -> (s0, false), (s1, false), (s2, true).
+    iterable -> (s0, false), (s1, false), ... (s_n, true).
     """
     it = iter(iterable)
     last = next(it)

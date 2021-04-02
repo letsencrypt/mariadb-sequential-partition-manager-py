@@ -52,6 +52,12 @@ group.add_argument(
 
 
 class Config:
+    """
+    Configurations that we need; can be created from both an argparse object
+    of command-line arguments, from a YAML file, both, and potentially be
+    modified via unit tests.
+    """
+
     def __init__(self):
         self.tables = list()
         self.dbcmd = SubprocessDatabaseCommand("mariadb")
@@ -123,6 +129,11 @@ def config_from_args(args):
 
 
 def all_configured_tables_are_compatible(conf):
+    """
+    This is a pre-flight test that all tables in the config are compatible
+    with the tool. Returns True only if all are compatible, otherwise logs
+    errors and returns False.
+    """
     problems = dict()
     for table in conf.tables:
         problem = table_is_compatible(conf.dbcmd, table)
@@ -174,6 +185,11 @@ stats_parser.set_defaults(func=stats_cmd)
 
 
 def do_partition(conf):
+    """
+    Produces SQL statements to manage partitions per the supplied configuration.
+    If the configuration does not set the noop flag, this runs those statements
+    as well.
+    """
     log = logging.getLogger("partition")
     if conf.noop:
         log.info("No-op mode")
@@ -222,23 +238,23 @@ def do_partition(conf):
 
             if conf.noop:
                 all_results[table.name] = {"sql": composite_sql_command, "noop": True}
-                logging.info(f"{table} planned SQL: {composite_sql_command}")
+                log.info(f"{table} planned SQL: {composite_sql_command}")
                 continue
 
-            logging.info(f"{table} running SQL: {composite_sql_command}")
+            log.info(f"{table} running SQL: {composite_sql_command}")
             time_start = datetime.utcnow()
             output = conf.dbcmd.run(composite_sql_command)
             time_end = datetime.utcnow()
 
             all_results[table.name] = {"sql": composite_sql_command, "output": output}
-            logging.info(f"{table} results: {output}")
+            log.info(f"{table} results: {output}")
             metrics.add(
                 "alter_time_seconds",
                 table.name,
                 (time_end - time_start).total_seconds(),
             )
         except NoEmptyPartitionsAvailableException:
-            logging.warning(
+            log.warning(
                 f"Unable to automatically handle {table}: No empty "
                 "partition is available."
             )
@@ -250,7 +266,9 @@ def do_partition(conf):
 
 
 def do_stats(conf, metrics=PrometheusMetrics()):
-    # Preflight
+    """
+    Populates a metrics object from the tables in the configuration.
+    """
     if not all_configured_tables_are_compatible(conf):
         return dict()
 

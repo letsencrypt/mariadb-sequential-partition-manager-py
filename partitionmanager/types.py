@@ -6,6 +6,11 @@ from urllib.parse import urlparse
 
 
 def retention_from_dict(r):
+    """
+    Process a dictionary, typically from YAML, which describes a table's
+    retetntion period. Returns a timedelta or None, and raises an argparse
+    error if the arguments are not understood.
+    """
     for k, v in r.items():
         if k == "days":
             return timedelta(days=v)
@@ -16,6 +21,10 @@ def retention_from_dict(r):
 
 
 class Table:
+    """
+    Represents enough information about a table to make partitioning decisions.
+    """
+
     def __init__(self, name):
         self.name = SqlInput(name)
         self.retention = None
@@ -32,6 +41,11 @@ class Table:
 
 
 class SqlInput(str):
+    """
+    Class which wraps a string only if the string is safe to use within a
+    single SQL statement.
+    """
+
     valid_form = re.compile(r"^[A-Z0-9_-]+$", re.IGNORECASE)
 
     def __new__(cls, *args, **kwargs):
@@ -46,6 +60,9 @@ class SqlInput(str):
 
 
 def toSqlUrl(urlstring):
+    """
+    Parse a sql://user:pass@host:port/schema URL and return the tuple.
+    """
     try:
         urltuple = urlparse(urlstring)
         if urltuple.scheme.lower() != "sql":
@@ -67,7 +84,11 @@ class DatabaseCommand(abc.ABC):
 
 class Partition(abc.ABC):
     """
-    Represents a single SQL table partition.
+    Abstract class which represents a single, currently-defined SQL table
+    partition. The subclasses represent: a partition with position information,
+    PositionPartition; those which are the tail partition and catch IDs beyond
+    the defined positions, MaxValuePartition; and a helper class,
+    InstantPartition, which is only used temporarily and never stored.
     """
 
     @abc.abstractmethod
@@ -80,7 +101,8 @@ class Partition(abc.ABC):
     @abc.abstractmethod
     def name(self):
         """
-        Return the partition's name.
+        Return the partition's name, which should generally represent the
+        date that the partition begins to fill, of the form p_yyyymmdd
         """
 
     @property
@@ -103,6 +125,13 @@ class Partition(abc.ABC):
         returns None
         """
 
+        if not self.has_time:
+            # Gotta start somewhere, for partitions named things like
+            # "p_start". This has the downside of causing abnormally-low
+            # rate of change calculations, but they fall off quickly
+            # for subsequent partitions
+            return datetime(2021, 1, 1, tzinfo=timezone.utc)
+
         try:
             return datetime.strptime(self.name, "p_%Y%m%d").replace(tzinfo=timezone.utc)
         except ValueError:
@@ -115,13 +144,6 @@ class Partition(abc.ABC):
             return datetime.strptime(self.name, "p_%Y").replace(tzinfo=timezone.utc)
         except ValueError:
             pass
-
-        if "start" in self.name:
-            # Gotta start somewhere, for partitions named things like
-            # "p_start". This has the downside of causing abnormally-low
-            # rate of change calculations, but they fall off quickly
-            # for subsequent partitions
-            return datetime(2021, 1, 1, tzinfo=timezone.utc)
 
         return None
 
@@ -245,7 +267,13 @@ class InstantPartition(PositionPartition):
         return self.instant
 
 
-class ModifiedPartition(abc.ABC):
+class PlannedPartition(abc.ABC):
+    """
+    An abstract class representing a partition this tool plans to emit. If
+    the partition is an edit to an existing one, it will be the concrete type
+    ChangePlannedPartition. For new partitions, it'll be NewPlannedPartition.
+    """
+
     def __init__(self):
         self.num_columns = None
         self.positions = None
@@ -320,7 +348,7 @@ class ModifiedPartition(abc.ABC):
         return f"{type(self).__name__}<{str(self)}>"
 
     def __eq__(self, other):
-        if isinstance(other, ModifiedPartition):
+        if isinstance(other, PlannedPartition):
             return (
                 type(self) == type(other)
                 and self.positions == other.positions
@@ -330,7 +358,7 @@ class ModifiedPartition(abc.ABC):
         return False
 
 
-class ChangedPartition(ModifiedPartition):
+class ChangePlannedPartition(PlannedPartition):
     """
     Represents modifications to a given Partition
     """
@@ -359,7 +387,7 @@ class ChangedPartition(ModifiedPartition):
         return f"{self.old} => {self.positions} {imp} {self._timestamp}"
 
 
-class NewPartition(ModifiedPartition):
+class NewPlannedPartition(PlannedPartition):
     """
     Represents a wholly new Partition to be constructed
     """

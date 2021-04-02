@@ -14,6 +14,9 @@ from partitionmanager.types import (
 
 
 def destring(text):
+    """
+    Try and get a python type from a string. Used for SQL results.
+    """
     try:
         return int(text)
     except ValueError:
@@ -40,13 +43,17 @@ class XmlResult:
     """
 
     def __init__(self):
-        self.logger = logging.getLogger(name="xml")
+        self.logger = logging.getLogger("xml")
+
+        # The XML debugging is a little much, normally. If we're debugging
+        # the parser, comment this out or set it to DEBUG.
+        self.logger.setLevel("INFO")
 
         self.xmlparser = xml.parsers.expat.ParserCreate()
 
-        self.xmlparser.StartElementHandler = self.start_element
-        self.xmlparser.EndElementHandler = self.end_element
-        self.xmlparser.CharacterDataHandler = self.char_data
+        self.xmlparser.StartElementHandler = self._start_element
+        self.xmlparser.EndElementHandler = self._end_element
+        self.xmlparser.CharacterDataHandler = self._char_data
 
         self.rows = None
         self.current_row = None
@@ -54,6 +61,9 @@ class XmlResult:
         self.current_elements = list()
 
     def parse(self, data):
+        """
+        Return rows from an XML Result object.
+        """
         if self.rows is not None:
             raise ValueError("XmlResult objects can only be used once")
 
@@ -66,7 +76,7 @@ class XmlResult:
             )
         return self.rows
 
-    def start_element(self, name, attrs):
+    def _start_element(self, name, attrs):
         self.logger.debug(
             f"Element start: {name} {attrs} (Current elements: {self.current_elements}"
         )
@@ -83,7 +93,7 @@ class XmlResult:
             if "xsi:nil" in attrs and attrs["xsi:nil"] == "true":
                 self.current_row[attrs["name"]] = None
 
-    def end_element(self, name):
+    def _end_element(self, name):
         self.logger.debug(
             f"Element end: {name} (Current elements: {self.current_elements}"
         )
@@ -99,7 +109,7 @@ class XmlResult:
                 self.current_row[self.current_field] = destring(value)
             self.current_field = None
 
-    def char_data(self, data):
+    def _char_data(self, data):
         if self.current_elements[-1] == "field":
             assert self.current_field is not None
             assert self.current_row is not None
@@ -108,6 +118,12 @@ class XmlResult:
 
 
 class SubprocessDatabaseCommand(DatabaseCommand):
+    """
+    Run a database command via the CLI tool, getting the results in XML form.
+    This can be very convenient without explicit port-forwarding, but is a
+    little slow.
+    """
+
     def __init__(self, exe):
         self.exe = exe
 
@@ -130,6 +146,11 @@ class SubprocessDatabaseCommand(DatabaseCommand):
 
 
 class IntegratedDatabaseCommand(DatabaseCommand):
+    """
+    Run a database command via a direct socket connection and pymysql, a pure
+    Python PEP 249-compliant database connector.
+    """
+
     def __init__(self, url):
         self.db = None
         if url.path and url.path != "/":

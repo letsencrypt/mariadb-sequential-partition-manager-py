@@ -4,12 +4,12 @@ import unittest
 import argparse
 from datetime import datetime, timedelta, timezone
 from partitionmanager.types import (
-    ChangedPartition,
+    ChangePlannedPartition,
     DatabaseCommand,
     DuplicatePartitionException,
     MaxValuePartition,
     MismatchedIdException,
-    NewPartition,
+    NewPlannedPartition,
     NoEmptyPartitionsAvailableException,
     Partition,
     PositionPartition,
@@ -583,17 +583,17 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             planned,
             [
-                ChangedPartition(mkPPart("p_20201231", 100))
+                ChangePlannedPartition(mkPPart("p_20201231", 100))
                 .set_position([50])
                 .set_important(),
-                ChangedPartition(mkPPart("p_20210102", 200))
+                ChangePlannedPartition(mkPPart("p_20210102", 200))
                 .set_position([100])
                 .set_timestamp(datetime(2021, 1, 2, tzinfo=timezone.utc))
                 .set_important(),
-                ChangedPartition(mkTailPart("future"))
+                ChangePlannedPartition(mkTailPart("future"))
                 .set_position([150])
                 .set_timestamp(datetime(2021, 1, 4, tzinfo=timezone.utc)),
-                NewPartition()
+                NewPlannedPartition()
                 .set_columns(1)
                 .set_timestamp(datetime(2021, 1, 6, tzinfo=timezone.utc)),
             ],
@@ -626,12 +626,12 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             planned,
             [
-                ChangedPartition(mkPPart("p_20201231", 100)),
-                ChangedPartition(mkPPart("p_20210104", 200))
+                ChangePlannedPartition(mkPPart("p_20201231", 100)),
+                ChangePlannedPartition(mkPPart("p_20210104", 200))
                 .set_position([450])
                 .set_timestamp(datetime(2021, 1, 7, tzinfo=timezone.utc))
                 .set_important(),
-                ChangedPartition(mkTailPart("future"))
+                ChangePlannedPartition(mkTailPart("future"))
                 .set_position([800])
                 .set_timestamp(datetime(2021, 1, 14, tzinfo=timezone.utc))
                 .set_as_max_value(),
@@ -654,12 +654,12 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             planned,
             [
-                ChangedPartition(mkPPart("p_20210101", 50)).set_important(),
-                ChangedPartition(mkPPart("p_20210415", 200))
+                ChangePlannedPartition(mkPPart("p_20210101", 50)).set_important(),
+                ChangePlannedPartition(mkPPart("p_20210415", 200))
                 .set_position([53])
                 .set_timestamp(datetime(2021, 3, 31, tzinfo=timezone.utc))
                 .set_important(),
-                ChangedPartition(mkTailPart("future"))
+                ChangePlannedPartition(mkTailPart("future"))
                 .set_position([800])
                 .set_timestamp(datetime(2021, 4, 7, tzinfo=timezone.utc))
                 .set_as_max_value(),
@@ -683,13 +683,13 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             planned,
             [
-                ChangedPartition(mkPPart("p_20210125", 12010339136)).set_position(
+                ChangePlannedPartition(mkPPart("p_20210125", 12010339136)).set_position(
                     [12010339136]
                 ),
-                ChangedPartition(mkTailPart("p_future"))
+                ChangePlannedPartition(mkTailPart("p_future"))
                 .set_position([12960433003])
                 .set_timestamp(datetime(2021, 2, 1, tzinfo=timezone.utc)),
-                NewPartition()
+                NewPlannedPartition()
                 .set_columns(1)
                 .set_timestamp(datetime(2021, 2, 8, tzinfo=timezone.utc)),
             ],
@@ -719,11 +719,11 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             planned,
             [
-                ChangedPartition(mkPPart("p_start", 100)),
-                ChangedPartition(mkTailPart("p_future"))
+                ChangePlannedPartition(mkPPart("p_start", 100)),
+                ChangePlannedPartition(mkTailPart("p_future"))
                 .set_position([170])
                 .set_timestamp(datetime(2021, 1, 8, tzinfo=timezone.utc)),
-                NewPartition()
+                NewPlannedPartition()
                 .set_columns(1)
                 .set_timestamp(datetime(2021, 1, 15, tzinfo=timezone.utc)),
             ],
@@ -766,12 +766,12 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             planned,
             [
-                ChangedPartition(mkPPart("p_20201231", 100)),
-                ChangedPartition(mkPPart("p_20210102", 200))
+                ChangePlannedPartition(mkPPart("p_20201231", 100)),
+                ChangePlannedPartition(mkPPart("p_20210102", 200))
                 .set_position([450])
                 .set_timestamp(datetime(2021, 1, 7, tzinfo=timezone.utc))
                 .set_important(),
-                ChangedPartition(mkTailPart("future"))
+                ChangePlannedPartition(mkTailPart("future"))
                 .set_position([800])
                 .set_timestamp(datetime(2021, 1, 14, tzinfo=timezone.utc))
                 .set_as_max_value(),
@@ -791,14 +791,14 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 3,
             ),
             [
-                ChangedPartition(mkPPart("p_20210102", 200)).set_position([200]),
-                ChangedPartition(mkTailPart("future"))
+                ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position([200]),
+                ChangePlannedPartition(mkTailPart("future"))
                 .set_position([320])
                 .set_timestamp(datetime(2021, 1, 9, tzinfo=timezone.utc)),
-                NewPartition()
+                NewPlannedPartition()
                 .set_position([440])
                 .set_timestamp(datetime(2021, 1, 16, tzinfo=timezone.utc)),
-                NewPartition()
+                NewPlannedPartition()
                 .set_columns(1)
                 .set_timestamp(datetime(2021, 1, 23, tzinfo=timezone.utc)),
             ],
@@ -807,15 +807,19 @@ class TestPartitionAlgorithm(unittest.TestCase):
     def test_evaluate_partition_changes(self):
         self.assertFalse(
             evaluate_partition_changes(
-                [ChangedPartition(mkPPart("p_20210102", 200)).set_position([300])]
+                [ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position([300])]
             )
         )
 
         self.assertFalse(
             evaluate_partition_changes(
                 [
-                    ChangedPartition(mkPPart("p_20210102", 200)).set_position([300]),
-                    ChangedPartition(mkPPart("p_20210109", 1000)).set_position([1300]),
+                    ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
+                        [300]
+                    ),
+                    ChangePlannedPartition(mkPPart("p_20210109", 1000)).set_position(
+                        [1300]
+                    ),
                 ]
             )
         )
@@ -823,16 +827,16 @@ class TestPartitionAlgorithm(unittest.TestCase):
             self.assertTrue(
                 evaluate_partition_changes(
                     [
-                        ChangedPartition(mkPPart("p_20210102", 200)).set_position(
+                        ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
                             [302]
                         ),
-                        ChangedPartition(mkTailPart("future"))
+                        ChangePlannedPartition(mkTailPart("future"))
                         .set_position([422])
                         .set_timestamp(datetime(2021, 1, 9, tzinfo=timezone.utc)),
-                        NewPartition()
+                        NewPlannedPartition()
                         .set_position([542])
                         .set_timestamp(datetime(2021, 1, 16, tzinfo=timezone.utc)),
-                        NewPartition()
+                        NewPlannedPartition()
                         .set_position([662])
                         .set_timestamp(datetime(2021, 1, 23, tzinfo=timezone.utc)),
                     ]
@@ -851,11 +855,11 @@ class TestPartitionAlgorithm(unittest.TestCase):
             self.assertTrue(
                 evaluate_partition_changes(
                     [
-                        ChangedPartition(mkPPart("p_20210102", 200)),
-                        NewPartition()
+                        ChangePlannedPartition(mkPPart("p_20210102", 200)),
+                        NewPlannedPartition()
                         .set_position([542])
                         .set_timestamp(datetime(2021, 1, 16, tzinfo=timezone.utc)),
-                        NewPartition()
+                        NewPlannedPartition()
                         .set_position([662])
                         .set_timestamp(datetime(2021, 1, 23, tzinfo=timezone.utc)),
                     ]
@@ -873,7 +877,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         with self.assertRaises(ValueError):
             list(
                 generate_sql_reorganize_partition_commands(
-                    Table("table"), [ChangedPartition(mkPPart("p_20210102", 200))]
+                    Table("table"), [ChangePlannedPartition(mkPPart("p_20210102", 200))]
                 )
             )
 
@@ -883,7 +887,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 generate_sql_reorganize_partition_commands(
                     Table("table"),
                     [
-                        ChangedPartition(mkPPart("p_20210102", 200, 200))
+                        ChangePlannedPartition(mkPPart("p_20210102", 200, 200))
                         .set_position([542, 190])
                         .set_timestamp(datetime(2021, 1, 16, tzinfo=timezone.utc))
                     ],
@@ -901,10 +905,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 generate_sql_reorganize_partition_commands(
                     Table("table"),
                     [
-                        ChangedPartition(mkPPart("p_20210102", 200))
+                        ChangePlannedPartition(mkPPart("p_20210102", 200))
                         .set_position([500])
                         .set_timestamp(datetime(2021, 1, 16, tzinfo=timezone.utc)),
-                        ChangedPartition(mkPPart("p_20210120", 1000))
+                        ChangePlannedPartition(mkPPart("p_20210120", 1000))
                         .set_position([2000])
                         .set_timestamp(datetime(2021, 2, 14, tzinfo=timezone.utc)),
                     ],
@@ -924,11 +928,11 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 generate_sql_reorganize_partition_commands(
                     Table("table"),
                     [
-                        ChangedPartition(mkPPart("p_20210102", 200)),
-                        NewPartition()
+                        ChangePlannedPartition(mkPPart("p_20210102", 200)),
+                        NewPlannedPartition()
                         .set_position([542])
                         .set_timestamp(datetime(2021, 1, 16, tzinfo=timezone.utc)),
-                        NewPartition()
+                        NewPlannedPartition()
                         .set_position([662])
                         .set_timestamp(datetime(2021, 1, 23, tzinfo=timezone.utc)),
                     ],
@@ -948,16 +952,16 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 generate_sql_reorganize_partition_commands(
                     Table("table"),
                     [
-                        ChangedPartition(mkTailPart("future"))
+                        ChangePlannedPartition(mkTailPart("future"))
                         .set_position([800])
                         .set_timestamp(datetime(2021, 1, 14, tzinfo=timezone.utc)),
-                        NewPartition()
+                        NewPlannedPartition()
                         .set_position([1000])
                         .set_timestamp(datetime(2021, 1, 16, tzinfo=timezone.utc)),
-                        NewPartition()
+                        NewPlannedPartition()
                         .set_position([1200])
                         .set_timestamp(datetime(2021, 1, 23, tzinfo=timezone.utc)),
-                        NewPartition()
+                        NewPlannedPartition()
                         .set_columns(1)
                         .set_timestamp(datetime(2021, 1, 30, tzinfo=timezone.utc)),
                     ],
@@ -978,13 +982,13 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 generate_sql_reorganize_partition_commands(
                     Table("table_with_duplicate"),
                     [
-                        ChangedPartition(mkTailPart("future"))
+                        ChangePlannedPartition(mkTailPart("future"))
                         .set_position([800])
                         .set_timestamp(datetime(2021, 1, 14, tzinfo=timezone.utc)),
-                        NewPartition()
+                        NewPlannedPartition()
                         .set_position([1000])
                         .set_timestamp(datetime(2021, 1, 14, tzinfo=timezone.utc)),
-                        NewPartition()
+                        NewPlannedPartition()
                         .set_position([1200])
                         .set_timestamp(datetime(2021, 1, 15, tzinfo=timezone.utc)),
                     ],

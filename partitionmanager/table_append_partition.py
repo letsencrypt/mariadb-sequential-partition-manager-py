@@ -1,13 +1,13 @@
 from partitionmanager.types import (
-    ChangedPartition,
+    ChangePlannedPartition,
     DuplicatePartitionException,
     InstantPartition,
     MaxValuePartition,
     MismatchedIdException,
-    ModifiedPartition,
-    NewPartition,
+    NewPlannedPartition,
     NoEmptyPartitionsAvailableException,
     Partition,
+    PlannedPartition,
     PositionPartition,
     SqlInput,
     Table,
@@ -96,6 +96,8 @@ def parse_partition_map(rows):
     Read a partition statement from a table creation string and produce Partition
     objets for each partition.
     """
+    log = logging.getLogger("parse_partition_map")
+
     partition_range = re.compile(
         r"[ ]*PARTITION BY RANGE\s+(COLUMNS)?\((?P<cols>[\w,` ]+)\)"
     )
@@ -118,13 +120,13 @@ def parse_partition_map(rows):
         range_match = partition_range.match(l)
         if range_match:
             range_cols = [x.strip("` ") for x in range_match.group("cols").split(",")]
-            logging.debug(f"Partition range columns: {range_cols}")
+            log.debug(f"Partition range columns: {range_cols}")
 
         member_match = partition_member.match(l)
         if member_match:
             part_name = member_match.group("name")
             part_vals_str = member_match.group("cols")
-            logging.debug(f"Found partition {part_name} = {part_vals_str}")
+            log.debug(f"Found partition {part_name} = {part_vals_str}")
 
             part_vals = [int(x.strip("` ")) for x in part_vals_str.split(",")]
 
@@ -134,7 +136,7 @@ def parse_partition_map(rows):
                 )
 
             if len(part_vals) != len(range_cols):
-                logging.error(
+                log.error(
                     f"Partition columns {part_vals} don't match the partition range {range_cols}"
                 )
                 raise MismatchedIdException("Partition columns mismatch")
@@ -149,7 +151,7 @@ def parse_partition_map(rows):
                     "Processing tail, but the partition definition wasn't found."
                 )
             part_name = member_tail.group("name")
-            logging.debug(f"Found tail partition named {part_name}")
+            log.debug(f"Found tail partition named {part_name}")
             partitions.append(MaxValuePartition(part_name, len(range_cols)))
 
     if not partitions or not isinstance(partitions[-1], MaxValuePartition):
@@ -159,12 +161,14 @@ def parse_partition_map(rows):
 
 
 def evaluate_partition_actions(partitions, timestamp, allowed_lifespan):
+    log = logging.getLogger("evaluate_partition_actions")
+
     tail_part = partitions[-1]
     if not isinstance(tail_part, MaxValuePartition):
         raise UnexpectedPartitionException(tail_part)
 
     if not tail_part.timestamp():
-        logging.warning(f"Partition {tail_part} is assumed to need partitioning")
+        log.warning(f"Partition {tail_part} is assumed to need partitioning")
         return {"do_partition": True, "remaining_lifespan": timedelta()}
 
     lifespan = timestamp - tail_part.timestamp()
@@ -378,12 +382,14 @@ def plan_partition_changes(
         )
 
         results.append(
-            ChangedPartition(active_partition).set_position(new_pos).set_important()
+            ChangePlannedPartition(active_partition)
+            .set_position(new_pos)
+            .set_important()
         )
     else:
         # We need to include active_partition in the list even though we're not
         # actually changing it.
-        results.append(ChangedPartition(active_partition))
+        results.append(ChangePlannedPartition(active_partition))
 
     assert len(results) == 1, f"There must be exactly one partition: {results}"
 
@@ -400,7 +406,7 @@ def plan_partition_changes(
         )
 
         changed_partition = (
-            ChangedPartition(partition)
+            ChangePlannedPartition(partition)
             .set_position(changed_part_pos)
             .set_timestamp(partition_start_time)
         )
@@ -440,7 +446,7 @@ def plan_partition_changes(
             last_changed.positions, rates, allowed_lifespan
         )
         results.append(
-            NewPartition()
+            NewPlannedPartition()
             .set_position(new_part_pos)
             .set_timestamp(partition_start_time)
         )
@@ -461,12 +467,13 @@ def evaluate_partition_changes(altered_partitions):
     for skipping and returns False
     """
     log = logging.getLogger("evaluate_partition_changes")
+
     for p in altered_partitions:
-        if isinstance(p, NewPartition):
+        if isinstance(p, NewPlannedPartition):
             log.debug(f"{p} is new")
             return True
 
-        if isinstance(p, ChangedPartition):
+        if isinstance(p, ChangePlannedPartition):
             if p.timestamp() != p.old.timestamp():
                 log.debug(f"{p} has an updated timestamp vs {p.old}")
                 return True
@@ -489,9 +496,9 @@ def generate_sql_reorganize_partition_commands(table, changes):
     new_partitions = list()
 
     for p in changes:
-        if not isinstance(p, ModifiedPartition):
+        if not isinstance(p, PlannedPartition):
             raise UnexpectedPartitionException(p)
-        if isinstance(p, NewPartition):
+        if isinstance(p, NewPlannedPartition):
             new_partitions.append(p)
         else:
             modified_partitions.append(p)

@@ -6,6 +6,10 @@ from .tools import pairwise
 
 
 class PrometheusMetric:
+    """
+    Represents a single named metric for Prometheus
+    """
+
     def __init__(self, name, table, data):
         self.name = name
         self.table = table
@@ -13,23 +17,36 @@ class PrometheusMetric:
 
 
 class PrometheusMetrics:
+    """
+    A set of metrics that can be rendered for Prometheus.
+    """
+
     def __init__(self):
         self.metrics = dict()
         self.help = dict()
         self.types = dict()
 
     def add(self, name, table, data):
+        """
+        Record metric data representing the name and table.
+        """
         if name not in self.metrics:
             self.metrics[name] = list()
         self.metrics[name].append(PrometheusMetric(name, table, data))
 
     def describe(self, name, help_text=None, type=None):
+        """
+        Add optional descriptive and type data for a given metric name.
+        """
         self.help[name] = help_text
         self.types[name] = type
 
     def render(self, fp):
-        # Format specification:
-        # https://prometheus.io/docs/instrumenting/exposition_formats/
+        """
+        Write the collected metrics to the supplied file-like object, following
+        the format specification:
+        https://prometheus.io/docs/instrumenting/exposition_formats/
+        """
         for n, metrics in self.metrics.items():
             name = f"partition_{n}"
             if n in self.help:
@@ -42,6 +59,10 @@ class PrometheusMetrics:
 
 
 def get_statistics(partitions, current_timestamp, table):
+    """
+    Return a dictionary of statistics about the supplied table's partitions.
+    """
+    log = logging.getLogger("get_statistics")
     results = {"partitions": len(partitions)}
 
     if not partitions:
@@ -49,7 +70,7 @@ def get_statistics(partitions, current_timestamp, table):
 
     for p in partitions:
         if not isinstance(p, Partition):
-            logging.warning(
+            log.warning(
                 f"{table} get_statistics called with a partition list "
                 + f"that included a non-Partition entry: {p}"
             )
@@ -59,7 +80,7 @@ def get_statistics(partitions, current_timestamp, table):
     tail_part = partitions[-1]
 
     if not isinstance(tail_part, MaxValuePartition):
-        logging.warning(
+        log.warning(
             f"{table} get_statistics called with a partition list tail "
             + f"that wasn't a MaxValuePartition: {p}"
         )
@@ -70,12 +91,14 @@ def get_statistics(partitions, current_timestamp, table):
             current_timestamp - tail_part.timestamp()
         )
 
+    # Find the earliest partition that is timestamped
     for p in partitions:
         if p.timestamp():
             head_part = p
             break
 
     if not head_part or head_part == tail_part:
+        # For simple tables, we're done now.
         return results
 
     if head_part.timestamp():
@@ -91,7 +114,7 @@ def get_statistics(partitions, current_timestamp, table):
     max_d = timedelta()
     for a, b in pairwise(partitions):
         if not a.timestamp() or not b.timestamp():
-            logging.debug(f"{table} had partitions that aren't comparable: {a} and {b}")
+            log.debug(f"{table} had partitions that aren't comparable: {a} and {b}")
             continue
         d = b.timestamp() - a.timestamp()
         if d > max_d:
