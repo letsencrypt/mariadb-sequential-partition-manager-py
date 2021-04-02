@@ -516,7 +516,6 @@ def generate_sql_reorganize_partition_commands(table, changes):
         for part in new_part_list:
             if part.name in partition_names_set:
                 raise DuplicatePartitionException(f"Duplicate {part}")
-            log.debug(f"Adding {part.name} for {part}")
             partition_names_set.add(part.name)
 
             partition_strings.append(
@@ -524,7 +523,11 @@ def generate_sql_reorganize_partition_commands(table, changes):
             )
         partition_update = ", ".join(partition_strings)
 
-        yield (
+        alter_cmd = (
             f"ALTER TABLE `{table.name}` "
             f"REORGANIZE PARTITION `{modified_partition.old.name}` INTO ({partition_update});"
         )
+
+        log.debug(f"Yielding {alter_cmd}")
+
+        yield alter_cmd
