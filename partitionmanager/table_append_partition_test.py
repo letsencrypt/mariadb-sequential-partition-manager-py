@@ -496,8 +496,8 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [
                 "INFO:plan_partition_changes:Changeover predicted at 2021-01-05 "
                 "which is not 2021-01-02. This change will be marked as "
-                "important to ensure that p_20210102: (200) is moved to [150] "
-                "and 2021-01-02"
+                "important to ensure that p_20210102: (200) is moved to "
+                "2021-01-02"
             ],
         )
 
@@ -506,11 +506,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [
                 ChangePlannedPartition(mkPPart("p_20201231", 100)),
                 ChangePlannedPartition(mkPPart("p_20210102", 200))
-                .set_position([150])
                 .set_timestamp(datetime(2021, 1, 2, tzinfo=timezone.utc))
                 .set_important(),
                 ChangePlannedPartition(mkTailPart("future"))
-                .set_position([200])
+                .set_position([250])
                 .set_timestamp(datetime(2021, 1, 4, tzinfo=timezone.utc)),
                 NewPlannedPartition()
                 .set_columns(1)
@@ -537,8 +536,8 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [
                 "INFO:plan_partition_changes:Changeover predicted at 2021-01-03 "
                 "which is not 2021-01-04. This change will be marked as "
-                "important to ensure that p_20210104: (200) is moved to [450] "
-                "and 2021-01-07"
+                "important to ensure that p_20210104: (200) is moved to "
+                "2021-01-07"
             ],
         )
 
@@ -547,13 +546,11 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [
                 ChangePlannedPartition(mkPPart("p_20201231", 100)),
                 ChangePlannedPartition(mkPPart("p_20210104", 200))
-                .set_position([450])
                 .set_timestamp(datetime(2021, 1, 7, tzinfo=timezone.utc))
                 .set_important(),
-                ChangePlannedPartition(mkTailPart("future"))
-                .set_position([800])
-                .set_timestamp(datetime(2021, 1, 14, tzinfo=timezone.utc))
-                .set_as_max_value(),
+                ChangePlannedPartition(mkTailPart("future")).set_timestamp(
+                    datetime(2021, 1, 14, tzinfo=timezone.utc)
+                ),
             ],
         )
 
@@ -575,13 +572,11 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [
                 ChangePlannedPartition(mkPPart("p_20210101", 100)),
                 ChangePlannedPartition(mkPPart("p_20210415", 200))
-                .set_position([103])
                 .set_timestamp(datetime(2021, 3, 31, tzinfo=timezone.utc))
                 .set_important(),
-                ChangePlannedPartition(mkTailPart("future"))
-                .set_position([800])
-                .set_timestamp(datetime(2021, 4, 7, tzinfo=timezone.utc))
-                .set_as_max_value(),
+                ChangePlannedPartition(mkTailPart("future")).set_timestamp(
+                    datetime(2021, 4, 7, tzinfo=timezone.utc)
+                ),
             ],
         )
 
@@ -678,7 +673,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [
                 "INFO:plan_partition_changes:Changeover predicted at 2021-01-03 which is not "
                 "2021-01-02. This change will be marked as important to ensure "
-                "that p_20210102: (200) is moved to [450] and 2021-01-07"
+                "that p_20210102: (200) is moved to 2021-01-07"
             ],
         )
 
@@ -687,13 +682,11 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [
                 ChangePlannedPartition(mkPPart("p_20201231", 100)),
                 ChangePlannedPartition(mkPPart("p_20210102", 200))
-                .set_position([450])
                 .set_timestamp(datetime(2021, 1, 7, tzinfo=timezone.utc))
                 .set_important(),
-                ChangePlannedPartition(mkTailPart("future"))
-                .set_position([800])
-                .set_timestamp(datetime(2021, 1, 14, tzinfo=timezone.utc))
-                .set_as_max_value(),
+                ChangePlannedPartition(mkTailPart("future")).set_timestamp(
+                    datetime(2021, 1, 14, tzinfo=timezone.utc)
+                ),
             ],
         )
 
@@ -935,7 +928,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 "ALTER TABLE `water` REORGANIZE PARTITION `future` INTO "
                 "(PARTITION `p_20210114` VALUES LESS THAN MAXVALUE);",
                 "ALTER TABLE `water` REORGANIZE PARTITION `p_20210104` INTO "
-                "(PARTITION `p_20210107` VALUES LESS THAN (450));",
+                "(PARTITION `p_20210107` VALUES LESS THAN (200));",
             ],
         )
 

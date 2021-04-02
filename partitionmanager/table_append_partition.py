@@ -354,22 +354,15 @@ def plan_partition_changes(
     # calculations even though we're not actually changing it.
     results = [ChangePlannedPartition(active_partition)]
 
-    affected_max_value_partition = False
-
     # Adjust each of the empty partitions
     for partition in empty_partitions:
         last_changed = results[-1]
         partition_start_time = calculate_start_time(
             last_changed.timestamp(), evaluation_time, allowed_lifespan
         )
-        changed_part_pos = predict_forward_position(
-            last_changed.positions, rates, allowed_lifespan
-        )
 
-        changed_partition = (
-            ChangePlannedPartition(partition)
-            .set_position(changed_part_pos)
-            .set_timestamp(partition_start_time)
+        changed_partition = ChangePlannedPartition(partition).set_timestamp(
+            partition_start_time
         )
 
         if isinstance(partition, PositionPartition):
@@ -385,14 +378,15 @@ def plan_partition_changes(
                     f"Changeover predicted at {changeover_time.date()} which is "
                     f"not {partition.timestamp().date()}. This change will be "
                     f"marked as important to ensure that {partition} is moved "
-                    f"to {changed_part_pos} and {partition_start_time:%Y-%m-%d}"
+                    f"to {partition_start_time:%Y-%m-%d}"
                 )
                 changed_partition.set_important()
 
         if isinstance(partition, MaxValuePartition):
-            # If we are changing any MaxValuePartitions, then we need to
-            # ensure there's a MaxValuePartition on the end.
-            affected_max_value_partition = True
+            changed_part_pos = predict_forward_position(
+                last_changed.positions, rates, allowed_lifespan
+            )
+            changed_partition.set_position(changed_part_pos)
 
         results.append(changed_partition)
 
@@ -412,8 +406,8 @@ def plan_partition_changes(
             .set_timestamp(partition_start_time)
         )
 
-    if affected_max_value_partition:
-        results[-1].set_as_max_value()
+    # Final result is always MAXVALUE
+    results[-1].set_as_max_value()
 
     log.debug(f"Planned {results}")
 
