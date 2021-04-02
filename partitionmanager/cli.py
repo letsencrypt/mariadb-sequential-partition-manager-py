@@ -15,7 +15,13 @@ from partitionmanager.table_append_partition import (
     plan_partition_changes,
     table_is_compatible,
 )
-from partitionmanager.types import SqlInput, Table, retention_from_dict, toSqlUrl
+from partitionmanager.types import (
+    SqlInput,
+    Table,
+    retention_from_dict,
+    toSqlUrl,
+    NoEmptyPartitionsAvailableException,
+)
 from partitionmanager.stats import get_statistics, PrometheusMetrics
 from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
 
@@ -185,41 +191,57 @@ def do_partition(conf):
 
     all_results = dict()
     for table in conf.tables:
-        map_data = get_partition_map(conf.dbcmd, table)
+        try:
+            map_data = get_partition_map(conf.dbcmd, table)
 
-        duration = conf.partition_period
-        if table.partition_period:
-            duration = table.partition_period
+            duration = conf.partition_period
+            if table.partition_period:
+                duration = table.partition_period
 
-        positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
+            positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
 
-        partition_changes = plan_partition_changes(
-            map_data["partitions"], positions, conf.curtime, duration, conf.num_empty
-        )
+            log.info(f"Evaluating {table} (duration={duration}) (pos={positions})")
 
-        if not evaluate_partition_changes(partition_changes):
-            log.info(f"{table} does not need to be modified currently.")
-            continue
-        log.debug(f"{table} has changes waiting.")
+            partition_changes = plan_partition_changes(
+                map_data["partitions"],
+                positions,
+                conf.curtime,
+                duration,
+                conf.num_empty,
+            )
 
-        sql_cmds = generate_sql_reorganize_partition_commands(table, partition_changes)
-        composite_sql_command = "\n".join(sql_cmds)
+            if not evaluate_partition_changes(partition_changes):
+                log.info(f"{table} does not need to be modified currently.")
+                continue
+            log.debug(f"{table} has changes waiting.")
 
-        if conf.noop:
-            all_results[table.name] = {"sql": composite_sql_command, "noop": True}
-            logging.info(f"{table} planned SQL: {composite_sql_command}")
-            continue
+            sql_cmds = generate_sql_reorganize_partition_commands(
+                table, partition_changes
+            )
+            composite_sql_command = "\n".join(sql_cmds)
 
-        logging.info(f"{table} running SQL: {composite_sql_command}")
-        time_start = datetime.utcnow()
-        output = conf.dbcmd.run(composite_sql_command)
-        time_end = datetime.utcnow()
+            if conf.noop:
+                all_results[table.name] = {"sql": composite_sql_command, "noop": True}
+                logging.info(f"{table} planned SQL: {composite_sql_command}")
+                continue
 
-        all_results[table.name] = {"sql": composite_sql_command, "output": output}
-        logging.info(f"{table} results: {output}")
-        metrics.add(
-            "alter_time_seconds", table.name, (time_end - time_start).total_seconds()
-        )
+            logging.info(f"{table} running SQL: {composite_sql_command}")
+            time_start = datetime.utcnow()
+            output = conf.dbcmd.run(composite_sql_command)
+            time_end = datetime.utcnow()
+
+            all_results[table.name] = {"sql": composite_sql_command, "output": output}
+            logging.info(f"{table} results: {output}")
+            metrics.add(
+                "alter_time_seconds",
+                table.name,
+                (time_end - time_start).total_seconds(),
+            )
+        except NoEmptyPartitionsAvailableException:
+            logging.warning(
+                f"Unable to automatically handle {table}: No empty "
+                "partition is available."
+            )
 
     if conf.prometheus_stats_path:
         do_stats(conf, metrics)

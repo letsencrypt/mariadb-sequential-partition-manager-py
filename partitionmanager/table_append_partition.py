@@ -331,6 +331,11 @@ def plan_partition_changes(
         partition_list, current_positions
     )
     if not empty_partitions:
+        log.warning(
+            f"Partition {active_partition.name} requires manual ALTER "
+            "as this tool won't bisect the partition to determine a"
+            "rate of fill to make a prediction for new partitions."
+        )
         raise NoEmptyPartitionsAvailableException()
     if not active_partition:
         raise Exception("Active Partition can't be None")
