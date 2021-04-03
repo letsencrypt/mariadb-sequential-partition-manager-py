@@ -1,6 +1,6 @@
 import argparse
 import unittest
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from .types import (
     ChangePlannedPartition,
     InstantPartition,
@@ -108,12 +108,12 @@ class TestTypes(unittest.TestCase):
             PositionPartition("p_20210101").set_position([1, 2, 3, 4])
         )
         self.assertFalse(c.has_modifications)
-        c.set_timestamp(date(2021, 1, 2))
+        c.set_timestamp(datetime(2021, 1, 2))
         y = c.set_position([10, 10, 10, 10])
         self.assertEqual(c, y)
         self.assertTrue(c.has_modifications)
 
-        self.assertEqual(c.timestamp(), date(2021, 1, 2))
+        self.assertEqual(c.timestamp(), datetime(2021, 1, 2))
         self.assertEqual(c.positions, [10, 10, 10, 10])
 
         self.assertEqual(
@@ -179,7 +179,7 @@ class TestTypes(unittest.TestCase):
             .as_partition(),
             NewPlannedPartition()
             .set_columns(4)
-            .set_timestamp(date(2021, 1, 1))
+            .set_timestamp(datetime(2021, 1, 1))
             .as_partition(),
         )
 
@@ -190,7 +190,7 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(
             NewPlannedPartition()
             .set_columns(5)
-            .set_timestamp(date(2021, 12, 31))
+            .set_timestamp(datetime(2021, 12, 31, hour=23, minute=15))
             .as_partition(),
             MaxValuePartition("p_20211231", count=5),
         )
@@ -200,7 +200,7 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(
             NewPlannedPartition()
             .set_position([3])
-            .set_timestamp(date(2021, 12, 31))
+            .set_timestamp(datetime(2021, 12, 31))
             .as_partition(),
             PositionPartition("p_20211231").set_position([3]),
         )
@@ -208,22 +208,26 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(
             NewPlannedPartition()
             .set_position([1, 1, 1])
-            .set_timestamp(date(1994, 1, 1))
+            .set_timestamp(datetime(1994, 1, 1))
             .as_partition(),
             PositionPartition("p_19940101").set_position([1, 1, 1]),
         )
 
         self.assertEqual(
-            NewPlannedPartition().set_position([3]).set_timestamp(date(2021, 12, 31)),
-            NewPlannedPartition().set_position([3]).set_timestamp(date(2021, 12, 31)),
+            NewPlannedPartition()
+            .set_position([3])
+            .set_timestamp(datetime(2021, 12, 31)),
+            NewPlannedPartition()
+            .set_position([3])
+            .set_timestamp(datetime(2021, 12, 31)),
         )
 
         self.assertEqual(
             NewPlannedPartition()
             .set_position([99, 999])
-            .set_timestamp(date(2021, 12, 31))
+            .set_timestamp(datetime(2021, 12, 31, hour=19, minute=2))
             .set_as_max_value(),
-            NewPlannedPartition().set_columns(2).set_timestamp(date(2021, 12, 31)),
+            NewPlannedPartition().set_columns(2).set_timestamp(datetime(2021, 12, 31)),
         )
 
 

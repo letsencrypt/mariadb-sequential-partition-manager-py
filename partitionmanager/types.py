@@ -318,7 +318,7 @@ class PlannedPartition(abc.ABC):
         Set the timestamp to be used for the modified partition. This
         effectively changes the partition's name.
         """
-        self._timestamp = timestamp
+        self._timestamp = timestamp.replace(hour=0, minute=0)
         return self
 
     def set_position(self, pos):
@@ -420,7 +420,9 @@ class ChangePlannedPartition(PlannedPartition):
     def has_modifications(self):
         return (
             self.positions != self._old_positions
-            or self._timestamp != self.old.timestamp()
+            or self.old.timestamp() is None
+            and self._timestamp is not None
+            or self._timestamp.date() != self.old.timestamp().date()
         )
 
     def __str__(self):

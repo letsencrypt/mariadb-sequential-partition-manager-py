@@ -494,10 +494,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             logctx.output,
             [
-                "INFO:plan_partition_changes:Changeover predicted at 2021-01-05 "
-                "which is not 2021-01-02. This change will be marked as "
-                "important to ensure that p_20210102: (200) is moved to "
-                "2021-01-02"
+                "INFO:plan_partition_changes:Start-of-fill predicted at "
+                "2021-01-03 which is not 2021-01-02. This change will be marked "
+                "as important to ensure that p_20210102: (200) is moved to "
+                "2021-01-03"
             ],
         )
 
@@ -506,14 +506,14 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [
                 ChangePlannedPartition(mkPPart("p_20201231", 100)),
                 ChangePlannedPartition(mkPPart("p_20210102", 200))
-                .set_timestamp(datetime(2021, 1, 2, tzinfo=timezone.utc))
+                .set_timestamp(datetime(2021, 1, 3, tzinfo=timezone.utc))
                 .set_important(),
                 ChangePlannedPartition(mkTailPart("future"))
                 .set_position([250])
-                .set_timestamp(datetime(2021, 1, 4, tzinfo=timezone.utc)),
+                .set_timestamp(datetime(2021, 1, 5, tzinfo=timezone.utc)),
                 NewPlannedPartition()
                 .set_columns(1)
-                .set_timestamp(datetime(2021, 1, 6, tzinfo=timezone.utc)),
+                .set_timestamp(datetime(2021, 1, 7, tzinfo=timezone.utc)),
             ],
         )
 
@@ -534,10 +534,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             logctx.output,
             [
-                "INFO:plan_partition_changes:Changeover predicted at 2021-01-03 "
-                "which is not 2021-01-04. This change will be marked as "
-                "important to ensure that p_20210104: (200) is moved to "
-                "2021-01-07"
+                "INFO:plan_partition_changes:Start-of-fill predicted at "
+                "2021-01-02 which is not 2021-01-04. This change will be marked "
+                "as important to ensure that p_20210104: (200) is moved to "
+                "2021-01-02"
             ],
         )
 
@@ -546,10 +546,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [
                 ChangePlannedPartition(mkPPart("p_20201231", 100)),
                 ChangePlannedPartition(mkPPart("p_20210104", 200))
-                .set_timestamp(datetime(2021, 1, 7, tzinfo=timezone.utc))
+                .set_timestamp(datetime(2021, 1, 2, tzinfo=timezone.utc))
                 .set_important(),
                 ChangePlannedPartition(mkTailPart("future")).set_timestamp(
-                    datetime(2021, 1, 14, tzinfo=timezone.utc)
+                    datetime(2021, 1, 9, tzinfo=timezone.utc)
                 ),
             ],
         )
@@ -572,10 +572,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [
                 ChangePlannedPartition(mkPPart("p_20210101", 100)),
                 ChangePlannedPartition(mkPPart("p_20210415", 200))
-                .set_timestamp(datetime(2021, 3, 31, tzinfo=timezone.utc))
+                .set_timestamp(datetime(2021, 6, 28, tzinfo=timezone.utc))
                 .set_important(),
                 ChangePlannedPartition(mkTailPart("future")).set_timestamp(
-                    datetime(2021, 4, 7, tzinfo=timezone.utc)
+                    datetime(2021, 7, 5, tzinfo=timezone.utc)
                 ),
             ],
         )
@@ -656,36 +656,25 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes(self):
-        with self.assertLogs("plan_partition_changes", level="INFO") as logctx:
-            planned = plan_partition_changes(
-                [
-                    mkPPart("p_20201231", 100),
-                    mkPPart("p_20210102", 200),
-                    mkTailPart("future"),
-                ],
-                [50],
-                datetime(2021, 1, 1, tzinfo=timezone.utc),
-                timedelta(days=7),
-                2,
-            )
-        self.assertEqual(
-            logctx.output,
+        planned = plan_partition_changes(
             [
-                "INFO:plan_partition_changes:Changeover predicted at 2021-01-03 which is not "
-                "2021-01-02. This change will be marked as important to ensure "
-                "that p_20210102: (200) is moved to 2021-01-07"
+                mkPPart("p_20201231", 100),
+                mkPPart("p_20210102", 200),
+                mkTailPart("future"),
             ],
+            [50],
+            datetime(2021, 1, 1, tzinfo=timezone.utc),
+            timedelta(days=7),
+            2,
         )
 
         self.assertEqual(
             planned,
             [
                 ChangePlannedPartition(mkPPart("p_20201231", 100)),
-                ChangePlannedPartition(mkPPart("p_20210102", 200))
-                .set_timestamp(datetime(2021, 1, 7, tzinfo=timezone.utc))
-                .set_important(),
+                ChangePlannedPartition(mkPPart("p_20210102", 200)),
                 ChangePlannedPartition(mkTailPart("future")).set_timestamp(
-                    datetime(2021, 1, 14, tzinfo=timezone.utc)
+                    datetime(2021, 1, 9, tzinfo=timezone.utc)
                 ),
             ],
         )
@@ -757,9 +746,8 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             logctx.output,
             [
-                "DEBUG:evaluate_partition_changes:future: MAXVALUE => [422]  "
-                "2021-01-09 00:00:00+00:00 has an updated timestamp vs future: "
-                "MAXVALUE"
+                "DEBUG:evaluate_partition_changes:Add: [542] 2021-01-16 "
+                "00:00:00+00:00 is new"
             ],
         )
 
@@ -786,12 +774,14 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_generate_sql_reorganize_partition_commands_no_change(self):
-        with self.assertRaises(ValueError):
+        self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
                     Table("table"), [ChangePlannedPartition(mkPPart("p_20210102", 200))]
                 )
-            )
+            ),
+            [],
+        )
 
     def test_generate_sql_reorganize_partition_commands_single_change(self):
         self.assertEqual(
@@ -926,9 +916,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
             list(generate_sql_reorganize_partition_commands(Table("water"), planned)),
             [
                 "ALTER TABLE `water` REORGANIZE PARTITION `future` INTO "
-                "(PARTITION `p_20210114` VALUES LESS THAN MAXVALUE);",
+                "(PARTITION `p_20210109` VALUES LESS THAN MAXVALUE);",
                 "ALTER TABLE `water` REORGANIZE PARTITION `p_20210104` INTO "
-                "(PARTITION `p_20210107` VALUES LESS THAN (200));",
+                "(PARTITION `p_20210102` VALUES LESS THAN (200));",
             ],
         )
 

@@ -349,6 +349,10 @@ def plan_partition_changes(
     rates = get_weighted_position_increase_per_day_for_partitions(
         rate_relevant_partitions
     )
+    log.debug(
+        f"Rates of change calculated as {rates} per day from "
+        f"{len(rate_relevant_partitions)} partitions"
+    )
 
     # We need to include active_partition in the list for the subsequent
     # calculations even though we're not actually changing it.
@@ -357,36 +361,42 @@ def plan_partition_changes(
     # Adjust each of the empty partitions
     for partition in empty_partitions:
         last_changed = results[-1]
-        partition_start_time = calculate_start_time(
-            last_changed.timestamp(), evaluation_time, allowed_lifespan
-        )
 
-        changed_partition = ChangePlannedPartition(partition).set_timestamp(
-            partition_start_time
-        )
+        changed_partition = ChangePlannedPartition(partition)
 
         if isinstance(partition, PositionPartition):
-            # If we took no action, at rates, what timestamp would we reach the
-            # end of active_partition? If this doesn't match the partition's
-            # name, then this is an important change.
-            changeover_time = predict_forward_time(
-                last_changed.positions, partition.positions, rates, evaluation_time
+            # We can't change the position on this partition, but we can adjust
+            # the name to be more exact as to what date we expect it to begin
+            # filling. If we calculate the start-of-fill date and it doesn't
+            # match the partition's name, let's rename it and mark it as an
+            # important change.
+            start_of_fill_time = predict_forward_time(
+                current_positions, last_changed.positions, rates, evaluation_time
             )
 
-            if changeover_time.date() != partition.timestamp().date():
+            if start_of_fill_time.date() != partition.timestamp().date():
                 log.info(
-                    f"Changeover predicted at {changeover_time.date()} which is "
-                    f"not {partition.timestamp().date()}. This change will be "
-                    f"marked as important to ensure that {partition} is moved "
-                    f"to {partition_start_time:%Y-%m-%d}"
+                    f"Start-of-fill predicted at {start_of_fill_time.date()} "
+                    f"which is not {partition.timestamp().date()}. This change "
+                    f"will be marked as important to ensure that {partition} is "
+                    f"moved to {start_of_fill_time:%Y-%m-%d}"
                 )
-                changed_partition.set_important()
+                changed_partition.set_timestamp(start_of_fill_time).set_important()
 
         if isinstance(partition, MaxValuePartition):
+            # Only the tail MaxValuePartitions can get new positions. For those,
+            # we calculate forward what position we expect and use it in the
+            # future.
+
+            partition_start_time = calculate_start_time(
+                last_changed.timestamp(), evaluation_time, allowed_lifespan
+            )
             changed_part_pos = predict_forward_position(
                 last_changed.positions, rates, allowed_lifespan
             )
-            changed_partition.set_position(changed_part_pos)
+            changed_partition.set_position(changed_part_pos).set_timestamp(
+                partition_start_time
+            )
 
         results.append(changed_partition)
 
@@ -429,10 +439,6 @@ def evaluate_partition_changes(altered_partitions):
             return True
 
         if isinstance(p, ChangePlannedPartition):
-            if p.timestamp() != p.old.timestamp():
-                log.debug(f"{p} has an updated timestamp vs {p.old}")
-                return True
-
             if p.important():
                 log.debug(f"{p} is marked important")
                 return True
@@ -442,10 +448,10 @@ def evaluate_partition_changes(altered_partitions):
 
 def generate_sql_reorganize_partition_commands(table, changes):
     """
-    Produce a SQL command to reorganize the partition in table_name to
-    match the new changes list.
+    Generate a series of SQL commands to reorganize the partition in table_name
+    to match the new changes list.
     """
-    log = logging.getLogger("generate_sql_reorganize_partition_commands")
+    log = logging.getLogger(f"generate_sql_reorganize_partition_commands:{table.name}")
 
     modified_partitions = list()
     new_partitions = list()
@@ -462,7 +468,8 @@ def generate_sql_reorganize_partition_commands(table, changes):
     if not new_partitions and not list(
         filter(lambda x: x.has_modifications, modified_partitions)
     ):
-        raise ValueError()
+        log.debug("No partitions have modifications and no new partitions")
+        return
 
     new_part_list = list()
     partition_names_set = set()
@@ -479,6 +486,7 @@ def generate_sql_reorganize_partition_commands(table, changes):
 
         # If there's not at least one modification, skip
         if not is_final and not modified_partition.has_modifications:
+            log.debug(f"{modified_partition} does not have modifications, skip")
             continue
 
         partition_strings = list()
