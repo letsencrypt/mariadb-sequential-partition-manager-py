@@ -138,6 +138,7 @@ class SubprocessDatabaseCommand(DatabaseCommand):
             [self.exe, "-X"],
             input=sql_cmd,
             stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             encoding="UTF-8",
             check=True,
         )
