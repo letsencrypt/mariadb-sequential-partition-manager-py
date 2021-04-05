@@ -41,8 +41,10 @@ from .types_test import mkPPart, mkTailPart
 class MockDatabase(DatabaseCommand):
     def __init__(self):
         self.response = []
+        self.num_queries = 0
 
     def run(self, cmd):
+        self.num_queries += 1
         return self.response
 
     def db_name(self):
@@ -231,6 +233,7 @@ class TestGetPositions(unittest.TestCase):
         p = get_current_positions(db, Table("table"), ["id"])
         self.assertEqual(len(p), 1)
         self.assertEqual(p[0], 1)
+        self.assertEqual(db.num_queries, 1)
 
     def test_get_position_two_columns(self):
         db = MockDatabase()
@@ -240,6 +243,7 @@ class TestGetPositions(unittest.TestCase):
         self.assertEqual(len(p), 2)
         self.assertEqual(p[0], 1)
         self.assertEqual(p[1], 2)
+        self.assertEqual(db.num_queries, 2)
 
 
 class TestPartitionAlgorithm(unittest.TestCase):

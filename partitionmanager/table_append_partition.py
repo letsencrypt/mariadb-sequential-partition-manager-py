@@ -69,19 +69,17 @@ def get_current_positions(database, table, columns):
     if not isinstance(columns, list) or not isinstance(table, Table):
         raise ValueError("columns must be a list and table must be a Table")
 
-    order_col = columns[0]
-    columns_str = ", ".join([f"`{x}`" for x in columns])
-    sql = f"SELECT {columns_str} FROM `{table.name}` ORDER BY {order_col} DESC LIMIT 1;"
-    rows = database.run(sql)
-    if len(rows) > 1:
-        raise TableInformationException(f"Expected one result from {table.name}")
-    if not rows:
-        raise TableInformationException(
-            f"Table {table.name} appears to be empty. (No results)"
-        )
     ordered_positions = list()
-    for c in columns:
-        ordered_positions.append(rows[0][c])
+    for column in columns:
+        sql = f"SELECT {column} FROM `{table.name}` ORDER BY {column} DESC LIMIT 1;"
+        rows = database.run(sql)
+        if len(rows) > 1:
+            raise TableInformationException(f"Expected one result from {table.name}")
+        if not rows:
+            raise TableInformationException(
+                f"Table {table.name} appears to be empty. (No results)"
+            )
+        ordered_positions.append(rows[0][column])
     return ordered_positions
 
 
