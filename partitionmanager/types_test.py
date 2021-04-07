@@ -77,6 +77,11 @@ class TestTypes(unittest.TestCase):
         t = Table("t")
         self.assertEqual(None, t.retention)
 
+        self.assertEqual(
+            Table("a").set_partition_period(timedelta(days=9)).partition_period,
+            timedelta(days=9),
+        )
+
         with self.assertRaises(argparse.ArgumentTypeError):
             retention_from_dict({"something": 1})
 

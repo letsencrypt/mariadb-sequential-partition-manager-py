@@ -40,6 +40,7 @@ class Table:
         if not isinstance(ret, timedelta):
             raise ValueError("Must be a timedelta")
         self.retention = ret
+        return self
 
     def set_partition_period(self, dur):
         """
@@ -48,6 +49,7 @@ class Table:
         if not isinstance(dur, timedelta):
             raise ValueError("Must be a timedelta")
         self.partition_period = dur
+        return self
 
     def __str__(self):
         return f"Table {self.name}"
