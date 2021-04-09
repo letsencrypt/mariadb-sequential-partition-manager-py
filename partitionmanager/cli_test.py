@@ -21,10 +21,19 @@ def insert_into_file(fp, data):
     fp.seek(0)
 
 
+def get_config_from_args_and_yaml(args, yaml, time):
+    with tempfile.NamedTemporaryFile() as tmpfile:
+        insert_into_file(tmpfile, yaml)
+        args.config = tmpfile
+        conf = config_from_args(args)
+        conf.curtime = time
+        return conf
+
+
 def run_partition_cmd_yaml(yaml):
     with tempfile.NamedTemporaryFile() as tmpfile:
         insert_into_file(tmpfile, yaml)
-        args = PARSER.parse_args(["add", "--config", tmpfile.name])
+        args = PARSER.parse_args(["--config", tmpfile.name, "add"])
         return partition_cmd(args)
 
 
@@ -107,7 +116,7 @@ class TestPartitionCmd(unittest.TestCase):
         output = partition_cmd(args)
 
         self.assertEqual(len(output), 2)
-        self.assertSequenceEqual(list(output), ["testtable", "another_table"])
+        self.assertSetEqual(set(output), set(["testtable", "another_table"]))
 
     def test_partition_unpartitioned_table(self):
         o = run_partition_cmd_yaml(
@@ -166,7 +175,7 @@ partitionmanager:
     mariadb: {str(fake_exec)}
 """
         )
-        self.assertSequenceEqual(list(o), ["test", "test_with_retention"])
+        self.assertSetEqual(set(o), set(["test", "test_with_retention"]))
 
     def test_partition_period_daily(self):
         o = run_partition_cmd_yaml(
@@ -181,7 +190,7 @@ partitionmanager:
 """
         )
         self.assertSequenceEqual(
-            list(o), ["partitioned_last_week", "partitioned_yesterday"]
+            set(o), set(["partitioned_last_week", "partitioned_yesterday"])
         )
 
     def test_partition_period_seven_days(self):
@@ -214,7 +223,7 @@ partitionmanager:
 """
         )
         self.assertSequenceEqual(
-            list(o), ["partitioned_yesterday", "partitioned_last_week"]
+            set(o), set(["partitioned_yesterday", "partitioned_last_week"])
         )
 
     def test_partition_with_db_url(self):
@@ -291,3 +300,52 @@ class TestHelpers(unittest.TestCase):
         )
         config = config_from_args(args)
         self.assertFalse(all_configured_tables_are_compatible(config))
+
+
+class TestConfig(unittest.TestCase):
+    def test_cli_tables_override_yaml(self):
+        args = PARSER.parse_args(["stats", "--table", "table_one", "table_two"])
+        conf = get_config_from_args_and_yaml(
+            args,
+            """
+partitionmanager:
+    tables:
+        table_a:
+        table_b:
+        table_c:
+""",
+            datetime.now(),
+        )
+        self.assertEqual(
+            {str(x.name) for x in conf.tables}, set(["table_one", "table_two"])
+        )
+
+    def test_cli_mariadb_override_yaml(self):
+        args = PARSER.parse_args(["--mariadb", "/usr/bin/true", "stats"])
+        conf = get_config_from_args_and_yaml(
+            args,
+            """
+partitionmanager:
+    mariadb: /dev/null
+    tables:
+        one:
+""",
+            datetime.now(),
+        )
+        self.assertEqual(conf.dbcmd.exe, "/usr/bin/true")
+
+    def test_cli_sqlurl_override_yaml(self):
+        args = PARSER.parse_args(
+            ["--dburl", "sql://user:pass@127.0.0.1:3306/database", "stats"]
+        )
+        with self.assertRaises(pymysql.err.OperationalError):
+            get_config_from_args_and_yaml(
+                args,
+                """
+partitionmanager:
+    mariadb: /dev/null
+    tables:
+        one:
+""",
+                datetime.now(),
+            )

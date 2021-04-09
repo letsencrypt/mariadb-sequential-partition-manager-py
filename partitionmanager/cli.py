@@ -9,6 +9,10 @@ import logging
 import traceback
 import yaml
 
+from partitionmanager.bootstrap import (
+    calculate_sql_alters_from_state_info,
+    write_state_info,
+)
 from partitionmanager.table_append_partition import (
     evaluate_partition_changes,
     generate_sql_reorganize_partition_commands,
@@ -43,9 +47,12 @@ PARSER.add_argument(
 PARSER.add_argument(
     "--prometheus-stats", type=Path, help="Path to produce a prometheus statistics file"
 )
+PARSER.add_argument(
+    "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
+)
 
 GROUP = PARSER.add_mutually_exclusive_group()
-GROUP.add_argument("--mariadb", default="mariadb", help="Path to mariadb command")
+GROUP.add_argument("--mariadb", help="Path to mariadb command")
 GROUP.add_argument(
     "--dburl",
     type=toSqlUrl,
@@ -61,8 +68,8 @@ class Config:
     """
 
     def __init__(self):
-        self.tables = list()
-        self.dbcmd = SubprocessDatabaseCommand("mariadb")
+        self.tables = set()
+        self.dbcmd = None
         self.noop = False
         self.num_empty = 2
         self.curtime = datetime.now(tz=timezone.utc)
@@ -76,10 +83,10 @@ class Config:
         """
         if args.table:
             for n in args.table:
-                self.tables.append(Table(n))
+                self.tables.add(Table(n))
         if args.dburl:
             self.dbcmd = IntegratedDatabaseCommand(args.dburl)
-        else:
+        elif args.mariadb:
             self.dbcmd = SubprocessDatabaseCommand(args.mariadb)
         if "days" in args and args.days:
             self.partition_period = timedelta(days=args.days)
@@ -111,21 +118,23 @@ class Config:
                 raise ValueError("Negative lifespan is not allowed")
         if "num_empty" in data:
             self.num_empty = int(data["num_empty"])
-        if "dburl" in data:
-            self.dbcmd = IntegratedDatabaseCommand(toSqlUrl(data["dburl"]))
-        elif "mariadb" in data:
-            self.dbcmd = SubprocessDatabaseCommand(data["mariadb"])
-        for key in data["tables"]:
-            tab = Table(key)
-            tabledata = data["tables"][key]
-            if isinstance(tabledata, dict) and "retention" in tabledata:
-                tab.set_retention(retention_from_dict(tabledata["retention"]))
-            if isinstance(tabledata, dict) and "partition_period" in tabledata:
-                tab.set_partition_period(
-                    retention_from_dict(tabledata["partition_period"])
-                )
+        if not self.dbcmd:
+            if "dburl" in data:
+                self.dbcmd = IntegratedDatabaseCommand(toSqlUrl(data["dburl"]))
+            elif "mariadb" in data:
+                self.dbcmd = SubprocessDatabaseCommand(data["mariadb"])
+        if not self.tables:  # Only load tables froml YAML if not supplied via args
+            for key in data["tables"]:
+                tab = Table(key)
+                tabledata = data["tables"][key]
+                if isinstance(tabledata, dict) and "retention" in tabledata:
+                    tab.set_retention(retention_from_dict(tabledata["retention"]))
+                if isinstance(tabledata, dict) and "partition_period" in tabledata:
+                    tab.set_partition_period(
+                        retention_from_dict(tabledata["partition_period"])
+                    )
 
-            self.tables.append(tab)
+                self.tables.add(tab)
         if "prometheus_stats" in data:
             self.prometheus_stats_path = Path(data["prometheus_stats"])
 
@@ -178,12 +187,8 @@ PARTITION_PARSER.add_argument(
 PARTITION_PARSER.add_argument(
     "--days", "-d", type=int, help="Lifetime of each partition in days"
 )
-PARTITION_GROUP = PARTITION_PARSER.add_mutually_exclusive_group()
-PARTITION_GROUP.add_argument(
-    "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
-)
-PARTITION_GROUP.add_argument(
-    "--table", "-t", type=SqlInput, nargs="+", help="table names"
+PARTITION_PARSER.add_argument(
+    "--table", "-t", type=SqlInput, nargs="+", help="table names, overwriting config"
 )
 PARTITION_PARSER.set_defaults(func=partition_cmd)
 
@@ -202,8 +207,42 @@ STATS_GROUP = STATS_PARSER.add_mutually_exclusive_group()
 STATS_GROUP.add_argument(
     "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
 )
-STATS_GROUP.add_argument("--table", "-t", type=SqlInput, nargs="+", help="table names")
+STATS_GROUP.add_argument(
+    "--table", "-t", type=SqlInput, nargs="+", help="table names, overwriting config"
+)
 STATS_PARSER.set_defaults(func=stats_cmd)
+
+
+def bootstrap_cmd(args):
+    """
+    Helper for argparse that runs the bootstrap methods
+    """
+    conf = config_from_args(args)
+
+    if args.outfile:
+        write_state_info(conf, args.outfile)
+
+    if args.infile:
+        return calculate_sql_alters_from_state_info(conf, args.infile)
+
+    return None
+
+
+BOOTSTRAP_PARSER = SUBPARSERS.add_parser(
+    "bootstrap",
+    help="bootstrap partitions that haven't been used with this tool before",
+)
+BOOTSTRAP_GROUP = BOOTSTRAP_PARSER.add_mutually_exclusive_group()
+BOOTSTRAP_GROUP.add_argument(
+    "--in", "-i", dest="infile", type=argparse.FileType("r"), help="input YAML"
+)
+BOOTSTRAP_GROUP.add_argument(
+    "--out", "-o", dest="outfile", type=argparse.FileType("w"), help="output YAML"
+)
+BOOTSTRAP_GROUP.add_argument(
+    "--table", "-t", type=SqlInput, nargs="+", help="table names, overwriting config"
+)
+BOOTSTRAP_PARSER.set_defaults(func=bootstrap_cmd)
 
 
 def do_partition(conf):
@@ -240,9 +279,11 @@ def do_partition(conf):
 
             log.info(f"Evaluating {table} (duration={duration}) (pos={positions})")
 
+            ordered_positions = [positions[col] for col in map_data["range_cols"]]
+
             partition_changes = plan_partition_changes(
                 map_data["partitions"],
-                positions,
+                ordered_positions,
                 conf.curtime,
                 duration,
                 conf.num_empty,

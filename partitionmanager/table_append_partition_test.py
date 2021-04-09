@@ -232,7 +232,7 @@ class TestGetPositions(unittest.TestCase):
 
         p = get_current_positions(db, Table("table"), ["id"])
         self.assertEqual(len(p), 1)
-        self.assertEqual(p[0], 1)
+        self.assertEqual(p["id"], 1)
         self.assertEqual(db.num_queries, 1)
 
     def test_get_position_two_columns(self):
@@ -241,8 +241,8 @@ class TestGetPositions(unittest.TestCase):
 
         p = get_current_positions(db, Table("table"), ["id", "id2"])
         self.assertEqual(len(p), 2)
-        self.assertEqual(p[0], 1)
-        self.assertEqual(p[1], 2)
+        self.assertEqual(p["id"], 1)
+        self.assertEqual(p["id2"], 2)
         self.assertEqual(db.num_queries, 2)
 
 

@@ -46,19 +46,20 @@ class MockDatabase(DatabaseCommand):
 
 class TestBootstrapTool(unittest.TestCase):
     def test_writing_state_info(self):
-        ts = datetime(2021, 3, 1)
-
         conf = Config()
+        conf.curtime = datetime(2021, 3, 1)
         conf.dbcmd = MockDatabase()
         conf.tables = [Table("test")]
 
         out = io.StringIO()
 
-        write_state_info(conf, ts, out)
+        write_state_info(conf, out)
 
         written_yaml = yaml.safe_load(out.getvalue())
 
-        self.assertEqual(written_yaml, {"tables": {"test": [150]}, "time": ts})
+        self.assertEqual(
+            written_yaml, {"tables": {"test": {"id": 150}}, "time": conf.curtime}
+        )
 
     def test_get_time_offsets(self):
         self.assertEqual(
@@ -81,22 +82,25 @@ class TestBootstrapTool(unittest.TestCase):
         )
 
     def test_read_state_info(self):
-        ts_past = datetime(2021, 3, 1)
-        ts_now = datetime(2021, 3, 3)
-
-        conf = Config()
-        conf.dbcmd = MockDatabase()
-        conf.tables = [Table("test").set_partition_period(timedelta(days=30))]
+        conf_past = Config()
+        conf_past.curtime = datetime(2021, 3, 1)
+        conf_past.dbcmd = MockDatabase()
+        conf_past.tables = [Table("test").set_partition_period(timedelta(days=30))]
 
         state_fs = io.StringIO()
-        yaml.dump({"tables": {"test": [0]}, "time": ts_past}, state_fs)
+        yaml.dump({"tables": {"test": {"id": 0}}, "time": conf_past.curtime}, state_fs)
         state_fs.seek(0)
 
         with self.assertRaises(ValueError):
-            calculate_sql_alters_from_state_info(conf, ts_past, state_fs)
+            calculate_sql_alters_from_state_info(conf_past, state_fs)
+
+        conf_now = Config()
+        conf_now.curtime = datetime(2021, 3, 3)
+        conf_now.dbcmd = MockDatabase()
+        conf_now.tables = [Table("test").set_partition_period(timedelta(days=30))]
 
         state_fs.seek(0)
-        x = calculate_sql_alters_from_state_info(conf, ts_now, state_fs)
+        x = calculate_sql_alters_from_state_info(conf_now, state_fs)
         self.assertEqual(
             x,
             {

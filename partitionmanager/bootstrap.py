@@ -25,7 +25,7 @@ RATE_UNIT = timedelta(hours=1)
 MINIMUM_FUTURE_DELTA = timedelta(hours=2)
 
 
-def write_state_info(conf, now_time, out_fp):
+def write_state_info(conf, out_fp):
     """
     Write the state info for tables defined in conf to the provided file-like
     object.
@@ -33,7 +33,7 @@ def write_state_info(conf, now_time, out_fp):
     log = logging.getLogger("write_state_info")
 
     log.info("Writing current state information")
-    state_info = {"time": now_time, "tables": dict()}
+    state_info = {"time": conf.curtime, "tables": dict()}
     for table in conf.tables:
         problem = table_is_compatible(conf.dbcmd, table)
         if problem:
@@ -41,6 +41,7 @@ def write_state_info(conf, now_time, out_fp):
 
         map_data = get_partition_map(conf.dbcmd, table)
         positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
+
         log.info(f'(Table("{table.name}"): {positions}),')
         state_info["tables"][str(table.name)] = positions
 
@@ -64,7 +65,7 @@ def _get_time_offsets(num_entries, first_delta, subseq_delta):
 
 
 def _plan_partitions_for_time_offsets(
-    now_time, time_offsets, rate_of_change, current_positions, max_val_part
+    now_time, time_offsets, rate_of_change, ordered_current_pos, max_val_part
 ):
     """
     Return a list of PlannedPartitions, starting from now, corresponding to
@@ -75,7 +76,9 @@ def _plan_partitions_for_time_offsets(
     changes = list()
     for (i, offset), is_final in iter_show_end(enumerate(time_offsets)):
         increase = [x * offset / RATE_UNIT for x in rate_of_change]
-        predicted_positions = [int(p + i) for p, i in zip(current_positions, increase)]
+        predicted_positions = [
+            int(p + i) for p, i in zip(ordered_current_pos, increase)
+        ]
         predicted_time = now_time + offset
 
         part = None
@@ -98,7 +101,7 @@ def _plan_partitions_for_time_offsets(
     return changes
 
 
-def calculate_sql_alters_from_state_info(conf, now_time, in_fp):
+def calculate_sql_alters_from_state_info(conf, in_fp):
     """
     Using the config and the input yaml file-like object, return the SQL
     statements to bootstrap the tables in config that also have data in
@@ -109,10 +112,10 @@ def calculate_sql_alters_from_state_info(conf, now_time, in_fp):
     log.info("Reading prior state information")
     prior_data = yaml.safe_load(in_fp)
 
-    time_delta = (now_time - prior_data["time"]) / RATE_UNIT
+    time_delta = (conf.curtime - prior_data["time"]) / RATE_UNIT
     if time_delta <= 0:
         raise ValueError(
-            f"Time delta is too small: {now_time} - "
+            f"Time delta is too small: {conf.curtime} - "
             f"{prior_data['time']} = {time_delta}"
         )
 
@@ -136,7 +139,14 @@ def calculate_sql_alters_from_state_info(conf, now_time, in_fp):
             conf.dbcmd, table, map_data["range_cols"]
         )
 
-        delta_positions = list(map(operator.sub, current_positions, prior_pos))
+        ordered_current_pos = [
+            current_positions[name] for name in map_data["range_cols"]
+        ]
+        ordered_prior_pos = [prior_pos[name] for name in map_data["range_cols"]]
+
+        delta_positions = list(
+            map(operator.sub, ordered_current_pos, ordered_prior_pos)
+        )
         rate_of_change = list(map(lambda pos: pos / time_delta, delta_positions))
 
         max_val_part = map_data["partitions"][-1]
@@ -145,7 +155,7 @@ def calculate_sql_alters_from_state_info(conf, now_time, in_fp):
             raise Exception("Unexpected part?")
 
         log.info(
-            f"{table}, {time_delta:0.1f} hours, {prior_pos} - {current_positions}, "
+            f"{table}, {time_delta:0.1f} hours, {ordered_prior_pos} - {ordered_current_pos}, "
             f"{delta_positions} pos_change, {rate_of_change}/hour"
         )
 
@@ -158,7 +168,11 @@ def calculate_sql_alters_from_state_info(conf, now_time, in_fp):
         )
 
         changes = _plan_partitions_for_time_offsets(
-            now_time, time_offsets, rate_of_change, current_positions, max_val_part
+            conf.curtime,
+            time_offsets,
+            rate_of_change,
+            ordered_current_pos,
+            max_val_part,
         )
 
         commands[table.name] = list(

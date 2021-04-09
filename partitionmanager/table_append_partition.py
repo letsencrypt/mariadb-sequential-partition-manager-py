@@ -64,12 +64,12 @@ def table_information_schema_is_compatible(rows, table_name):
 def get_current_positions(database, table, columns):
     """
     Get the positions of the columns provided in the given table, return
-    as a list in the same order as the provided columns
+    as a dictionary of {column_name: position}
     """
     if not isinstance(columns, list) or not isinstance(table, Table):
         raise ValueError("columns must be a list and table must be a Table")
 
-    ordered_positions = list()
+    positions = dict()
     for column in columns:
         sql = f"SELECT {column} FROM `{table.name}` ORDER BY {column} DESC LIMIT 1;"
         rows = database.run(sql)
@@ -79,8 +79,8 @@ def get_current_positions(database, table, columns):
             raise TableInformationException(
                 f"Table {table.name} appears to be empty. (No results)"
             )
-        ordered_positions.append(rows[0][column])
-    return ordered_positions
+        positions[column] = rows[0][column]
+    return positions
 
 
 def get_partition_map(database, table):
