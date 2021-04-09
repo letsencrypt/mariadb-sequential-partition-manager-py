@@ -225,7 +225,7 @@ def bootstrap_cmd(args):
     if args.infile:
         return calculate_sql_alters_from_state_info(conf, args.infile)
 
-    return None
+    return {}
 
 
 BOOTSTRAP_PARSER = SUBPARSERS.add_parser(
@@ -412,8 +412,16 @@ def main():
 
     try:
         output = args.func(args)
-        for key, val in output.items():
-            print(f"{key}: {val}")
+        for key in output:
+            print(f"{key}:")
+            if isinstance(output[key], dict):
+                for k, v in output[key].items():
+                    print(f" {k}: {v}")
+            elif isinstance(output[key], list):
+                for v in output[key]:
+                    print(f" - {v}")
+            else:
+                print(f" {output[key]}")
     except Exception as e:
         logging.warning(f"Couldn't complete command: {args.subparser_name}")
         logging.warning(traceback.format_exc())
