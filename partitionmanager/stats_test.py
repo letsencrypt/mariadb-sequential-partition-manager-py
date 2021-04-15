@@ -2,14 +2,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from io import StringIO
 from .stats import get_statistics, PrometheusMetrics
-from .types import Table, MaxValuePartition, PositionPartition
-
-
-def mkPPart(name, *pos):
-    p = PositionPartition(name)
-    for x in pos:
-        p.add_position(x)
-    return p
+from .types import Table, MaxValuePartition
+from .types_test import mkPPart
 
 
 ts = datetime(1949, 1, 12, tzinfo=timezone.utc)
@@ -103,8 +97,10 @@ partition_second_metric{table="table_name"} 42
         exp.add("second_metric", "table_name", 42)
         exp.add("name", "other_table", 42)
 
-        exp.describe("second_metric", help_text="help for second_metric", type="type")
-        exp.describe("name", help_text="help for name", type="type")
+        exp.describe(
+            "second_metric", help_text="help for second_metric", type_name="type"
+        )
+        exp.describe("name", help_text="help for name", type_name="type")
 
         f = StringIO()
         exp.render(f)

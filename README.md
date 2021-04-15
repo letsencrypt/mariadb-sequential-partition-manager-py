@@ -34,6 +34,7 @@ partitionmanager:
   # mariadb: /usr/local/bin/mariadb
   partition_period:
     days: 7
+  num_empty: 2
 
   tables:
     table1:
@@ -47,6 +48,46 @@ partitionmanager:
         days: 14
 ```
 
+
+# Algorithm
+
+For a given table and that table's intended partition period, desired end-state is to have:
+- All the existing partitions containing data,
+- A configurable number of trailing partitions which contain no data, and
+- An "active" partition currently being filled with data
+
+To make it easier to manage, we give all the filled partitions a name to indicate the approximate date that partition began being filled with data. This date is approximate because once a partition contains data, it is no longer an instant `ALTER` operation to rename the partition, rather every contained row gets copied, so this tool predicts the date at which the new partition will become the "active" one.
+
+Inputs:
+- The table name
+- The intended partition period
+- The number of trailing partitions to keep
+- The table's current partition list
+- The table's partition id's current value(s)
+
+Outputs:
+- An intended partition list, changing only the empty partitions, or
+- If no partitions can be reorganized, an error.
+
+Procedure:
+- Using the current values, split the partition list into two sub-lists: empty partitions, and non-empty partitions.
+- If there are no empty partitions:
+  - Raise an error and halt the algorithm.
+
+- Perform a statistical regression using each non-empty partition to determine each partition's fill rate.
+- Using each partition's fill rate and their age, predict the future partition fill rate.
+- Create a new list of intended empty partitions.
+- For each empty partition:
+  - Predict the start-of-fill date using the partition's position relative to the current active partition, the current active partition's date, the partition period, and the future partition fill rate.
+  - Predict the end-of-fill value using the start-of-fill date and the future partition fill rate.
+  - If the start-of-fill date is different than the partition's name, rename the partition.
+  - If the end-of-fill value is different than the partition's current value, change that value.
+  - Append the changed partition to the intended empty partition list.
+- While the number of empty partitions is less than the intended number of trailing partitions to keep:
+  - Predict the start-of-fill date for a new partition using the previous partition's date and the partition period.
+  - Predict the end-of-fill value using the start-of-fill date and the future partition fill rate.
+  - Append the new partition to the intended empty partition list.
+- Return the lists of non-empty partitions, the current empty partitions, and the post-algorithm intended empty partitions.
 
 # TODOs
 
