@@ -239,7 +239,7 @@ BOOTSTRAP_GROUP.add_argument(
 BOOTSTRAP_GROUP.add_argument(
     "--out", "-o", dest="outfile", type=argparse.FileType("w"), help="output YAML"
 )
-BOOTSTRAP_GROUP.add_argument(
+BOOTSTRAP_PARSER.add_argument(
     "--table", "-t", type=SqlInput, nargs="+", help="table names, overwriting config"
 )
 BOOTSTRAP_PARSER.set_defaults(func=bootstrap_cmd)

@@ -3,7 +3,9 @@
 
 This tool partitions and manages MariaDB tables by sequential IDs.
 
-Note that reorganizing partitions is not a fast operation on ext4 filesystems; it is fast on xfs and zfs, but only when the partition being edited contains no rows. Adding partitions in the first place with InnoDB requires a full table copy.
+This is primarily a mechanism for dropping large numbers of rows of data without using `DELETE` statements.
+
+Adding partitions in the first place with InnoDB requires a full table copy. Otherwise, the `REORGANIZE PARTITION` command is fast only if operating on a partition that is empty, e.g., has no rows.
 
 Similar tools:
 * https://github.com/davidburger/gomypartition, intended for tables with date-based partitions
@@ -48,8 +50,25 @@ partitionmanager:
         days: 14
 ```
 
+For tables which are either partitioned but not yet using this tool's schema, or which have no empty partitions, the `bootstrap` command can be useful for proposing alterations to run manually. Note that `bootstrap` proposes commands that are likely to require partial copies of each table, so likely they will require a maintenance period.
+
+```sh
+partition-manager --mariadb ~/bin/rootsql-dev-primary bootstrap --out /tmp/bootstrap.yml --table orders
+INFO:write_state_info:Writing current state information
+INFO:write_state_info:(Table("orders"): {'id': 9236}),
+
+# wait some time
+partition-manager --mariadb ~/bin/rootsql-dev-primary bootstrap --in /tmp/bootstrap.yml --table orders
+INFO:calculate_sql_alters:Reading prior state information
+INFO:calculate_sql_alters:Table orders, 24.0 hours, [9236] - [29236], [20000] pos_change, [832.706363653845]/hour
+orders:
+ - ALTER TABLE `orders` REORGANIZE PARTITION `p_20210405` INTO (PARTITION `p_20210416` VALUES LESS THAN (30901), PARTITION `p_20210516` VALUES LESS THAN (630449), PARTITION `p_20210615` VALUES LESS THAN MAXVALUE);
+
+```
 
 # Algorithm
+
+The core algorithm is implemented in a method `plan_partition_changes` in `table_append_partition.py`. That algorithm is:
 
 For a given table and that table's intended partition period, desired end-state is to have:
 - All the existing partitions containing data,
@@ -79,16 +98,16 @@ Procedure:
 - Create a new list of intended empty partitions.
 - For each empty partition:
   - Predict the start-of-fill date using the partition's position relative to the current active partition, the current active partition's date, the partition period, and the future partition fill rate.
-  - Predict the end-of-fill value using the start-of-fill date and the future partition fill rate.
   - If the start-of-fill date is different than the partition's name, rename the partition.
-  - If the end-of-fill value is different than the partition's current value, change that value.
   - Append the changed partition to the intended empty partition list.
 - While the number of empty partitions is less than the intended number of trailing partitions to keep:
   - Predict the start-of-fill date for a new partition using the previous partition's date and the partition period.
-  - Predict the end-of-fill value using the start-of-fill date and the future partition fill rate.
   - Append the new partition to the intended empty partition list.
 - Return the lists of non-empty partitions, the current empty partitions, and the post-algorithm intended empty partitions.
 
 # TODOs
 
-Lots. A drop mechanism, for one. Yet more tests, particularly live integration tests with a test DB, for another.
+Lots:
+[X] Support for tables with partitions across multiple columns.
+[ ] A drop mechanism, for one. Initially it should take a retention period and log proposed `DROP` statements, not perform them.
+[ ] Yet more tests, particularly live integration tests with a test DB.
