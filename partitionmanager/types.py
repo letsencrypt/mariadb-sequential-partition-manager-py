@@ -403,7 +403,8 @@ class PlannedPartition(abc.ABC):
 
 class ChangePlannedPartition(PlannedPartition):
     """
-    Represents modifications to a given Partition
+    Represents modifications to a Partition supplied during construction. Use
+    the parent class' methods to alter this change.
     """
 
     def __init__(self, old_part):
@@ -434,7 +435,9 @@ class ChangePlannedPartition(PlannedPartition):
 
 class NewPlannedPartition(PlannedPartition):
     """
-    Represents a wholly new Partition to be constructed
+    Represents a wholly new Partition to be constructed. After construction,
+    you must set the number of columns using set_columns before attempting
+    to use this in a plan.
     """
 
     def __init__(self):
