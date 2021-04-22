@@ -14,7 +14,43 @@ Similar tools:
 # Usage
 
 ```sh
- → pip install --editable .
+ → git clone https://github.com/letsencrypt/mariadb-sequential-partition-manager-py.git
+ → cd mariadb-sequential-partition-manager-py
+ → python3 -m venv .venv
+ → . .venv/bin/activate
+ → python3 -m pip install .
+ → tee /tmp/partman.conf.yml <<EOF
+ partitionmanager:
+  num_empty: 2
+  partition_period:
+      days: 90
+  dburl: "sql://user:password@localhost3306:/test_db"
+  tables:
+    cats: {}
+    dogs:
+      partition_period:
+        days: 30
+  prometheus_stats: "/tmp/prometheus-textcollect-partition-manager.prom"
+EOF
+ → partition-manager --config /tmp/partman.conf.yml add --noop
+INFO:root:No-op mode
+INFO:partition:Evaluating Table dogs (duration=30 days, 0:00:00) (pos={'id': 150})
+INFO:partition:Table dogs planned SQL: ALTER TABLE `dogs` REORGANIZE PARTITION `p_20201204` INTO (PARTITION `p_20210422` VALUES LESS THAN (221), PARTITION `p_20210522` VALUES LESS THAN MAXVALUE);
+
+dogs:
+ sql: ALTER TABLE `dogs` REORGANIZE PARTITION `p_20201204` INTO (PARTITION `p_20210422` VALUES LESS THAN (221), PARTITION `p_20210522` VALUES LESS THAN MAXVALUE);
+ noop: True
+```
+
+
+## Hacking on this Project
+
+```sh
+ → git clone https://github.com/letsencrypt/mariadb-sequential-partition-manager-py.git
+ → cd mariadb-sequential-partition-manager-py
+ → python3 -m venv .venv
+ → . .venv/bin/activate
+ → python3 -m pip install --editable .
  → partition-manager --log-level=debug  \
     --mariadb test_tools/fake_mariadb.sh \
     add --noop --table tablename
@@ -28,7 +64,8 @@ ALTER TABLE `dbname`.`tablename` REORGANIZE PARTITION `p_20201204` INTO (PARTITI
 
 ```
 
-You can also use a yaml configuration file with the `--config` parameter of the form:
+# Configuration
+You can use a yaml configuration file with the `--config` parameter of the form:
 ```yaml
 partitionmanager:
   dburl: sql://user:password@localhost/db-name
@@ -48,6 +85,7 @@ partitionmanager:
     table3:
       retention:
         days: 14
+    table4: {}
 ```
 
 For tables which are either partitioned but not yet using this tool's schema, or which have no empty partitions, the `bootstrap` command can be useful for proposing alterations to run manually. Note that `bootstrap` proposes commands that are likely to require partial copies of each table, so likely they will require a maintenance period.
@@ -66,7 +104,16 @@ orders:
 
 ```
 
-# Algorithm
+# Procedure
+
+## Configuration Processing
+
+- At start, if any configuration file specified as a CLI argument, read that configuration file to set all other values.
+- Then, process all remaining command line arguments, overriding values loaded from the configuration file in case of conflicts.
+- From those command-line arguments, determine whether to collect statistics `stats`, determine an initial partition layout `bootstrap`, or operate in the normal `add` mode.
+- Use the configuration information as inputs to the required algorithm.
+
+## "Add" Algorithm
 
 The core algorithm is implemented in a method `plan_partition_changes` in `table_append_partition.py`. That algorithm is:
 
@@ -104,6 +151,14 @@ Procedure:
   - Predict the start-of-fill date for a new partition using the previous partition's date and the partition period.
   - Append the new partition to the intended empty partition list.
 - Return the lists of non-empty partitions, the current empty partitions, and the post-algorithm intended empty partitions.
+
+### "Add" Finalization
+
+The results of the algorithm are converted into `ALTER` statements; if the user configured `--noop` they're emitted to console and the logs for each table. If not set to `--noop`, the application will execute the ALTERs at the database server and emit the results, including execution time as prometheus statistics if so configured.
+
+## "Bootstrap" Algorithm
+
+The bootstrap mode is a limited form of the "Add" Algorithm, using a temporary state file to determine rates-of-change. The bootstrap mode also does not limit itself to only affecting empty partitions, it can and will request changes that will prmopt row copies, in order to prepare a table for future use of the "Add" algorithm.
 
 # TODOs
 

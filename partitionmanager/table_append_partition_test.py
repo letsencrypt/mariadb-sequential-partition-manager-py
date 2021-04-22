@@ -19,7 +19,6 @@ from partitionmanager.types import (
     UnexpectedPartitionException,
 )
 from partitionmanager.table_append_partition import (
-    evaluate_partition_changes,
     generate_sql_reorganize_partition_commands,
     generate_weights,
     get_current_positions,
@@ -30,6 +29,7 @@ from partitionmanager.table_append_partition import (
     plan_partition_changes,
     predict_forward_position,
     predict_forward_time,
+    should_run_changes,
     split_partitions_around_positions,
     table_information_schema_is_compatible,
     table_is_compatible,
@@ -709,15 +709,15 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
-    def test_evaluate_partition_changes(self):
+    def test_should_run_changes(self):
         self.assertFalse(
-            evaluate_partition_changes(
+            should_run_changes(
                 [ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position([300])]
             )
         )
 
         self.assertFalse(
-            evaluate_partition_changes(
+            should_run_changes(
                 [
                     ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
                         [300]
@@ -728,9 +728,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 ]
             )
         )
-        with self.assertLogs("evaluate_partition_changes", level="DEBUG") as logctx:
+        with self.assertLogs("should_run_changes", level="DEBUG") as logctx:
             self.assertTrue(
-                evaluate_partition_changes(
+                should_run_changes(
                     [
                         ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
                             [302]
@@ -749,15 +749,12 @@ class TestPartitionAlgorithm(unittest.TestCase):
             )
         self.assertEqual(
             logctx.output,
-            [
-                "DEBUG:evaluate_partition_changes:Add: [542] 2021-01-16 "
-                "00:00:00+00:00 is new"
-            ],
+            ["DEBUG:should_run_changes:Add: [542] 2021-01-16 " "00:00:00+00:00 is new"],
         )
 
-        with self.assertLogs("evaluate_partition_changes", level="DEBUG") as logctx:
+        with self.assertLogs("should_run_changes", level="DEBUG") as logctx:
             self.assertTrue(
-                evaluate_partition_changes(
+                should_run_changes(
                     [
                         ChangePlannedPartition(mkPPart("p_20210102", 200)),
                         NewPlannedPartition()
@@ -771,10 +768,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             )
         self.assertEqual(
             logctx.output,
-            [
-                "DEBUG:evaluate_partition_changes:Add: [542] 2021-01-16 "
-                "00:00:00+00:00 is new"
-            ],
+            ["DEBUG:should_run_changes:Add: [542] 2021-01-16 " "00:00:00+00:00 is new"],
         )
 
     def test_generate_sql_reorganize_partition_commands_no_change(self):
@@ -897,6 +891,25 @@ class TestPartitionAlgorithm(unittest.TestCase):
                         NewPlannedPartition()
                         .set_position([1200])
                         .set_timestamp(datetime(2021, 1, 15, tzinfo=timezone.utc)),
+                    ],
+                )
+            )
+
+    def test_generate_sql_reorganize_partition_commands_out_of_order(self):
+        with self.assertRaises(AssertionError):
+            list(
+                generate_sql_reorganize_partition_commands(
+                    Table("table_with_out_of_order_changeset"),
+                    [
+                        ChangePlannedPartition(mkTailPart("past"))
+                        .set_position([800])
+                        .set_timestamp(datetime(2021, 1, 14, tzinfo=timezone.utc)),
+                        NewPlannedPartition()
+                        .set_position([1000])
+                        .set_timestamp(datetime(2021, 1, 15, tzinfo=timezone.utc)),
+                        ChangePlannedPartition(mkTailPart("future"))
+                        .set_position([1200])
+                        .set_timestamp(datetime(2021, 1, 16, tzinfo=timezone.utc)),
                     ],
                 )
             )
