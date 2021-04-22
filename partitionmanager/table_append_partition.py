@@ -338,7 +338,7 @@ def plan_partition_changes(
     # increasing until we get to "now" and the active partition. "Now" actually
     # takes place _after_ active partition's start date (naturally), but
     # contains a position that is before the top of active, by definition. For
-    # the rate processing to work, we need to cross the "now" and the active
+    # the rate processing to work, we need to swap the "now" and the active
     # partition's dates and positions.
     rate_relevant_partitions = filled_partitions + [
         InstantPartition(active_partition.timestamp(), current_positions),
@@ -422,14 +422,13 @@ def plan_partition_changes(
     return results
 
 
-def evaluate_partition_changes(altered_partitions):
+def should_run_changes(altered_partitions):
     """
     Evaluate the list from plan_partition_changes and determine if the set of
     changes should be performed - if all the changes are minor, they shouldn't
-    be run. Returns True if the changeset should run, otherwise logs the reason
-    for skipping and returns False
+    be run. Returns True if the changeset should run, otherwise returns False.
     """
-    log = logging.getLogger("evaluate_partition_changes")
+    log = logging.getLogger("should_run_changes")
 
     for p in altered_partitions:
         if isinstance(p, NewPlannedPartition):
@@ -460,6 +459,7 @@ def generate_sql_reorganize_partition_commands(table, changes):
         if isinstance(p, NewPlannedPartition):
             new_partitions.append(p)
         else:
+            assert not new_partitions, "Modified partitions must preceed new partitions"
             modified_partitions.append(p)
 
     # If there's not at least one modification, bail out

@@ -14,11 +14,11 @@ from partitionmanager.bootstrap import (
     write_state_info,
 )
 from partitionmanager.table_append_partition import (
-    evaluate_partition_changes,
     generate_sql_reorganize_partition_commands,
     get_current_positions,
     get_partition_map,
     plan_partition_changes,
+    should_run_changes,
     table_is_compatible,
 )
 from partitionmanager.types import (
@@ -289,7 +289,7 @@ def do_partition(conf):
                 conf.num_empty,
             )
 
-            if not evaluate_partition_changes(partition_changes):
+            if not should_run_changes(partition_changes):
                 log.info(f"{table} does not need to be modified currently.")
                 continue
             log.debug(f"{table} has changes waiting.")

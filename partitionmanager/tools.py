@@ -19,8 +19,8 @@ def iter_show_end(iterable):
     iterable -> (s0, false), (s1, false), ... (s_n, true).
     """
     it = iter(iterable)
-    last = next(it)
+    prev = next(it)
     for val in it:
-        yield last, False
-        last = val
-    yield last, True
+        yield prev, False
+        prev = val
+    yield prev, True
