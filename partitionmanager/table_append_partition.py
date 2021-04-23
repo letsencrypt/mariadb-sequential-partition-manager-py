@@ -49,7 +49,8 @@ def table_is_compatible(database, table):
 
 def table_information_schema_is_compatible(rows, table_name):
     """
-    Parse a table information schema, validating options
+    Parse a table information schema, validating options including existance of
+    each table
     """
     if len(rows) != 1:
         return f"Unable to read information for {table_name}"
