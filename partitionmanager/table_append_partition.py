@@ -16,7 +16,6 @@ from partitionmanager.types import (
     NewPlannedPartition,
     NoEmptyPartitionsAvailableException,
     Partition,
-    PlannedPartition,
     PositionPartition,
     SqlInput,
     Table,
@@ -454,13 +453,13 @@ def generate_sql_reorganize_partition_commands(table, changes):
     new_partitions = list()
 
     for p in changes:
-        if not isinstance(p, PlannedPartition):
-            raise UnexpectedPartitionException(p)
-        if isinstance(p, NewPlannedPartition):
-            new_partitions.append(p)
-        else:
+        if isinstance(p, ChangePlannedPartition):
             assert not new_partitions, "Modified partitions must preceed new partitions"
             modified_partitions.append(p)
+        elif isinstance(p, NewPlannedPartition):
+            new_partitions.append(p)
+        else:
+            raise UnexpectedPartitionException(p)
 
     # If there's not at least one modification, bail out
     if not new_partitions and not list(
