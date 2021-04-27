@@ -49,7 +49,7 @@ def table_is_compatible(database, table):
 
 def table_information_schema_is_compatible(rows, table_name):
     """
-    Parse a table information schema, validating options including existance of
+    Parse a table information schema, validating options including existence of
     each table
     """
     if len(rows) != 1:
