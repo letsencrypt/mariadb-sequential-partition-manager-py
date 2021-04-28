@@ -1,16 +1,20 @@
 import tempfile
 import unittest
 import pymysql
+import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 from .cli import (
     all_configured_tables_are_compatible,
+    bootstrap_cmd,
     config_from_args,
     do_partition,
     PARSER,
     partition_cmd,
     stats_cmd,
 )
+from .bootstrap import calculate_sql_alters_from_state_info
+
 
 fake_exec = Path(__file__).absolute().parent.parent / "test_tools/fake_mariadb.sh"
 nonexistant_exec = fake_exec.parent / "not_real"
@@ -371,3 +375,244 @@ partitionmanager:
 """,
                 datetime.now(),
             )
+
+    def test_bootstrap_cmd_out(self):
+        with tempfile.NamedTemporaryFile() as outfile:
+            args = PARSER.parse_args(
+                [
+                    "--mariadb",
+                    str(fake_exec),
+                    "bootstrap",
+                    "--out",
+                    outfile.name,
+                    "--table",
+                    "partitioned_yesterday",
+                    "two",
+                ]
+            )
+
+            output = bootstrap_cmd(args)
+            self.assertEqual({}, output)
+
+            out_yaml = yaml.safe_load(Path(outfile.name).read_text())
+            self.assertTrue("time" in out_yaml)
+            self.assertTrue(isinstance(out_yaml["time"], datetime))
+            del out_yaml["time"]
+
+            self.assertEqual(
+                out_yaml,
+                {"tables": {"partitioned_yesterday": {"id": 150}, "two": {"id": 150}}},
+            )
+
+    def test_bootstrap_cmd_out_unpartitioned(self):
+        with tempfile.NamedTemporaryFile() as outfile:
+            args = PARSER.parse_args(
+                [
+                    "--mariadb",
+                    str(fake_exec),
+                    "bootstrap",
+                    "--out",
+                    outfile.name,
+                    "--table",
+                    "unpartitioned",
+                    "two",
+                ]
+            )
+
+            with self.assertRaisesRegex(
+                Exception, "Table unpartitioned is not partitioned"
+            ):
+                bootstrap_cmd(args)
+
+    def test_bootstrap_cmd_out_unpartitioned_with_override(self):
+        with tempfile.NamedTemporaryFile() as outfile:
+            args = PARSER.parse_args(
+                [
+                    "--mariadb",
+                    str(fake_exec),
+                    "bootstrap",
+                    "--assume-partitioned-on",
+                    "id",
+                    "--out",
+                    outfile.name,
+                    "--table",
+                    "unpartitioned",
+                ]
+            )
+            output = bootstrap_cmd(args)
+            self.assertEqual({}, output)
+
+            out_yaml = yaml.safe_load(Path(outfile.name).read_text())
+            self.assertTrue("time" in out_yaml)
+            self.assertTrue(isinstance(out_yaml["time"], datetime))
+            del out_yaml["time"]
+
+            self.assertEqual(out_yaml, {"tables": {"unpartitioned": {"id": 150}}})
+
+    def test_bootstrap_cmd_in(self):
+        with tempfile.NamedTemporaryFile(mode="w+") as infile:
+            yaml.dump(
+                {
+                    "tables": {"partitioned_yesterday": {"id": 50}, "two": {"id": 0}},
+                    "time": datetime(2021, 4, 1, tzinfo=timezone.utc),
+                },
+                infile,
+            )
+
+            args = PARSER.parse_args(
+                [
+                    "--mariadb",
+                    str(fake_exec),
+                    "bootstrap",
+                    "--in",
+                    infile.name,
+                    "--table",
+                    "partitioned_yesterday",
+                    "two",
+                ]
+            )
+
+            conf = config_from_args(args)
+            conf.curtime = datetime(2021, 4, 21, tzinfo=timezone.utc)
+            self.maxDiff = None
+
+            output = calculate_sql_alters_from_state_info(
+                conf, Path(infile.name).open("r")
+            )
+            self.assertEqual(
+                output,
+                {
+                    "partitioned_yesterday": [
+                        "DROP TABLE IF EXISTS partitioned_yesterday_new_20210421;",
+                        "CREATE TABLE partitioned_yesterday_new_20210421 "
+                        + "LIKE partitioned_yesterday;",
+                        "ALTER TABLE partitioned_yesterday_new_20210421 "
+                        + "REMOVE PARTITIONING;",
+                        "ALTER TABLE partitioned_yesterday_new_20210421 "
+                        + "PARTITION BY RANGE(id) (",
+                        "\tPARTITION p_20210802 VALUES LESS THAN MAXVALUE",
+                        ");",
+                        "ALTER TABLE `partitioned_yesterday_new_20210421` "
+                        + "REORGANIZE PARTITION `p_20210802` INTO (PARTITION "
+                        + "`p_20210421` VALUES LESS THAN (150), PARTITION "
+                        + "`p_20210521` VALUES LESS THAN (300), PARTITION "
+                        + "`p_20210620` VALUES LESS THAN MAXVALUE);",
+                        "CREATE OR REPLACE TRIGGER copy_inserts_from_"
+                        + "partitioned_yesterday_to_partitioned_yesterday_new_20210421",
+                        "\tAFTER INSERT ON partitioned_yesterday FOR EACH ROW",
+                        "\t\tINSERT INTO partitioned_yesterday_new_20210421 SET",
+                        "\t\t\t`id` = NEW.`id`,",
+                        "\t\t\t`serial` = NEW.`serial`;",
+                        "CREATE OR REPLACE TRIGGER copy_updates_from_"
+                        + "partitioned_yesterday_to_partitioned_yesterday_new_20210421",
+                        "\tAFTER UPDATE ON partitioned_yesterday FOR EACH ROW",
+                        "\t\tUPDATE partitioned_yesterday_new_20210421 SET",
+                        "\t\t\t`serial` = NEW.`serial`",
+                        "\t\tWHERE `id` = NEW.`id`;",
+                    ],
+                    "two": [
+                        "DROP TABLE IF EXISTS two_new_20210421;",
+                        "CREATE TABLE two_new_20210421 LIKE two;",
+                        "ALTER TABLE two_new_20210421 REMOVE PARTITIONING;",
+                        "ALTER TABLE two_new_20210421 PARTITION BY RANGE(id) (",
+                        "\tPARTITION p_20201204 VALUES LESS THAN MAXVALUE",
+                        ");",
+                        "ALTER TABLE `two_new_20210421` REORGANIZE PARTITION "
+                        + "`p_20201204` INTO (PARTITION `p_20210421` VALUES "
+                        + "LESS THAN (150), PARTITION `p_20210521` VALUES LESS "
+                        + "THAN (375), PARTITION `p_20210620` VALUES LESS THAN "
+                        + "MAXVALUE);",
+                        "CREATE OR REPLACE TRIGGER copy_inserts_from_two_to_two_new_20210421",
+                        "\tAFTER INSERT ON two FOR EACH ROW",
+                        "\t\tINSERT INTO two_new_20210421 SET",
+                        "\t\t\t`id` = NEW.`id`,",
+                        "\t\t\t`serial` = NEW.`serial`;",
+                        "CREATE OR REPLACE TRIGGER copy_updates_from_two_to_two_new_20210421",
+                        "\tAFTER UPDATE ON two FOR EACH ROW",
+                        "\t\tUPDATE two_new_20210421 SET",
+                        "\t\t\t`serial` = NEW.`serial`",
+                        "\t\tWHERE `id` = NEW.`id`;",
+                    ],
+                },
+            )
+
+    def test_bootstrap_cmd_in_unpartitioned_with_override(self):
+        with tempfile.NamedTemporaryFile(mode="w+") as infile:
+            yaml.dump(
+                {
+                    "tables": {"unpartitioned": {"id": 50}},
+                    "time": datetime(2021, 4, 1, tzinfo=timezone.utc),
+                },
+                infile,
+            )
+
+            args = PARSER.parse_args(
+                [
+                    "--mariadb",
+                    str(fake_exec),
+                    "bootstrap",
+                    "--assume-partitioned-on",
+                    "id",
+                    "--in",
+                    infile.name,
+                    "--table",
+                    "unpartitioned",
+                ]
+            )
+            conf = config_from_args(args)
+            conf.curtime = datetime(2021, 4, 21, tzinfo=timezone.utc)
+            self.maxDiff = None
+
+            output = calculate_sql_alters_from_state_info(
+                conf, Path(infile.name).open("r")
+            )
+
+            self.assertEqual(
+                output,
+                {
+                    "unpartitioned": [
+                        "DROP TABLE IF EXISTS unpartitioned_new_20210421;",
+                        "CREATE TABLE unpartitioned_new_20210421 LIKE unpartitioned;",
+                        "ALTER TABLE unpartitioned_new_20210421 REMOVE PARTITIONING;",
+                        "ALTER TABLE unpartitioned_new_20210421 PARTITION BY RANGE(id) (",
+                        "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
+                        ");",
+                        "ALTER TABLE `unpartitioned_new_20210421` REORGANIZE "
+                        + "PARTITION `p_assumed` INTO (PARTITION `p_20210421` "
+                        + "VALUES LESS THAN (150), PARTITION `p_20210521` VALUES "
+                        + "LESS THAN (300), PARTITION `p_20210620` VALUES LESS "
+                        + "THAN MAXVALUE);",
+                        "CREATE OR REPLACE TRIGGER copy_inserts_from_"
+                        + "unpartitioned_to_unpartitioned_new_20210421",
+                        "\tAFTER INSERT ON unpartitioned FOR EACH ROW",
+                        "\t\tINSERT INTO unpartitioned_new_20210421 SET",
+                        "\t\t\t`id` = NEW.`id`,",
+                        "\t\t\t`serial` = NEW.`serial`;",
+                        "CREATE OR REPLACE TRIGGER copy_updates_from_"
+                        + "unpartitioned_to_unpartitioned_new_20210421",
+                        "\tAFTER UPDATE ON unpartitioned FOR EACH ROW",
+                        "\t\tUPDATE unpartitioned_new_20210421 SET",
+                        "\t\t\t`serial` = NEW.`serial`",
+                        "\t\tWHERE `id` = NEW.`id`;",
+                    ]
+                },
+            )
+
+    def test_bootstrap_cmd_in_out(self):
+        with tempfile.NamedTemporaryFile() as outfile, tempfile.NamedTemporaryFile(
+            mode="w+"
+        ) as infile:
+            with self.assertRaises(SystemExit):
+                PARSER.parse_args(
+                    [
+                        "--mariadb",
+                        str(fake_exec),
+                        "bootstrap",
+                        "--out",
+                        outfile.name,
+                        "--in",
+                        infile.name,
+                        "--table",
+                        "flip",
+                    ]
+                )

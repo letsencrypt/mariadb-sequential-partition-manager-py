@@ -125,6 +125,7 @@ class SubprocessDatabaseCommand(partitionmanager.types.DatabaseCommand):
         self.exe = exe
 
     def run(self, sql_cmd):
+        logging.debug(f"SubprocessDatabaseCommand executing {sql_cmd}")
         result = subprocess.run(
             [self.exe, "-X"],
             input=sql_cmd,
@@ -171,6 +172,7 @@ class IntegratedDatabaseCommand(partitionmanager.types.DatabaseCommand):
         return partitionmanager.types.SqlInput(self.db)
 
     def run(self, sql_cmd):
+        logging.debug(f"IntegratedDatabaseCommand executing {sql_cmd}")
         with self.connection.cursor() as cursor:
             cursor.execute(sql_cmd)
             return [row for row in cursor]
