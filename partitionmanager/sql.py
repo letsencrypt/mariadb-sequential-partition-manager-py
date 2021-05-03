@@ -19,9 +19,7 @@ from partitionmanager.types import (
 
 
 def destring(text):
-    """
-    Try and get a python type from a string. Used for SQL results.
-    """
+    """Try and get a python type from a string. Used for SQL results."""
     try:
         return int(text)
     except ValueError:
@@ -34,9 +32,9 @@ def destring(text):
 
 
 class XmlResult:
-    """
-    Ugly class to parse XML results from the mariadb CLI client. The general
-    schema is:
+    """Parses XML results from the mariadb CLI client.
+
+    The general schema is:
     <resultset statement="sql query">
         <row>
             <field name="name" xsi:nil="true/false">data if any</field>
@@ -67,9 +65,7 @@ class XmlResult:
         self.statement = None
 
     def parse(self, data):
-        """
-        Return rows from an XML Result object.
-        """
+        """Return rows from an XML Result object."""
         if self.rows is not None:
             raise ValueError("XmlResult objects can only be used once")
 
@@ -124,8 +120,8 @@ class XmlResult:
 
 
 class SubprocessDatabaseCommand(DatabaseCommand):
-    """
-    Run a database command via the CLI tool, getting the results in XML form.
+    """Run a database command via the CLI tool, getting the results in XML form.
+
     This can be very convenient without explicit port-forwarding, but is a
     little slow.
     """
@@ -153,9 +149,9 @@ class SubprocessDatabaseCommand(DatabaseCommand):
 
 
 class IntegratedDatabaseCommand(DatabaseCommand):
-    """
-    Run a database command via a direct socket connection and pymysql, a pure
-    Python PEP 249-compliant database connector.
+    """Run a database command via a direct socket connection and pymysql.
+
+    Pymysql is a pure Python PEP 249-compliant database connector.
     """
 
     def __init__(self, url):

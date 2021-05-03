@@ -24,6 +24,8 @@ from partitionmanager.table_append_partition import (
     get_current_positions,
     get_partition_map,
     get_position_increase_per_day,
+    get_table_compatibility_problems,
+    get_table_information_schema_problems,
     get_weighted_position_increase_per_day_for_partitions,
     parse_partition_map,
     plan_partition_changes,
@@ -31,8 +33,6 @@ from partitionmanager.table_append_partition import (
     predict_forward_time,
     should_run_changes,
     split_partitions_around_positions,
-    table_information_schema_is_compatible,
-    table_is_compatible,
 )
 
 from .types_test import mkPPart, mkTailPart
@@ -58,26 +58,33 @@ class TestTypeEnforcement(unittest.TestCase):
 
     def test_get_autoincrement(self):
         self.assertEqual(
-            table_is_compatible(MockDatabase(), ""), "Unexpected table type: "
+            get_table_compatibility_problems(MockDatabase(), ""),
+            ["Unexpected table type: "],
         )
 
 
 class TestParseTableInformationSchema(unittest.TestCase):
     def test_not_partitioned_and_unexpected(self):
         info = [{"CREATE_OPTIONS": "exfoliated, disenchanted"}]
-        self.assertIsNotNone(table_information_schema_is_compatible(info, "extable"))
+        self.assertEqual(
+            get_table_information_schema_problems(info, "extable"),
+            ["Table extable is not partitioned"],
+        )
 
     def test_not_partitioned(self):
         info = [{"CREATE_OPTIONS": "exfoliated"}]
-        self.assertIsNotNone(table_information_schema_is_compatible(info, "extable"))
+        self.assertEqual(
+            get_table_information_schema_problems(info, "extable"),
+            ["Table extable is not partitioned"],
+        )
 
     def test_normal(self):
         info = [{"CREATE_OPTIONS": "partitioned"}]
-        self.assertIsNone(table_information_schema_is_compatible(info, "table"))
+        self.assertEqual(get_table_information_schema_problems(info, "table"), list())
 
     def test_normal_multiple_create_options(self):
         info = [{"CREATE_OPTIONS": "magical, partitioned"}]
-        self.assertIsNone(table_information_schema_is_compatible(info, "table"))
+        self.assertEqual(get_table_information_schema_problems(info, "table"), list())
 
 
 class TestParsePartitionMap(unittest.TestCase):
@@ -452,6 +459,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
             # We should never be asked to operate on positions in the incorrect
             # order
             predict_forward_time([101, 101], [100, 100], [200, 200], t)
+        with self.assertRaises(ValueError):
+            # Nonzero rates of change are bad too.
+            predict_forward_time([0, 0, 0], [100, 100, 100], [1, 1, 0], t)
 
         self.assertEqual(
             predict_forward_time([0], [100], [100], t), t + timedelta(hours=24)

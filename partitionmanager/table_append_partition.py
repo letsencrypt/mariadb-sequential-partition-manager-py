@@ -25,11 +25,8 @@ from partitionmanager.types import (
 from .tools import pairwise, iter_show_end
 
 
-def table_is_compatible(database, table):
-    """
-    Gather the information schema from the database command and parse out the
-    autoincrement value.
-    """
+def get_table_compatibility_problems(database, table):
+    """Return a list of strings of problems altering this table, or empty."""
     db_name = database.db_name()
 
     if (
@@ -37,33 +34,32 @@ def table_is_compatible(database, table):
         or not isinstance(table, Table)
         or not isinstance(table.name, SqlInput)
     ):
-        return f"Unexpected table type: {table}"
+        return [f"Unexpected table type: {table}"]
+
     sql_cmd = (
         "SELECT CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES "
         + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
     ).strip()
 
-    return table_information_schema_is_compatible(database.run(sql_cmd), table.name)
+    return get_table_information_schema_problems(database.run(sql_cmd), table.name)
 
 
-def table_information_schema_is_compatible(rows, table_name):
-    """
-    Parse a table information schema, validating options
-    """
+def get_table_information_schema_problems(rows, table_name):
+    """Return a string representing problems partitioning this table, or None."""
     if len(rows) != 1:
-        return f"Unable to read information for {table_name}"
+        return [f"Unable to read information for {table_name}"]
 
     options = rows[0]
     if "partitioned" not in options["CREATE_OPTIONS"]:
-        return f"Table {table_name} is not partitioned"
+        return [f"Table {table_name} is not partitioned"]
 
-    return None
+    return list()
 
 
 def get_current_positions(database, table, columns):
-    """
-    Get the positions of the columns provided in the given table, return
-    as a dictionary of {column_name: position}
+    """Get positions of the columns in the table.
+
+    Return as a dictionary of {column_name: position}
     """
     if not isinstance(columns, list) or not isinstance(table, Table):
         raise ValueError("columns must be a list and table must be a Table")
@@ -83,9 +79,7 @@ def get_current_positions(database, table, columns):
 
 
 def get_partition_map(database, table):
-    """
-    Gather the partition map via the database command tool.
-    """
+    """Gather the partition map via the database command tool."""
     if not isinstance(table, Table) or not isinstance(table.name, SqlInput):
         raise ValueError("Unexpected type")
     sql_cmd = f"SHOW CREATE TABLE `{table.name}`;"
@@ -93,9 +87,13 @@ def get_partition_map(database, table):
 
 
 def parse_partition_map(rows):
-    """
-    Read a partition statement from a table creation string and produce Partition
-    objets for each partition.
+    """Return a dictionary of range_cols and partition objects.
+
+    The "range_cols" is the ordered list of what columns are used as the
+    range identifiers for the partitions.
+
+    The "partitions" is a list of the Partition objects representing each
+    defined partition. There will be at least one MaxValuePartition.
     """
     log = logging.getLogger("parse_partition_map")
 
@@ -162,10 +160,14 @@ def parse_partition_map(rows):
 
 
 def split_partitions_around_positions(partition_list, current_positions):
-    """
-    Split a partition_list into those for which _all_ values are less than
-    current_positions, a single partition whose values contain current_positions,
-    and a list of all the others.
+    """Divide up a partition list to three parts: filled, current, and empty.
+
+    The first part is the filled partition list: those partitions for which
+    _all_ values are less than current_positions.
+
+    The second is the a single partition whose values contain current_positions.
+
+    The third part is a list of all the other, empty partitions yet-to-be-filled.
     """
     for p in partition_list:
         if not isinstance(p, Partition):
@@ -189,8 +191,9 @@ def split_partitions_around_positions(partition_list, current_positions):
 
 
 def get_position_increase_per_day(p1, p2):
-    """
-    Return a list containing the change in positions between p1 and p2 divided
+    """Return the rate of change between two position-lists, in positions/day.
+
+    Returns a list containing the change in positions between p1 and p2 divided
     by the number of days between them, as "position increase per day", or raise
     ValueError if p1 is not before p2, or if either p1 or p2 does not have a
     position. For partitions with only a single position, this will be a list of
@@ -212,15 +215,16 @@ def get_position_increase_per_day(p1, p2):
 
 
 def generate_weights(count):
-    """
-    Generate a static list of geometricly-decreasing values, starting from
-    10,000 to give a high ceiling. It could be dynamic, but eh.
+    """Static list of geometrically-decreasing weights.
+
+    Starts from 10,000 to give a high ceiling. It could be dynamic, but eh.
     """
     return [10_000 / x for x in range(count, 0, -1)]
 
 
 def get_weighted_position_increase_per_day_for_partitions(partitions):
-    """
+    """Get weighted partition-position-increase-per-day as a position-list.
+
     For the provided list of partitions, uses the get_position_increase_per_day
     method to generate a list position increment rates in positions/day, then
     uses a geometric weight to make more recent rates influence the outcome
@@ -246,9 +250,10 @@ def get_weighted_position_increase_per_day_for_partitions(partitions):
 
 
 def predict_forward_position(current_positions, rate_of_change, duration):
-    """
-    Move current_positions forward a given duration at the provided rates of
-    change. The rate and the duration must be compatible units, and both the
+    """Return a predicted future position as a position-list.
+
+    This moves current_positions forward a given duration at the provided rates
+    of change. The rate and the duration must be compatible units, and both the
     positions and the rate must be lists of the same size.
     """
     if len(current_positions) != len(rate_of_change):
@@ -267,16 +272,20 @@ def predict_forward_position(current_positions, rate_of_change, duration):
 
 
 def predict_forward_time(current_positions, end_positions, rates, evaluation_time):
-    """
-    Given the current_positions and the rates, determine the timestamp of when
-    the positions will reach ALL end_positions.
+    """Return a predicted datetime of when we'll exceed the end position-list.
+
+    Given the current_positions position-list and the rates, this calculates
+    a timestamp of when the positions will be beyond ALL of the end_positions
+    position-list, as that is MariaDB's definition of when to start filling a
+    partition.
     """
     if not len(current_positions) == len(end_positions) == len(rates):
         raise ValueError("Expected identical list sizes")
 
-    for neg_rate in filter(lambda r: r < 0, rates):
+    for neg_rate in filter(lambda r: r <= 0, rates):
         raise ValueError(
-            f"Can't predict forward with a negative rate of change: {neg_rate}"
+            f"Can't predict forward with a non-positive rate of change: "
+            f"{neg_rate} / {rates}"
         )
 
     days_remaining = [
@@ -291,11 +300,16 @@ def predict_forward_time(current_positions, end_positions, rates, evaluation_tim
 
 
 def calculate_start_time(last_changed_time, evaluation_time, allowed_lifespan):
-    """
-    Partition start times should never be in the past.
+    """Return a start time to be used in the partition planning.
+
+    This is a helper method that doesn't always return strictly
+    last_changed_time + allowed_lifespan, it prohibits times in the past,
+    returning evaluation_time instead, to ensure that we don't try to set
+    newly constructed partitions in the past.
     """
     partition_start_time = last_changed_time + allowed_lifespan
     if partition_start_time < evaluation_time:
+        # Partition start times should never be in the past.
         return evaluation_time
     return partition_start_time
 
@@ -307,10 +321,11 @@ def plan_partition_changes(
     allowed_lifespan,
     num_empty_partitions,
 ):
-    """
-    Produces a list of partitions that should be modified or created in order
-    to meet the supplied table requirements, using an estimate as to the rate of
-    fill.
+    """Return a list of partitions to modify or create.
+
+    This method makes recommendations in order to meet the supplied table
+    requirements, using an estimate as to the rate of fill from the supplied
+    partition_list, current_positions, and evaluation_time.
     """
     log = logging.getLogger("plan_partition_changes")
 
@@ -422,10 +437,11 @@ def plan_partition_changes(
 
 
 def should_run_changes(altered_partitions):
-    """
+    """Returns True if the changeset should run, otherwise returns False.
+
     Evaluate the list from plan_partition_changes and determine if the set of
     changes should be performed - if all the changes are minor, they shouldn't
-    be run. Returns True if the changeset should run, otherwise returns False.
+    be run.
     """
     log = logging.getLogger("should_run_changes")
 
@@ -443,10 +459,7 @@ def should_run_changes(altered_partitions):
 
 
 def generate_sql_reorganize_partition_commands(table, changes):
-    """
-    Generate a series of SQL commands to reorganize the partition in table_name
-    to match the new changes list.
-    """
+    """Generates SQL commands to reorganize table to apply the changes."""
     log = logging.getLogger(f"generate_sql_reorganize_partition_commands:{table.name}")
 
     modified_partitions = list()

@@ -17,9 +17,9 @@ from partitionmanager.table_append_partition import (
     generate_sql_reorganize_partition_commands,
     get_current_positions,
     get_partition_map,
+    get_table_compatibility_problems,
     plan_partition_changes,
     should_run_changes,
-    table_is_compatible,
 )
 from partitionmanager.types import (
     SqlInput,
@@ -61,10 +61,10 @@ GROUP.add_argument(
 
 
 class Config:
-    """
-    Configurations that we need; can be created from both an argparse object
-    of command-line arguments, from a YAML file, both, and potentially be
-    modified via unit tests.
+    """Configuration data that the rest of the tooling uses.
+
+    Can be created from both an argparse object of command-line arguments, from
+    a YAML file, both, and potentially be modified via unit tests.
     """
 
     def __init__(self):
@@ -77,9 +77,9 @@ class Config:
         self.prometheus_stats_path = None
 
     def from_argparse(self, args):
-        """
-        Populate this config from an argparse result. Overwrites only what
-        is set by argparse.
+        """Populate this config from an argparse result.
+
+        Overwrites only what is set by argparse.
         """
         if args.table:
             for n in args.table:
@@ -98,8 +98,8 @@ class Config:
             self.prometheus_stats_path = args.prometheus_stats
 
     def from_yaml_file(self, file):
-        """
-        Populate this config from the yaml in the file-like object supplied.
+        """Populate this config from the yaml in the file-like object supplied.
+
         Overwrites only what is set by the yaml.
         """
         data = yaml.safe_load(file)
@@ -140,9 +140,9 @@ class Config:
 
 
 def config_from_args(args):
-    """
-    Helper that produces a Config from the arguments, including loading any
-    referenced YAML after the argparse completes.
+    """Helper that produces a Config from the arguments.
+
+    Loads referenced YAML after the argparse completes.
     """
     conf = Config()
     conf.from_argparse(args)
@@ -152,25 +152,25 @@ def config_from_args(args):
 
 
 def all_configured_tables_are_compatible(conf):
-    """
-    This is a pre-flight test that all tables in the config are compatible
-    with the tool. Returns True only if all are compatible, otherwise logs
-    errors and returns False.
+    """Pre-flight test that all tables are compatible; returns True/False.
+
+    Returns True only if all are compatible, otherwise logs errors and returns
+    False.
     """
     problems = dict()
     for table in conf.tables:
-        problem = table_is_compatible(conf.dbcmd, table)
-        if problem:
-            problems[table.name] = problem
-            logging.error(f"Cannot proceed: {table} {problem}")
+        table_problems = get_table_compatibility_problems(conf.dbcmd, table)
+        if table_problems:
+            problems[table.name] = table_problems
+            logging.error(f"Cannot proceed: {table} {table_problems}")
 
     return len(problems) == 0
 
 
 def partition_cmd(args):
-    """
-    Helper for argparse that runs do_partition on the config that results from
-    the CLI arguments.
+    """Runs do_partition on the config that results from the CLI arguments.
+
+    Helper for argparse.
     """
     conf = config_from_args(args)
     return do_partition(conf)
@@ -194,9 +194,9 @@ PARTITION_PARSER.set_defaults(func=partition_cmd)
 
 
 def stats_cmd(args):
-    """
-    Helper for argparse that runs do_stats on the config that results from the
-    CLI arguments.
+    """Runs do_stats on the config that results from the CLI arguments.
+
+    Helper for argparse.
     """
     conf = config_from_args(args)
     return do_stats(conf)
@@ -214,8 +214,9 @@ STATS_PARSER.set_defaults(func=stats_cmd)
 
 
 def bootstrap_cmd(args):
-    """
-    Helper for argparse that runs the bootstrap methods
+    """Runs bootstrap actions on the config that results from the CLI arguments.
+
+    Helper for argparse.
     """
     conf = config_from_args(args)
 
@@ -246,8 +247,8 @@ BOOTSTRAP_PARSER.set_defaults(func=bootstrap_cmd)
 
 
 def do_partition(conf):
-    """
-    Produces SQL statements to manage partitions per the supplied configuration.
+    """Produces SQL statements to manage partitions per the supplied configuration.
+
     If the configuration does not set the noop flag, this runs those statements
     as well.
     """
@@ -329,9 +330,7 @@ def do_partition(conf):
 
 
 def do_stats(conf, metrics=PrometheusMetrics()):
-    """
-    Populates a metrics object from the tables in the configuration.
-    """
+    """Populates a metrics object from the tables in the configuration."""
     if not all_configured_tables_are_compatible(conf):
         return dict()
 
@@ -401,9 +400,7 @@ def do_stats(conf, metrics=PrometheusMetrics()):
 
 
 def main():
-    """
-    Start here.
-    """
+    """Start here."""
     args = PARSER.parse_args()
     logging.basicConfig(level=args.log_level)
     if "func" not in args:

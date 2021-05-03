@@ -238,12 +238,20 @@ class TestTypes(unittest.TestCase):
 
 class TestPartition(unittest.TestCase):
     def test_partition_timestamps(self):
-        self.assertIsNone(PositionPartition("").timestamp())
-        self.assertIsNone(PositionPartition("not_a_date").timestamp())
-        self.assertIsNone(PositionPartition("p_202012310130").timestamp())
+        self.assertFalse(PositionPartition("p_start").has_real_time)
         self.assertEqual(
-            PositionPartition("p_20201231").timestamp(),
-            datetime(2020, 12, 31, tzinfo=timezone.utc),
+            PositionPartition("p_start").timestamp(),
+            datetime(2021, 1, 1, tzinfo=timezone.utc),
+        )
+        self.assertFalse(PositionPartition("not_a_date").has_real_time)
+        self.assertIsNone(PositionPartition("not_a_date").timestamp())
+        self.assertFalse(PositionPartition("p_202012310130").has_real_time)
+        self.assertIsNone(PositionPartition("p_202012310130").timestamp())
+
+        self.assertTrue(PositionPartition("p_20011231").has_real_time)
+        self.assertEqual(
+            PositionPartition("p_20011231").timestamp(),
+            datetime(2001, 12, 31, tzinfo=timezone.utc),
         )
 
         self.assertLess(mkPPart("a", 9), mkPPart("b", 11))

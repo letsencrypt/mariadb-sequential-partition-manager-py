@@ -110,54 +110,52 @@ class DatabaseCommand(abc.ABC):
 
 
 class Partition(abc.ABC):
-    """
-    Abstract class which represents a single, currently-defined SQL table
-    partition. The subclasses represent: a partition with position information,
-    PositionPartition; those which are the tail partition and catch IDs beyond
-    the defined positions, MaxValuePartition; and a helper class,
-    InstantPartition, which is only used temporarily and never stored.
-    """
+    """Abstract class which represents a existing table partition."""
 
     @abc.abstractmethod
     def values(self):
-        """
-        Return a SQL partition value string.
-        """
+        """Return a SQL partition value string."""
 
     @property
     @abc.abstractmethod
     def name(self):
-        """
-        Return the partition's name, which should generally represent the
-        date that the partition begins to fill, of the form p_yyyymmdd
+        """Name representing when the partition began to fill.
+
+        Generally this will be of the form p_yyyymmdd, but sometimes partitions
+        have names like p_initial, p_start, or any other valid SQL identifier.
         """
 
     @property
     @abc.abstractmethod
     def num_columns(self):
-        """
-        Return the number of columns this partition represents
-        """
+        """Return the number of columns this partition represents"""
 
     @property
-    def has_time(self):
+    def has_real_time(self):
+        """True if the partition has a non-synthetic timestamp.
+
+        This should be used to determine whether timestamp() should be used for
+        statistical purposes, as timestamp() generates a synthetic timestamp
+        for rate-of-change calculations in corner-cases.
         """
-        True if the partition has a timestamp, e.g. if timestamp() can be
-        reasonably assumed to be non-None. Doesn't gaurantee, as this only
-        allows for names to be of the form p_start or p_YYYY[MM[DD]].
-        """
-        if "start" in self.name:
+        if "p_start" in self.name or not self.name.startswith("p_"):
             return False
-        return True
+
+        return self.timestamp() is not None
 
     def timestamp(self):
-        """
-        Returns a datetime object representing this partition's
-        date, if the partition is of the form "p_YYYYMMDD", otherwise
-        returns None
+        """Returns datetime of this partition's date, or None.
+
+        This returns the date from the partition's name if the partition is of
+        the form "p_YYYYMMDD". If the name is "p_start", return a synthetic
+        timestamp (be sure to use self.has_real_time before using for
+        statistical purposes). Otherwise, returns None.
         """
 
-        if not self.has_time:
+        if not self.name.startswith("p_"):
+            return None
+
+        if "p_start" in self.name:
             # Gotta start somewhere, for partitions named things like
             # "p_start". This has the downside of causing abnormally-low
             # rate of change calculations, but they fall off quickly
@@ -187,9 +185,7 @@ class Partition(abc.ABC):
 
 
 class PositionPartition(Partition):
-    """
-    A partition that may have positions assocated with it.
-    """
+    """A partition that may have positions assocated with it."""
 
     def __init__(self, name):
         self._name = name
@@ -200,9 +196,7 @@ class PositionPartition(Partition):
         return self._name
 
     def set_position(self, positions):
-        """
-        Set the position list for this partition.
-        """
+        """Set the position list for this partition."""
         self.positions = [int(p) for p in positions]
         return self
 
@@ -242,9 +236,10 @@ class PositionPartition(Partition):
 
 
 class MaxValuePartition(Partition):
-    """
-    A partition that lives at the tail of a partition list, saying
-    all remaining values belong in this partition.
+    """A partition that includes all remaining values.
+
+    This kind of partition always resides at the tail of the partition list,
+    and is defined as containing values up to the reserved keyword MAXVALUE.
     """
 
     def __init__(self, name, count):
@@ -263,9 +258,7 @@ class MaxValuePartition(Partition):
         return ", ".join(["MAXVALUE"] * self.count)
 
     def __lt__(self, other):
-        """
-        MaxValuePartitions are always greater than every other partition
-        """
+        """MaxValuePartitions are always greater than every other partition."""
         if isinstance(other, list):
             if self.count != len(other):
                 raise UnexpectedPartitionException(
@@ -287,10 +280,10 @@ class MaxValuePartition(Partition):
 
 
 class InstantPartition(PositionPartition):
-    """
-    Represent a partition at the current moment, used for rate calculations
-    as a stand-in that only exists for the purposes of the rate calculation
-    itself.
+    """Represent a partition at the current moment.
+
+    Used for rate calculations as a stand-in that only exists for the purposes
+    of the rate calculation itself.
     """
 
     def __init__(self, now, positions):
@@ -303,9 +296,9 @@ class InstantPartition(PositionPartition):
 
 
 class PlannedPartition(abc.ABC):
-    """
-    An abstract class representing a partition this tool plans to emit. If
-    the partition is an edit to an existing one, it will be the concrete type
+    """Represents a partition this tool plans to emit.
+
+    If the partition is an edit to an existing one, it will be the concrete type
     ChangePlannedPartition. For new partitions, it'll be NewPlannedPartition.
     """
 
@@ -316,18 +309,18 @@ class PlannedPartition(abc.ABC):
         self._important = False
 
     def set_timestamp(self, timestamp):
-        """
-        Set the timestamp to be used for the modified partition. This
-        effectively changes the partition's name.
+        """Set the timestamp to be used for the modified partition.
+
+        This effectively changes the partition's name.
         """
         self._timestamp = timestamp.replace(hour=0, minute=0)
         return self
 
     def set_position(self, pos):
-        """
-        Set the position of this modified partition. If this partition
-        changes an existing partition, the positions of both must have
-        identical length.
+        """Set the position of this modified partition.
+
+        If this partition changes an existing partition, the positions of both
+        must have identical length.
         """
         if not isinstance(pos, list):
             raise ValueError()
@@ -339,46 +332,31 @@ class PlannedPartition(abc.ABC):
         return self
 
     def set_important(self):
-        """
-        Indicate this is an important partition.
-        """
+        """Indicate this is an important partition."""
         self._important = True
         return self
 
     def timestamp(self):
-        """
-        The timestamp of this partition.
-        """
+        """The timestamp of this partition."""
         return self._timestamp
 
     def important(self):
-        """
-        Whether this modified Partition is itself important enough to ensure
-        commitment.
-        """
+        """True if this Partition is important enough to ensure commitment."""
         return self._important
 
     @property
     @abc.abstractmethod
     def has_modifications(self):
-        """
-        True if this partition modifies another partition.
-        """
+        """True if this partition modifies another partition."""
 
     def set_as_max_value(self):
-        """
-        Make this partition represent MAXVALUE and be represented by a
-        MaxValuePartition by the as_partition method.
-        """
+        """Represent this partition by MaxValuePartition from as_partition()"""
         self.num_columns = len(self.positions)
         self.positions = None
         return self
 
     def as_partition(self):
-        """
-        Convert this from a Planned Partition to a Partition, which can then be
-        rendered into a SQL ALTER.
-        """
+        """Return a concrete Partition that can be rendered into a SQL ALTER."""
         if not self._timestamp:
             raise ValueError()
         if self.positions:
@@ -402,9 +380,9 @@ class PlannedPartition(abc.ABC):
 
 
 class ChangePlannedPartition(PlannedPartition):
-    """
-    Represents modifications to a Partition supplied during construction. Use
-    the parent class' methods to alter this change.
+    """Represents modifications to a Partition supplied during construction.
+
+    Use the parent class' methods to alter this change.
     """
 
     def __init__(self, old_part):
@@ -434,10 +412,10 @@ class ChangePlannedPartition(PlannedPartition):
 
 
 class NewPlannedPartition(PlannedPartition):
-    """
-    Represents a wholly new Partition to be constructed. After construction,
-    you must set the number of columns using set_columns before attempting
-    to use this in a plan.
+    """Represents a wholly new Partition to be constructed.
+
+    After construction, you must set the number of columns using set_columns
+    before attempting to use this in a plan.
     """
 
     def __init__(self):
@@ -445,10 +423,8 @@ class NewPlannedPartition(PlannedPartition):
         self.set_important()
 
     def set_columns(self, count):
-        """
-        Set the number of columns needed to represent a position for this
-        partition.
-        """
+        """Set the number of columns needed to represent a position for this
+        partition."""
         self.num_columns = count
         return self
 
@@ -461,36 +437,24 @@ class NewPlannedPartition(PlannedPartition):
 
 
 class MismatchedIdException(Exception):
-    """
-    Raised if the partition map doesn't use the primary key as its range id.
-    """
+    """ Raised if the partition map doesn't use the primary key as its range id."""
 
 
 class TruncatedDatabaseResultException(Exception):
-    """
-    Raised if the XML schema truncated over a subprocess interaction
-    """
+    """Raised if the XML schema truncated over a subprocess interaction"""
 
 
 class DuplicatePartitionException(Exception):
-    """
-    Raise if a partition being created already exists.
-    """
+    """Raise if a partition being created already exists."""
 
 
 class UnexpectedPartitionException(Exception):
-    """
-    Raised when the partition map is unexpected.
-    """
+    """Raised when the partition map is unexpected."""
 
 
 class TableInformationException(Exception):
-    """
-    Raised when the table's status doesn't include the information we need.
-    """
+    """Raised when the table's status doesn't include the information we need."""
 
 
 class NoEmptyPartitionsAvailableException(Exception):
-    """
-    Raised if no empty partitions are available to safely modify.
-    """
+    """Raised if no empty partitions are available to safely modify."""

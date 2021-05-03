@@ -14,10 +14,10 @@ from partitionmanager.types import (
     NewPlannedPartition,
 )
 from partitionmanager.table_append_partition import (
-    table_is_compatible,
+    generate_sql_reorganize_partition_commands,
     get_current_positions,
     get_partition_map,
-    generate_sql_reorganize_partition_commands,
+    get_table_compatibility_problems,
 )
 from .tools import iter_show_end
 
@@ -35,9 +35,9 @@ def write_state_info(conf, out_fp):
     log.info("Writing current state information")
     state_info = {"time": conf.curtime, "tables": dict()}
     for table in conf.tables:
-        problem = table_is_compatible(conf.dbcmd, table)
-        if problem:
-            raise Exception(problem)
+        problems = get_table_compatibility_problems(conf.dbcmd, table)
+        if problems:
+            raise Exception("; ".join(problems))
 
         map_data = get_partition_map(conf.dbcmd, table)
         positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
@@ -130,7 +130,7 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
             log.info(f"Skipping {table_name} as it is not in the current config")
             continue
 
-        problem = table_is_compatible(conf.dbcmd, table)
+        problem = get_table_compatibility_problems(conf.dbcmd, table)
         if problem:
             raise Exception(problem)
 

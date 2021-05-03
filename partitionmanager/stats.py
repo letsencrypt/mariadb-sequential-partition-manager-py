@@ -10,9 +10,7 @@ from .tools import pairwise
 
 
 class PrometheusMetric:
-    """
-    Represents a single named metric for Prometheus
-    """
+    """Represents a single named metric for Prometheus"""
 
     def __init__(self, name, table, data):
         self.name = name
@@ -21,9 +19,7 @@ class PrometheusMetric:
 
 
 class PrometheusMetrics:
-    """
-    A set of metrics that can be rendered for Prometheus.
-    """
+    """A set of metrics that can be rendered for Prometheus."""
 
     def __init__(self):
         self.metrics = dict()
@@ -31,24 +27,20 @@ class PrometheusMetrics:
         self.types = dict()
 
     def add(self, name, table, data):
-        """
-        Record metric data representing the name and table.
-        """
+        """Record metric data representing the name and table."""
         if name not in self.metrics:
             self.metrics[name] = list()
         self.metrics[name].append(PrometheusMetric(name, table, data))
 
     def describe(self, name, help_text=None, type_name=None):
-        """
-        Add optional descriptive and type data for a given metric name.
-        """
+        """Add optional descriptive and type data for a given metric name."""
         self.help[name] = help_text
         self.types[name] = type_name
 
     def render(self, fp):
-        """
-        Write the collected metrics to the supplied file-like object, following
-        the format specification:
+        """Write the collected metrics to the supplied file-like object.
+
+        Follows the format specification:
         https://prometheus.io/docs/instrumenting/exposition_formats/
         """
         for n, metrics in self.metrics.items():
@@ -63,9 +55,7 @@ class PrometheusMetrics:
 
 
 def get_statistics(partitions, current_timestamp, table):
-    """
-    Return a dictionary of statistics about the supplied table's partitions.
-    """
+    """Return a dictionary of statistics about the supplied table's partitions."""
     log = logging.getLogger("get_statistics")
     results = {"partitions": len(partitions)}
 
@@ -90,7 +80,7 @@ def get_statistics(partitions, current_timestamp, table):
         )
         raise UnexpectedPartitionException(tail_part)
 
-    if tail_part.has_time and tail_part.timestamp():
+    if tail_part.has_real_time and tail_part.timestamp():
         results["time_since_newest_partition"] = (
             current_timestamp - tail_part.timestamp()
         )
