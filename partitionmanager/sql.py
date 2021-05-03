@@ -7,9 +7,6 @@ import logging
 import subprocess
 import xml.parsers.expat
 
-import pymysql
-import pymysql.cursors
-
 import partitionmanager.types
 
 
@@ -151,6 +148,13 @@ class IntegratedDatabaseCommand(partitionmanager.types.DatabaseCommand):
     """
 
     def __init__(self, url):
+        try:
+            import pymysql
+            import pymysql.cursors
+        except ModuleNotFoundError as mnfe:
+            logging.fatal("You cannot use --dburl without the pymysql package.")
+            raise mnfe
+
         self.db = None
         if url.path and url.path != "/":
             self.db = url.path.lstrip("/")
