@@ -312,8 +312,8 @@ class _PlannedPartition(abc.ABC):
     """
 
     def __init__(self):
-        self.num_columns = None
-        self.positions = None
+        self._num_columns = None
+        self._positions = None
         self._timestamp = None
         self._important = False
 
@@ -337,13 +337,18 @@ class _PlannedPartition(abc.ABC):
             raise UnexpectedPartitionException(
                 f"Expected {self.num_columns} columns but list has {len(pos)}."
             )
-        self.positions = pos
+        self._positions = pos
         return self
 
     def set_important(self):
         """Indicate this is an important partition."""
         self._important = True
         return self
+
+    @property
+    def positions(self):
+        """Get the positions for this modified partition."""
+        return self._positions
 
     def timestamp(self):
         """The timestamp of this partition."""
@@ -358,21 +363,26 @@ class _PlannedPartition(abc.ABC):
     def has_modifications(self):
         """True if this partition modifies another partition."""
 
+    @property
+    def num_columns(self):
+        """Return the number of columns this partition represents."""
+        return self._num_columns
+
     def set_as_max_value(self):
         """Represent this partition by MaxValuePartition from as_partition()"""
-        self.num_columns = len(self.positions)
-        self.positions = None
+        self._num_columns = len(self._positions)
+        self._positions = None
         return self
 
     def as_partition(self):
         """Return a concrete Partition that can be rendered into a SQL ALTER."""
         if not self._timestamp:
             raise ValueError()
-        if self.positions:
+        if self._positions:
             return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(
-                self.positions
+                self._positions
             )
-        return MaxValuePartition(f"p_{self._timestamp:%Y%m%d}", count=self.num_columns)
+        return MaxValuePartition(f"p_{self._timestamp:%Y%m%d}", count=self._num_columns)
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"
@@ -399,17 +409,17 @@ class ChangePlannedPartition(_PlannedPartition):
             raise ValueError()
         super().__init__()
         self._old = old_part
-        self.num_columns = self._old.num_columns
+        self._num_columns = self._old.num_columns
         self._timestamp = self._old.timestamp()
         self._old_positions = (
             self._old.positions if isinstance(old_part, PositionPartition) else None
         )
-        self.positions = self._old_positions
+        self._positions = self._old_positions
 
     @property
     def has_modifications(self):
         return (
-            self.positions != self._old_positions
+            self._positions != self._old_positions
             or self._old.timestamp() is None
             and self._timestamp is not None
             or self._timestamp.date() != self._old.timestamp().date()
@@ -422,7 +432,7 @@ class ChangePlannedPartition(_PlannedPartition):
 
     def __str__(self):
         imp = "[!!]" if self.important() else ""
-        return f"{self._old} => {self.positions} {imp} {self._timestamp}"
+        return f"{self._old} => {self._positions} {imp} {self._timestamp}"
 
 
 class NewPlannedPartition(_PlannedPartition):
@@ -439,7 +449,7 @@ class NewPlannedPartition(_PlannedPartition):
     def set_columns(self, count):
         """Set the number of columns needed to represent a position for this
         partition."""
-        self.num_columns = count
+        self._num_columns = count
         return self
 
     @property
