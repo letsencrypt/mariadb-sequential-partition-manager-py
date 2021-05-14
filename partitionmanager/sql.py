@@ -18,7 +18,7 @@ from partitionmanager.types import (
 )
 
 
-def destring(text):
+def _destring(text):
     """Try and get a python type from a string. Used for SQL results."""
     try:
         return int(text)
@@ -108,7 +108,7 @@ class XmlResult:
             assert self.current_field is not None
             value = self.current_row[self.current_field]
             if value:
-                self.current_row[self.current_field] = destring(value)
+                self.current_row[self.current_field] = _destring(value)
             self.current_field = None
 
     def _char_data(self, data):

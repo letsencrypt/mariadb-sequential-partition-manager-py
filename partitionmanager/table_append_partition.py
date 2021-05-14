@@ -41,10 +41,10 @@ def get_table_compatibility_problems(database, table):
         + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
     ).strip()
 
-    return get_table_information_schema_problems(database.run(sql_cmd), table.name)
+    return _get_table_information_schema_problems(database.run(sql_cmd), table.name)
 
 
-def get_table_information_schema_problems(rows, table_name):
+def _get_table_information_schema_problems(rows, table_name):
     """Return a string representing problems partitioning this table, or None."""
     if len(rows) != 1:
         return [f"Unable to read information for {table_name}"]
@@ -83,10 +83,10 @@ def get_partition_map(database, table):
     if not isinstance(table, Table) or not isinstance(table.name, SqlInput):
         raise ValueError("Unexpected type")
     sql_cmd = f"SHOW CREATE TABLE `{table.name}`;"
-    return parse_partition_map(database.run(sql_cmd))
+    return _parse_partition_map(database.run(sql_cmd))
 
 
-def parse_partition_map(rows):
+def _parse_partition_map(rows):
     """Return a dictionary of range_cols and partition objects.
 
     The "range_cols" is the ordered list of what columns are used as the
@@ -95,7 +95,7 @@ def parse_partition_map(rows):
     The "partitions" is a list of the Partition objects representing each
     defined partition. There will be at least one MaxValuePartition.
     """
-    log = logging.getLogger("parse_partition_map")
+    log = logging.getLogger("_parse_partition_map")
 
     partition_range = re.compile(
         r"[ ]*PARTITION BY RANGE\s+(COLUMNS)?\((?P<cols>[\w,` ]+)\)"
@@ -159,7 +159,7 @@ def parse_partition_map(rows):
     return {"range_cols": range_cols, "partitions": partitions}
 
 
-def split_partitions_around_positions(partition_list, current_positions):
+def _split_partitions_around_positions(partition_list, current_positions):
     """Divide up a partition list to three parts: filled, current, and empty.
 
     The first part is the filled partition list: those partitions for which
@@ -190,7 +190,7 @@ def split_partitions_around_positions(partition_list, current_positions):
     return less_than_partitions, active_partition, greater_or_equal_partitions
 
 
-def get_position_increase_per_day(p1, p2):
+def _get_position_increase_per_day(p1, p2):
     """Return the rate of change between two position-lists, in positions/day.
 
     Returns a list containing the change in positions between p1 and p2 divided
@@ -214,7 +214,7 @@ def get_position_increase_per_day(p1, p2):
     return list(map(lambda pos: pos / delta_days, delta_positions))
 
 
-def generate_weights(count):
+def _generate_weights(count):
     """Static list of geometrically-decreasing weights.
 
     Starts from 10,000 to give a high ceiling. It could be dynamic, but eh.
@@ -222,10 +222,10 @@ def generate_weights(count):
     return [10_000 / x for x in range(count, 0, -1)]
 
 
-def get_weighted_position_increase_per_day_for_partitions(partitions):
+def _get_weighted_position_increase_per_day_for_partitions(partitions):
     """Get weighted partition-position-increase-per-day as a position-list.
 
-    For the provided list of partitions, uses the get_position_increase_per_day
+    For the provided list of partitions, uses the _get_position_increase_per_day
     method to generate a list position increment rates in positions/day, then
     uses a geometric weight to make more recent rates influence the outcome
     more, and returns a final list of weighted partition-position-increase-per-
@@ -235,9 +235,9 @@ def get_weighted_position_increase_per_day_for_partitions(partitions):
         raise ValueError("Partition list must not be empty")
 
     pos_rates = [
-        get_position_increase_per_day(p1, p2) for p1, p2 in pairwise(partitions)
+        _get_position_increase_per_day(p1, p2) for p1, p2 in pairwise(partitions)
     ]
-    weights = generate_weights(len(pos_rates))
+    weights = _generate_weights(len(pos_rates))
 
     # Initialize a list with a zero for each position
     weighted_sums = [0] * partitions[0].num_columns
@@ -249,7 +249,7 @@ def get_weighted_position_increase_per_day_for_partitions(partitions):
     return list(map(lambda x: x / sum(weights), weighted_sums))
 
 
-def predict_forward_position(current_positions, rate_of_change, duration):
+def _predict_forward_position(current_positions, rate_of_change, duration):
     """Return a predicted future position as a position-list.
 
     This moves current_positions forward a given duration at the provided rates
@@ -271,7 +271,7 @@ def predict_forward_position(current_positions, rate_of_change, duration):
     return predicted_positions
 
 
-def predict_forward_time(current_positions, end_positions, rates, evaluation_time):
+def _predict_forward_time(current_positions, end_positions, rates, evaluation_time):
     """Return a predicted datetime of when we'll exceed the end position-list.
 
     Given the current_positions position-list and the rates, this calculates
@@ -299,7 +299,7 @@ def predict_forward_time(current_positions, end_positions, rates, evaluation_tim
     return evaluation_time + (max(days_remaining) * timedelta(days=1))
 
 
-def calculate_start_time(last_changed_time, evaluation_time, allowed_lifespan):
+def _calculate_start_time(last_changed_time, evaluation_time, allowed_lifespan):
     """Return a start time to be used in the partition planning.
 
     This is a helper method that doesn't always return strictly
@@ -346,7 +346,7 @@ def plan_partition_changes(
     """
     log = logging.getLogger("plan_partition_changes")
 
-    filled_partitions, active_partition, empty_partitions = split_partitions_around_positions(
+    filled_partitions, active_partition, empty_partitions = _split_partitions_around_positions(
         partition_list, current_positions
     )
     if not empty_partitions:
@@ -375,7 +375,7 @@ def plan_partition_changes(
         InstantPartition(active_partition.timestamp(), current_positions),
         InstantPartition(evaluation_time, active_partition.positions),
     ]
-    rates = get_weighted_position_increase_per_day_for_partitions(
+    rates = _get_weighted_position_increase_per_day_for_partitions(
         rate_relevant_partitions
     )
     log.debug(
@@ -399,7 +399,7 @@ def plan_partition_changes(
             # filling. If we calculate the start-of-fill date and it doesn't
             # match the partition's name, let's rename it and mark it as an
             # important change.
-            start_of_fill_time = predict_forward_time(
+            start_of_fill_time = _predict_forward_time(
                 current_positions, last_changed.positions, rates, evaluation_time
             )
 
@@ -417,10 +417,10 @@ def plan_partition_changes(
             # we calculate forward what position we expect and use it in the
             # future.
 
-            partition_start_time = calculate_start_time(
+            partition_start_time = _calculate_start_time(
                 last_changed.timestamp(), evaluation_time, allowed_lifespan
             )
-            changed_part_pos = predict_forward_position(
+            changed_part_pos = _predict_forward_position(
                 last_changed.positions, rates, allowed_lifespan
             )
             changed_partition.set_position(changed_part_pos).set_timestamp(
@@ -432,11 +432,11 @@ def plan_partition_changes(
     # Ensure we have the required number of empty partitions
     while len(results) < num_empty_partitions + 1:
         last_changed = results[-1]
-        partition_start_time = calculate_start_time(
+        partition_start_time = _calculate_start_time(
             last_changed.timestamp(), evaluation_time, allowed_lifespan
         )
 
-        new_part_pos = predict_forward_position(
+        new_part_pos = _predict_forward_position(
             last_changed.positions, rates, allowed_lifespan
         )
         results.append(
