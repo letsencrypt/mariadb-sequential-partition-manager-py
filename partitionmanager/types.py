@@ -194,7 +194,7 @@ class PositionPartition(_Partition):
 
     def __init__(self, name):
         self._name = name
-        self.positions = list()
+        self._positions = list()
 
     @property
     def name(self):
@@ -202,21 +202,26 @@ class PositionPartition(_Partition):
 
     def set_position(self, positions):
         """Set the position list for this partition."""
-        self.positions = [int(p) for p in positions]
+        self._positions = [int(p) for p in positions]
         return self
 
     @property
+    def positions(self):
+        """Return the position list this partition represents"""
+        return self._positions
+
+    @property
     def num_columns(self):
-        return len(self.positions)
+        return len(self._positions)
 
     def values(self):
-        return "(" + ", ".join([str(x) for x in self.positions]) + ")"
+        return "(" + ", ".join([str(x) for x in self._positions]) + ")"
 
     def __lt__(self, other):
         if isinstance(other, MaxValuePartition):
-            if len(self.positions) != other.num_columns:
+            if len(self._positions) != other.num_columns:
                 raise UnexpectedPartitionException(
-                    f"Expected {len(self.positions)} columns but "
+                    f"Expected {len(self._positions)} columns but "
                     f"partition has {other.num_columns}."
                 )
             return True
@@ -225,18 +230,18 @@ class PositionPartition(_Partition):
             other_positions = other
         elif isinstance(other, PositionPartition):
             other_positions = other.positions
-        if not other_positions or len(self.positions) != len(other_positions):
+        if not other_positions or len(self._positions) != len(other_positions):
             raise UnexpectedPartitionException(
-                f"Expected {len(self.positions)} columns but partition has {other_positions}."
+                f"Expected {len(self._positions)} columns but partition has {other_positions}."
             )
-        for v_mine, v_other in zip(self.positions, other_positions):
+        for v_mine, v_other in zip(self._positions, other_positions):
             if v_mine >= v_other:
                 return False
         return True
 
     def __eq__(self, other):
         if isinstance(other, PositionPartition):
-            return self.name == other.name and self.positions == other.positions
+            return self.name == other.name and self._positions == other.positions
         return False
 
 
@@ -249,7 +254,7 @@ class MaxValuePartition(_Partition):
 
     def __init__(self, name, count):
         self._name = name
-        self.count = count
+        self._count = count
 
     @property
     def name(self):
@@ -257,30 +262,30 @@ class MaxValuePartition(_Partition):
 
     @property
     def num_columns(self):
-        return self.count
+        return self._count
 
     def values(self):
-        return ", ".join(["MAXVALUE"] * self.count)
+        return ", ".join(["MAXVALUE"] * self._count)
 
     def __lt__(self, other):
         """MaxValuePartitions are always greater than every other partition."""
         if isinstance(other, list):
-            if self.count != len(other):
+            if self._count != len(other):
                 raise UnexpectedPartitionException(
-                    f"Expected {self.count} columns but list has {len(other)}."
+                    f"Expected {self._count} columns but list has {len(other)}."
                 )
             return False
         if is_partition_type(other):
-            if self.count != other.num_columns:
+            if self._count != other.num_columns:
                 raise UnexpectedPartitionException(
-                    f"Expected {self.count} columns but list has {other.num_columns}."
+                    f"Expected {self._count} columns but list has {other.num_columns}."
                 )
             return False
         return ValueError()
 
     def __eq__(self, other):
         if isinstance(other, MaxValuePartition):
-            return self.name == other.name and self.count == other.count
+            return self.name == other.name and self._count == other.num_columns
         return False
 
 
@@ -293,11 +298,11 @@ class InstantPartition(PositionPartition):
 
     def __init__(self, now, positions):
         super().__init__("Instant")
-        self.instant = now
-        self.positions = positions
+        self._instant = now
+        self._positions = positions
 
     def timestamp(self):
-        return self.instant
+        return self._instant
 
 
 class _PlannedPartition(abc.ABC):
