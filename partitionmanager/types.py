@@ -190,7 +190,12 @@ class _Partition(abc.ABC):
 
 
 class PositionPartition(_Partition):
-    """A partition that may have positions assocated with it."""
+    """A partition that has positions assocated with it.
+
+    Partitions are independent table segments, and each has a name and a list of
+    positions. The positions-list is an ordered list of identifiers, matching
+    the order of the table's partition-by statement when the table was created.
+    """
 
     def __init__(self, name):
         self._name = name

@@ -326,6 +326,23 @@ def plan_partition_changes(
     This method makes recommendations in order to meet the supplied table
     requirements, using an estimate as to the rate of fill from the supplied
     partition_list, current_positions, and evaluation_time.
+
+    Args:
+
+    partition_list: the currently-existing partition objects, each with
+        a name and either a starting position or are the tail MAXVALUE.
+
+    current_positions: a position-list representing the position IDs for
+        this table at the evaluation_time.
+
+    evaluation_time: a datetime instance that represents the time the
+        algorithm is running.
+
+    allowed_lifespan: a timedelta that represents how long a span of time
+        a partition should seek to cover.
+
+    num_empty_partitions: the number of empty partitions to seek to keep at the
+        tail, each aiming to span allowed_lifespan.
     """
     log = logging.getLogger("plan_partition_changes")
 
@@ -333,10 +350,10 @@ def plan_partition_changes(
         partition_list, current_positions
     )
     if not empty_partitions:
-        log.warning(
+        log.error(
             f"Partition {active_partition.name} requires manual ALTER "
-            "as this tool won't bisect the partition to determine a"
-            "rate of fill to make a prediction for new partitions."
+            "as without an empty partition to manipulate, you'll need to "
+            "perform an expensive copy operation. See the bootstrap mode."
         )
         raise NoEmptyPartitionsAvailableException()
     if not active_partition:
