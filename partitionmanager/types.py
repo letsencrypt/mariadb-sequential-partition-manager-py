@@ -398,11 +398,11 @@ class ChangePlannedPartition(_PlannedPartition):
         if not is_partition_type(old_part):
             raise ValueError()
         super().__init__()
-        self.old = old_part
-        self.num_columns = self.old.num_columns
-        self._timestamp = self.old.timestamp()
+        self._old = old_part
+        self.num_columns = self._old.num_columns
+        self._timestamp = self._old.timestamp()
         self._old_positions = (
-            self.old.positions if isinstance(old_part, PositionPartition) else None
+            self._old.positions if isinstance(old_part, PositionPartition) else None
         )
         self.positions = self._old_positions
 
@@ -410,14 +410,19 @@ class ChangePlannedPartition(_PlannedPartition):
     def has_modifications(self):
         return (
             self.positions != self._old_positions
-            or self.old.timestamp() is None
+            or self._old.timestamp() is None
             and self._timestamp is not None
-            or self._timestamp.date() != self.old.timestamp().date()
+            or self._timestamp.date() != self._old.timestamp().date()
         )
+
+    @property
+    def old(self):
+        """Get the partition to be modified"""
+        return self._old
 
     def __str__(self):
         imp = "[!!]" if self.important() else ""
-        return f"{self.old} => {self.positions} {imp} {self._timestamp}"
+        return f"{self._old} => {self.positions} {imp} {self._timestamp}"
 
 
 class NewPlannedPartition(_PlannedPartition):
