@@ -5,7 +5,7 @@ Statistics-gathering tooling.
 import logging
 
 from datetime import timedelta
-from .types import MaxValuePartition, Partition, UnexpectedPartitionException
+from .types import is_partition_type, MaxValuePartition, UnexpectedPartitionException
 from .tools import pairwise
 
 
@@ -63,7 +63,7 @@ def get_statistics(partitions, current_timestamp, table):
         return results
 
     for p in partitions:
-        if not isinstance(p, Partition):
+        if not is_partition_type(p):
             log.warning(
                 f"{table} get_statistics called with a partition list "
                 + f"that included a non-Partition entry: {p}"

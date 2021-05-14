@@ -11,7 +11,6 @@ from partitionmanager.types import (
     MismatchedIdException,
     NewPlannedPartition,
     NoEmptyPartitionsAvailableException,
-    Partition,
     PositionPartition,
     SqlInput,
     Table,

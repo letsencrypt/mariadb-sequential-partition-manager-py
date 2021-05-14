@@ -11,11 +11,11 @@ from partitionmanager.types import (
     ChangePlannedPartition,
     DuplicatePartitionException,
     InstantPartition,
+    is_partition_type,
     MaxValuePartition,
     MismatchedIdException,
     NewPlannedPartition,
     NoEmptyPartitionsAvailableException,
-    Partition,
     PositionPartition,
     SqlInput,
     Table,
@@ -170,7 +170,7 @@ def split_partitions_around_positions(partition_list, current_positions):
     The third part is a list of all the other, empty partitions yet-to-be-filled.
     """
     for p in partition_list:
-        if not isinstance(p, Partition):
+        if not is_partition_type(p):
             raise UnexpectedPartitionException(p)
     if not isinstance(current_positions, list):
         raise ValueError()

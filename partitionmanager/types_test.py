@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from .types import (
     ChangePlannedPartition,
     InstantPartition,
+    is_partition_type,
     MaxValuePartition,
     NewPlannedPartition,
     PositionPartition,
@@ -282,3 +283,10 @@ class TestPartition(unittest.TestCase):
         self.assertEqual(ip.positions, [1, 2])
         self.assertEqual(ip.name, "Instant")
         self.assertEqual(ip.timestamp(), now)
+
+    def test_is_partition_type(self):
+        self.assertTrue(is_partition_type(mkPPart("b", 1, 2)))
+        self.assertTrue(is_partition_type(InstantPartition(datetime.utcnow(), [1, 2])))
+        self.assertFalse(is_partition_type(None))
+        self.assertFalse(is_partition_type(1))
+        self.assertFalse(is_partition_type(NewPlannedPartition()))

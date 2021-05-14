@@ -109,7 +109,12 @@ class DatabaseCommand(abc.ABC):
         """
 
 
-class Partition(abc.ABC):
+def is_partition_type(obj):
+    """ True if the object inherits from a _Position. """
+    return isinstance(obj, _Partition)
+
+
+class _Partition(abc.ABC):
     """Abstract class which represents a existing table partition."""
 
     @abc.abstractmethod
@@ -184,7 +189,7 @@ class Partition(abc.ABC):
         return f"{self.name}: {self.values()}"
 
 
-class PositionPartition(Partition):
+class PositionPartition(_Partition):
     """A partition that may have positions assocated with it."""
 
     def __init__(self, name):
@@ -235,7 +240,7 @@ class PositionPartition(Partition):
         return False
 
 
-class MaxValuePartition(Partition):
+class MaxValuePartition(_Partition):
     """A partition that includes all remaining values.
 
     This kind of partition always resides at the tail of the partition list,
@@ -265,7 +270,7 @@ class MaxValuePartition(Partition):
                     f"Expected {self.count} columns but list has {len(other)}."
                 )
             return False
-        if isinstance(other, Partition):
+        if is_partition_type(other):
             if self.count != other.num_columns:
                 raise UnexpectedPartitionException(
                     f"Expected {self.count} columns but list has {other.num_columns}."
@@ -295,11 +300,10 @@ class InstantPartition(PositionPartition):
         return self.instant
 
 
-class PlannedPartition(abc.ABC):
+class _PlannedPartition(abc.ABC):
     """Represents a partition this tool plans to emit.
 
-    If the partition is an edit to an existing one, it will be the concrete type
-    ChangePlannedPartition. For new partitions, it'll be NewPlannedPartition.
+    The method as_partition will make this a concrete type for later evaluation.
     """
 
     def __init__(self):
@@ -369,7 +373,7 @@ class PlannedPartition(abc.ABC):
         return f"{type(self).__name__}<{str(self)}>"
 
     def __eq__(self, other):
-        if isinstance(other, PlannedPartition):
+        if isinstance(other, _PlannedPartition):
             return (
                 isinstance(self, type(other))
                 and self.positions == other.positions
@@ -379,14 +383,14 @@ class PlannedPartition(abc.ABC):
         return False
 
 
-class ChangePlannedPartition(PlannedPartition):
+class ChangePlannedPartition(_PlannedPartition):
     """Represents modifications to a Partition supplied during construction.
 
     Use the parent class' methods to alter this change.
     """
 
     def __init__(self, old_part):
-        if not isinstance(old_part, Partition):
+        if not is_partition_type(old_part):
             raise ValueError()
         super().__init__()
         self.old = old_part
@@ -411,7 +415,7 @@ class ChangePlannedPartition(PlannedPartition):
         return f"{self.old} => {self.positions} {imp} {self._timestamp}"
 
 
-class NewPlannedPartition(PlannedPartition):
+class NewPlannedPartition(_PlannedPartition):
     """Represents a wholly new Partition to be constructed.
 
     After construction, you must set the number of columns using set_columns
