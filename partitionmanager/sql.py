@@ -10,12 +10,7 @@ import xml.parsers.expat
 import pymysql
 import pymysql.cursors
 
-from partitionmanager.types import (
-    DatabaseCommand,
-    TruncatedDatabaseResultException,
-    TableInformationException,
-    SqlInput,
-)
+import partitionmanager.types
 
 
 def _destring(text):
@@ -73,7 +68,7 @@ class XmlResult:
         self.xmlparser.Parse(data)
 
         if self.current_elements:
-            raise TruncatedDatabaseResultException(
+            raise partitionmanager.types.TruncatedDatabaseResultException(
                 f"These XML tags are unclosed: {self.current_elements}"
             )
         return self.rows
@@ -119,7 +114,7 @@ class XmlResult:
             self.current_row[self.current_field] += data
 
 
-class SubprocessDatabaseCommand(DatabaseCommand):
+class SubprocessDatabaseCommand(partitionmanager.types.DatabaseCommand):
     """Run a database command via the CLI tool, getting the results in XML form.
 
     This can be very convenient without explicit port-forwarding, but is a
@@ -143,12 +138,14 @@ class SubprocessDatabaseCommand(DatabaseCommand):
     def db_name(self):
         rows = self.run("SELECT DATABASE();")
         if len(rows) != 1:
-            raise TableInformationException("Expected one result")
+            raise partitionmanager.types.TableInformationException(
+                "Expected one result"
+            )
 
-        return SqlInput(rows[0]["DATABASE()"])
+        return partitionmanager.types.SqlInput(rows[0]["DATABASE()"])
 
 
-class IntegratedDatabaseCommand(DatabaseCommand):
+class IntegratedDatabaseCommand(partitionmanager.types.DatabaseCommand):
     """Run a database command via a direct socket connection and pymysql.
 
     Pymysql is a pure Python PEP 249-compliant database connector.
@@ -171,7 +168,7 @@ class IntegratedDatabaseCommand(DatabaseCommand):
         )
 
     def db_name(self):
-        return SqlInput(self.db)
+        return partitionmanager.types.SqlInput(self.db)
 
     def run(self, sql_cmd):
         with self.connection.cursor() as cursor:

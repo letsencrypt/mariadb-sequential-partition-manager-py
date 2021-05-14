@@ -5,8 +5,8 @@ Statistics-gathering tooling.
 import logging
 
 from datetime import timedelta
-from .types import is_partition_type, MaxValuePartition, UnexpectedPartitionException
-from .tools import pairwise
+import partitionmanager.tools
+import partitionmanager.types
 
 
 class PrometheusMetric:
@@ -63,22 +63,22 @@ def get_statistics(partitions, current_timestamp, table):
         return results
 
     for p in partitions:
-        if not is_partition_type(p):
+        if not partitionmanager.types.is_partition_type(p):
             log.warning(
                 f"{table} get_statistics called with a partition list "
                 + f"that included a non-Partition entry: {p}"
             )
-            raise UnexpectedPartitionException(p)
+            raise partitionmanager.types.UnexpectedPartitionException(p)
 
     head_part = None
     tail_part = partitions[-1]
 
-    if not isinstance(tail_part, MaxValuePartition):
+    if not isinstance(tail_part, partitionmanager.types.MaxValuePartition):
         log.warning(
             f"{table} get_statistics called with a partition list tail "
             + f"that wasn't a MaxValuePartition: {tail_part}"
         )
-        raise UnexpectedPartitionException(tail_part)
+        raise partitionmanager.types.UnexpectedPartitionException(tail_part)
 
     if tail_part.has_real_time and tail_part.timestamp():
         results["time_since_newest_partition"] = (
@@ -106,7 +106,7 @@ def get_statistics(partitions, current_timestamp, table):
         ) / (len(partitions) - 1)
 
     max_d = timedelta()
-    for a, b in pairwise(partitions):
+    for a, b in partitionmanager.tools.pairwise(partitions):
         if not a.timestamp() or not b.timestamp():
             log.debug(f"{table} had partitions that aren't comparable: {a} and {b}")
             continue

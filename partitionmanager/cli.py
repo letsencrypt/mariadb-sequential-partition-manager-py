@@ -9,27 +9,11 @@ import logging
 import traceback
 import yaml
 
-from partitionmanager.bootstrap import (
-    calculate_sql_alters_from_state_info,
-    write_state_info,
-)
-from partitionmanager.table_append_partition import (
-    generate_sql_reorganize_partition_commands,
-    get_current_positions,
-    get_partition_map,
-    get_table_compatibility_problems,
-    plan_partition_changes,
-    should_run_changes,
-)
-from partitionmanager.types import (
-    SqlInput,
-    Table,
-    retention_from_dict,
-    toSqlUrl,
-    NoEmptyPartitionsAvailableException,
-)
-from partitionmanager.stats import get_statistics, PrometheusMetrics
-from partitionmanager.sql import SubprocessDatabaseCommand, IntegratedDatabaseCommand
+import partitionmanager.bootstrap
+import partitionmanager.table_append_partition as pm_tap
+import partitionmanager.types
+import partitionmanager.stats
+import partitionmanager.sql
 
 PARSER = argparse.ArgumentParser(
     description="""
@@ -55,7 +39,7 @@ GROUP = PARSER.add_mutually_exclusive_group()
 GROUP.add_argument("--mariadb", help="Path to mariadb command")
 GROUP.add_argument(
     "--dburl",
-    type=toSqlUrl,
+    type=partitionmanager.types.toSqlUrl,
     help="DB connection url, such as sql://user:pass@10.0.0.1:3306/database",
 )
 
@@ -83,11 +67,11 @@ class Config:
         """
         if args.table:
             for n in args.table:
-                self.tables.add(Table(n))
+                self.tables.add(partitionmanager.types.Table(n))
         if args.dburl:
-            self.dbcmd = IntegratedDatabaseCommand(args.dburl)
+            self.dbcmd = partitionmanager.sql.IntegratedDatabaseCommand(args.dburl)
         elif args.mariadb:
-            self.dbcmd = SubprocessDatabaseCommand(args.mariadb)
+            self.dbcmd = partitionmanager.sql.SubprocessDatabaseCommand(args.mariadb)
         if "days" in args and args.days:
             self.partition_period = timedelta(days=args.days)
             if self.partition_period <= timedelta():
@@ -113,25 +97,37 @@ class Config:
         if "noop" in data:
             self.noop = data["noop"]
         if "partition_period" in data:
-            self.partition_period = retention_from_dict(data["partition_period"])
+            self.partition_period = partitionmanager.types.retention_from_dict(
+                data["partition_period"]
+            )
             if self.partition_period <= timedelta():
                 raise ValueError("Negative lifespan is not allowed")
         if "num_empty" in data:
             self.num_empty = int(data["num_empty"])
         if not self.dbcmd:
             if "dburl" in data:
-                self.dbcmd = IntegratedDatabaseCommand(toSqlUrl(data["dburl"]))
+                self.dbcmd = partitionmanager.sql.IntegratedDatabaseCommand(
+                    partitionmanager.types.toSqlUrl(data["dburl"])
+                )
             elif "mariadb" in data:
-                self.dbcmd = SubprocessDatabaseCommand(data["mariadb"])
+                self.dbcmd = partitionmanager.sql.SubprocessDatabaseCommand(
+                    data["mariadb"]
+                )
         if not self.tables:  # Only load tables froml YAML if not supplied via args
             for key in data["tables"]:
-                tab = Table(key)
+                tab = partitionmanager.types.Table(key)
                 tabledata = data["tables"][key]
                 if isinstance(tabledata, dict) and "retention" in tabledata:
-                    tab.set_retention(retention_from_dict(tabledata["retention"]))
+                    tab.set_retention(
+                        partitionmanager.types.retention_from_dict(
+                            tabledata["retention"]
+                        )
+                    )
                 if isinstance(tabledata, dict) and "partition_period" in tabledata:
                     tab.set_partition_period(
-                        retention_from_dict(tabledata["partition_period"])
+                        partitionmanager.types.retention_from_dict(
+                            tabledata["partition_period"]
+                        )
                     )
 
                 self.tables.add(tab)
@@ -159,7 +155,7 @@ def all_configured_tables_are_compatible(conf):
     """
     problems = dict()
     for table in conf.tables:
-        table_problems = get_table_compatibility_problems(conf.dbcmd, table)
+        table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if table_problems:
             problems[table.name] = table_problems
             logging.error(f"Cannot proceed: {table} {table_problems}")
@@ -188,7 +184,11 @@ PARTITION_PARSER.add_argument(
     "--days", "-d", type=int, help="Lifetime of each partition in days"
 )
 PARTITION_PARSER.add_argument(
-    "--table", "-t", type=SqlInput, nargs="+", help="table names, overwriting config"
+    "--table",
+    "-t",
+    type=partitionmanager.types.SqlInput,
+    nargs="+",
+    help="table names, overwriting config",
 )
 PARTITION_PARSER.set_defaults(func=partition_cmd)
 
@@ -208,7 +208,11 @@ STATS_GROUP.add_argument(
     "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
 )
 STATS_GROUP.add_argument(
-    "--table", "-t", type=SqlInput, nargs="+", help="table names, overwriting config"
+    "--table",
+    "-t",
+    type=partitionmanager.types.SqlInput,
+    nargs="+",
+    help="table names, overwriting config",
 )
 STATS_PARSER.set_defaults(func=stats_cmd)
 
@@ -221,10 +225,12 @@ def bootstrap_cmd(args):
     conf = config_from_args(args)
 
     if args.outfile:
-        write_state_info(conf, args.outfile)
+        partitionmanager.bootstrap.write_state_info(conf, args.outfile)
 
     if args.infile:
-        return calculate_sql_alters_from_state_info(conf, args.infile)
+        return partitionmanager.bootstrap.calculate_sql_alters_from_state_info(
+            conf, args.infile
+        )
 
     return {}
 
@@ -241,7 +247,11 @@ BOOTSTRAP_GROUP.add_argument(
     "--out", "-o", dest="outfile", type=argparse.FileType("w"), help="output YAML"
 )
 BOOTSTRAP_PARSER.add_argument(
-    "--table", "-t", type=SqlInput, nargs="+", help="table names, overwriting config"
+    "--table",
+    "-t",
+    type=partitionmanager.types.SqlInput,
+    nargs="+",
+    help="table names, overwriting config",
 )
 BOOTSTRAP_PARSER.set_defaults(func=bootstrap_cmd)
 
@@ -260,7 +270,7 @@ def do_partition(conf):
     if not all_configured_tables_are_compatible(conf):
         return dict()
 
-    metrics = PrometheusMetrics()
+    metrics = partitionmanager.stats.PrometheusMetrics()
     metrics.describe(
         "alter_time_seconds",
         help_text="Time in seconds to complete the ALTER command",
@@ -270,19 +280,21 @@ def do_partition(conf):
     all_results = dict()
     for table in conf.tables:
         try:
-            map_data = get_partition_map(conf.dbcmd, table)
+            map_data = pm_tap.get_partition_map(conf.dbcmd, table)
 
             duration = conf.partition_period
             if table.partition_period:
                 duration = table.partition_period
 
-            positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
+            positions = pm_tap.get_current_positions(
+                conf.dbcmd, table, map_data["range_cols"]
+            )
 
             log.info(f"Evaluating {table} (duration={duration}) (pos={positions})")
 
             ordered_positions = [positions[col] for col in map_data["range_cols"]]
 
-            partition_changes = plan_partition_changes(
+            partition_changes = pm_tap.plan_partition_changes(
                 map_data["partitions"],
                 ordered_positions,
                 conf.curtime,
@@ -290,12 +302,12 @@ def do_partition(conf):
                 conf.num_empty,
             )
 
-            if not should_run_changes(partition_changes):
+            if not pm_tap.should_run_changes(partition_changes):
                 log.info(f"{table} does not need to be modified currently.")
                 continue
             log.debug(f"{table} has changes waiting.")
 
-            sql_cmds = generate_sql_reorganize_partition_commands(
+            sql_cmds = pm_tap.generate_sql_reorganize_partition_commands(
                 table, partition_changes
             )
             composite_sql_command = "\n".join(sql_cmds)
@@ -317,7 +329,7 @@ def do_partition(conf):
                 table.name,
                 (time_end - time_start).total_seconds(),
             )
-        except NoEmptyPartitionsAvailableException:
+        except partitionmanager.types.NoEmptyPartitionsAvailableException:
             log.warning(
                 f"Unable to automatically handle {table}: No empty "
                 "partition is available."
@@ -329,15 +341,17 @@ def do_partition(conf):
     return all_results
 
 
-def do_stats(conf, metrics=PrometheusMetrics()):
+def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
     """Populates a metrics object from the tables in the configuration."""
     if not all_configured_tables_are_compatible(conf):
         return dict()
 
     all_results = dict()
     for table in conf.tables:
-        map_data = get_partition_map(conf.dbcmd, table)
-        statistics = get_statistics(map_data["partitions"], conf.curtime, table)
+        map_data = pm_tap.get_partition_map(conf.dbcmd, table)
+        statistics = partitionmanager.stats.get_statistics(
+            map_data["partitions"], conf.curtime, table
+        )
         all_results[table.name] = statistics
 
     if conf.prometheus_stats_path:

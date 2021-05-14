@@ -8,18 +8,9 @@ import logging
 import operator
 import yaml
 
-from partitionmanager.types import (
-    ChangePlannedPartition,
-    MaxValuePartition,
-    NewPlannedPartition,
-)
-from partitionmanager.table_append_partition import (
-    generate_sql_reorganize_partition_commands,
-    get_current_positions,
-    get_partition_map,
-    get_table_compatibility_problems,
-)
-from .tools import iter_show_end
+import partitionmanager.table_append_partition as pm_tap
+import partitionmanager.tools
+import partitionmanager.types
 
 RATE_UNIT = timedelta(hours=1)
 MINIMUM_FUTURE_DELTA = timedelta(hours=2)
@@ -35,12 +26,14 @@ def write_state_info(conf, out_fp):
     log.info("Writing current state information")
     state_info = {"time": conf.curtime, "tables": dict()}
     for table in conf.tables:
-        problems = get_table_compatibility_problems(conf.dbcmd, table)
+        problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if problems:
             raise Exception("; ".join(problems))
 
-        map_data = get_partition_map(conf.dbcmd, table)
-        positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
+        map_data = pm_tap.get_partition_map(conf.dbcmd, table)
+        positions = pm_tap.get_current_positions(
+            conf.dbcmd, table, map_data["range_cols"]
+        )
 
         log.info(f'(Table("{table.name}"): {positions}),')
         state_info["tables"][str(table.name)] = positions
@@ -74,7 +67,9 @@ def _plan_partitions_for_time_offsets(
     partition will be altered out of the supplied MaxValue partition.
     """
     changes = list()
-    for (i, offset), is_final in iter_show_end(enumerate(time_offsets)):
+    for (i, offset), is_final in partitionmanager.tools.iter_show_end(
+        enumerate(time_offsets)
+    ):
         increase = [x * offset / RATE_UNIT for x in rate_of_change]
         predicted_positions = [
             int(p + i) for p, i in zip(ordered_current_pos, increase)
@@ -84,13 +79,15 @@ def _plan_partitions_for_time_offsets(
         part = None
         if i == 0:
             part = (
-                ChangePlannedPartition(max_val_part)
+                partitionmanager.types.ChangePlannedPartition(max_val_part)
                 .set_position(predicted_positions)
                 .set_timestamp(predicted_time)
             )
 
         else:
-            part = NewPlannedPartition().set_timestamp(predicted_time)
+            part = partitionmanager.types.NewPlannedPartition().set_timestamp(
+                predicted_time
+            )
 
             if is_final:
                 part.set_columns(len(predicted_positions))
@@ -130,12 +127,12 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
             log.info(f"Skipping {table_name} as it is not in the current config")
             continue
 
-        problem = get_table_compatibility_problems(conf.dbcmd, table)
+        problem = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if problem:
             raise Exception(problem)
 
-        map_data = get_partition_map(conf.dbcmd, table)
-        current_positions = get_current_positions(
+        map_data = pm_tap.get_partition_map(conf.dbcmd, table)
+        current_positions = pm_tap.get_current_positions(
             conf.dbcmd, table, map_data["range_cols"]
         )
 
@@ -150,7 +147,7 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
         rate_of_change = list(map(lambda pos: pos / time_delta, delta_positions))
 
         max_val_part = map_data["partitions"][-1]
-        if not isinstance(max_val_part, MaxValuePartition):
+        if not isinstance(max_val_part, partitionmanager.types.MaxValuePartition):
             log.error(f"Expected a MaxValue partition, got {max_val_part}")
             raise Exception("Unexpected part?")
 
@@ -176,7 +173,7 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
         )
 
         commands[table.name] = list(
-            generate_sql_reorganize_partition_commands(table, changes)
+            pm_tap.generate_sql_reorganize_partition_commands(table, changes)
         )
 
     return commands

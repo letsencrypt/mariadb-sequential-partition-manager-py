@@ -7,22 +7,8 @@ import logging
 import operator
 import re
 
-from partitionmanager.types import (
-    ChangePlannedPartition,
-    DuplicatePartitionException,
-    InstantPartition,
-    is_partition_type,
-    MaxValuePartition,
-    MismatchedIdException,
-    NewPlannedPartition,
-    NoEmptyPartitionsAvailableException,
-    PositionPartition,
-    SqlInput,
-    Table,
-    TableInformationException,
-    UnexpectedPartitionException,
-)
-from .tools import pairwise, iter_show_end
+import partitionmanager.types
+import partitionmanager.tools
 
 
 def get_table_compatibility_problems(database, table):
@@ -30,9 +16,9 @@ def get_table_compatibility_problems(database, table):
     db_name = database.db_name()
 
     if (
-        not isinstance(db_name, SqlInput)
-        or not isinstance(table, Table)
-        or not isinstance(table.name, SqlInput)
+        not isinstance(db_name, partitionmanager.types.SqlInput)
+        or not isinstance(table, partitionmanager.types.Table)
+        or not isinstance(table.name, partitionmanager.types.SqlInput)
     ):
         return [f"Unexpected table type: {table}"]
 
@@ -61,7 +47,9 @@ def get_current_positions(database, table, columns):
 
     Return as a dictionary of {column_name: position}
     """
-    if not isinstance(columns, list) or not isinstance(table, Table):
+    if not isinstance(columns, list) or not isinstance(
+        table, partitionmanager.types.Table
+    ):
         raise ValueError("columns must be a list and table must be a Table")
 
     positions = dict()
@@ -69,9 +57,11 @@ def get_current_positions(database, table, columns):
         sql = f"SELECT {column} FROM `{table.name}` ORDER BY {column} DESC LIMIT 1;"
         rows = database.run(sql)
         if len(rows) > 1:
-            raise TableInformationException(f"Expected one result from {table.name}")
+            raise partitionmanager.types.TableInformationException(
+                f"Expected one result from {table.name}"
+            )
         if not rows:
-            raise TableInformationException(
+            raise partitionmanager.types.TableInformationException(
                 f"Table {table.name} appears to be empty. (No results)"
             )
         positions[column] = rows[0][column]
@@ -80,7 +70,9 @@ def get_current_positions(database, table, columns):
 
 def get_partition_map(database, table):
     """Gather the partition map via the database command tool."""
-    if not isinstance(table, Table) or not isinstance(table.name, SqlInput):
+    if not isinstance(table, partitionmanager.types.Table) or not isinstance(
+        table.name, partitionmanager.types.SqlInput
+    ):
         raise ValueError("Unexpected type")
     sql_cmd = f"SHOW CREATE TABLE `{table.name}`;"
     return _parse_partition_map(database.run(sql_cmd))
@@ -93,7 +85,7 @@ def _parse_partition_map(rows):
     range identifiers for the partitions.
 
     The "partitions" is a list of the Partition objects representing each
-    defined partition. There will be at least one MaxValuePartition.
+    defined partition. There will be at least one partitionmanager.types.MaxValuePartition.
     """
     log = logging.getLogger("_parse_partition_map")
 
@@ -111,7 +103,7 @@ def _parse_partition_map(rows):
     partitions = list()
 
     if len(rows) != 1:
-        raise TableInformationException("Expected one result")
+        raise partitionmanager.types.TableInformationException("Expected one result")
 
     options = rows[0]
 
@@ -130,7 +122,7 @@ def _parse_partition_map(rows):
             part_vals = [int(x.strip("` ")) for x in part_vals_str.split(",")]
 
             if range_cols is None:
-                raise TableInformationException(
+                raise partitionmanager.types.TableInformationException(
                     "Processing partitions, but the partition definition wasn't found."
                 )
 
@@ -138,23 +130,33 @@ def _parse_partition_map(rows):
                 log.error(
                     f"Partition columns {part_vals} don't match the partition range {range_cols}"
                 )
-                raise MismatchedIdException("Partition columns mismatch")
+                raise partitionmanager.types.MismatchedIdException(
+                    "Partition columns mismatch"
+                )
 
-            pos_part = PositionPartition(part_name).set_position(part_vals)
+            pos_part = partitionmanager.types.PositionPartition(part_name).set_position(
+                part_vals
+            )
             partitions.append(pos_part)
 
         member_tail = partition_tail.match(l)
         if member_tail:
             if range_cols is None:
-                raise TableInformationException(
+                raise partitionmanager.types.TableInformationException(
                     "Processing tail, but the partition definition wasn't found."
                 )
             part_name = member_tail.group("name")
             log.debug(f"Found tail partition named {part_name}")
-            partitions.append(MaxValuePartition(part_name, len(range_cols)))
+            partitions.append(
+                partitionmanager.types.MaxValuePartition(part_name, len(range_cols))
+            )
 
-    if not partitions or not isinstance(partitions[-1], MaxValuePartition):
-        raise UnexpectedPartitionException("There was no tail partition")
+    if not partitions or not isinstance(
+        partitions[-1], partitionmanager.types.MaxValuePartition
+    ):
+        raise partitionmanager.types.UnexpectedPartitionException(
+            "There was no tail partition"
+        )
 
     return {"range_cols": range_cols, "partitions": partitions}
 
@@ -170,8 +172,8 @@ def _split_partitions_around_positions(partition_list, current_positions):
     The third part is a list of all the other, empty partitions yet-to-be-filled.
     """
     for p in partition_list:
-        if not is_partition_type(p):
-            raise UnexpectedPartitionException(p)
+        if not partitionmanager.types.is_partition_type(p):
+            raise partitionmanager.types.UnexpectedPartitionException(p)
     if not isinstance(current_positions, list):
         raise ValueError()
 
@@ -199,8 +201,12 @@ def _get_position_increase_per_day(p1, p2):
     position. For partitions with only a single position, this will be a list of
     size 1.
     """
-    if not isinstance(p1, PositionPartition) or not isinstance(p2, PositionPartition):
-        raise ValueError("Both partitions must be PositionPartition type")
+    if not isinstance(p1, partitionmanager.types.PositionPartition) or not isinstance(
+        p2, partitionmanager.types.PositionPartition
+    ):
+        raise ValueError(
+            "Both partitions must be partitionmanager.types.PositionPartition type"
+        )
     if None in (p1.timestamp(), p2.timestamp()):
         # An empty list skips this pair in get_weighted_position_increase
         return list()
@@ -235,7 +241,8 @@ def _get_weighted_position_increase_per_day_for_partitions(partitions):
         raise ValueError("Partition list must not be empty")
 
     pos_rates = [
-        _get_position_increase_per_day(p1, p2) for p1, p2 in pairwise(partitions)
+        _get_position_increase_per_day(p1, p2)
+        for p1, p2 in partitionmanager.tools.pairwise(partitions)
     ]
     weights = _generate_weights(len(pos_rates))
 
@@ -355,7 +362,7 @@ def plan_partition_changes(
             "as without an empty partition to manipulate, you'll need to "
             "perform an expensive copy operation. See the bootstrap mode."
         )
-        raise NoEmptyPartitionsAvailableException()
+        raise partitionmanager.types.NoEmptyPartitionsAvailableException()
     if not active_partition:
         raise Exception("Active Partition can't be None")
 
@@ -372,8 +379,12 @@ def plan_partition_changes(
     # the rate processing to work, we need to swap the "now" and the active
     # partition's dates and positions.
     rate_relevant_partitions = filled_partitions + [
-        InstantPartition(active_partition.timestamp(), current_positions),
-        InstantPartition(evaluation_time, active_partition.positions),
+        partitionmanager.types.InstantPartition(
+            active_partition.timestamp(), current_positions
+        ),
+        partitionmanager.types.InstantPartition(
+            evaluation_time, active_partition.positions
+        ),
     ]
     rates = _get_weighted_position_increase_per_day_for_partitions(
         rate_relevant_partitions
@@ -385,15 +396,15 @@ def plan_partition_changes(
 
     # We need to include active_partition in the list for the subsequent
     # calculations even though we're not actually changing it.
-    results = [ChangePlannedPartition(active_partition)]
+    results = [partitionmanager.types.ChangePlannedPartition(active_partition)]
 
     # Adjust each of the empty partitions
     for partition in empty_partitions:
         last_changed = results[-1]
 
-        changed_partition = ChangePlannedPartition(partition)
+        changed_partition = partitionmanager.types.ChangePlannedPartition(partition)
 
-        if isinstance(partition, PositionPartition):
+        if isinstance(partition, partitionmanager.types.PositionPartition):
             # We can't change the position on this partition, but we can adjust
             # the name to be more exact as to what date we expect it to begin
             # filling. If we calculate the start-of-fill date and it doesn't
@@ -412,7 +423,7 @@ def plan_partition_changes(
                 )
                 changed_partition.set_timestamp(start_of_fill_time).set_important()
 
-        if isinstance(partition, MaxValuePartition):
+        if isinstance(partition, partitionmanager.types.MaxValuePartition):
             # Only the tail MaxValuePartitions can get new positions. For those,
             # we calculate forward what position we expect and use it in the
             # future.
@@ -440,7 +451,7 @@ def plan_partition_changes(
             last_changed.positions, rates, allowed_lifespan
         )
         results.append(
-            NewPlannedPartition()
+            partitionmanager.types.NewPlannedPartition()
             .set_position(new_part_pos)
             .set_timestamp(partition_start_time)
         )
@@ -463,11 +474,11 @@ def should_run_changes(altered_partitions):
     log = logging.getLogger("should_run_changes")
 
     for p in altered_partitions:
-        if isinstance(p, NewPlannedPartition):
+        if isinstance(p, partitionmanager.types.NewPlannedPartition):
             log.debug(f"{p} is new")
             return True
 
-        if isinstance(p, ChangePlannedPartition):
+        if isinstance(p, partitionmanager.types.ChangePlannedPartition):
             if p.important():
                 log.debug(f"{p} is marked important")
                 return True
@@ -483,13 +494,13 @@ def generate_sql_reorganize_partition_commands(table, changes):
     new_partitions = list()
 
     for p in changes:
-        if isinstance(p, ChangePlannedPartition):
+        if isinstance(p, partitionmanager.types.ChangePlannedPartition):
             assert not new_partitions, "Modified partitions must preceed new partitions"
             modified_partitions.append(p)
-        elif isinstance(p, NewPlannedPartition):
+        elif isinstance(p, partitionmanager.types.NewPlannedPartition):
             new_partitions.append(p)
         else:
-            raise UnexpectedPartitionException(p)
+            raise partitionmanager.types.UnexpectedPartitionException(p)
 
     # If there's not at least one modification, bail out
     if not new_partitions and not list(
@@ -502,7 +513,7 @@ def generate_sql_reorganize_partition_commands(table, changes):
     partition_names_set = set()
 
     for modified_partition, is_final in reversed(
-        list(iter_show_end(modified_partitions))
+        list(partitionmanager.tools.iter_show_end(modified_partitions))
     ):
         # We reverse the iterator so that we always alter the furthest-out partitions
         # first, so that we are always increasing the number of empty partitions
@@ -519,7 +530,9 @@ def generate_sql_reorganize_partition_commands(table, changes):
         partition_strings = list()
         for part in new_part_list:
             if part.name in partition_names_set:
-                raise DuplicatePartitionException(f"Duplicate {part}")
+                raise partitionmanager.types.DuplicatePartitionException(
+                    f"Duplicate {part}"
+                )
             partition_names_set.add(part.name)
 
             partition_strings.append(
