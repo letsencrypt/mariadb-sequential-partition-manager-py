@@ -87,7 +87,7 @@ def _parse_partition_map(rows):
     The "partitions" is a list of the Partition objects representing each
     defined partition. There will be at least one partitionmanager.types.MaxValuePartition.
     """
-    log = logging.getLogger("_parse_partition_map")
+    log = logging.getLogger("parse_partition_map")
 
     partition_range = re.compile(
         r"[ ]*PARTITION BY RANGE\s+(COLUMNS)?\((?P<cols>[\w,` ]+)\)"
@@ -321,7 +321,7 @@ def _calculate_start_time(last_changed_time, evaluation_time, allowed_lifespan):
     return partition_start_time
 
 
-def plan_partition_changes(
+def _plan_partition_changes(
     partition_list,
     current_positions,
     evaluation_time,
@@ -333,23 +333,6 @@ def plan_partition_changes(
     This method makes recommendations in order to meet the supplied table
     requirements, using an estimate as to the rate of fill from the supplied
     partition_list, current_positions, and evaluation_time.
-
-    Args:
-
-    partition_list: the currently-existing partition objects, each with
-        a name and either a starting position or are the tail MAXVALUE.
-
-    current_positions: a position-list representing the position IDs for
-        this table at the evaluation_time.
-
-    evaluation_time: a datetime instance that represents the time the
-        algorithm is running.
-
-    allowed_lifespan: a timedelta that represents how long a span of time
-        a partition should seek to cover.
-
-    num_empty_partitions: the number of empty partitions to seek to keep at the
-        tail, each aiming to span allowed_lifespan.
     """
     log = logging.getLogger("plan_partition_changes")
 
@@ -464,7 +447,7 @@ def plan_partition_changes(
     return results
 
 
-def should_run_changes(altered_partitions):
+def _should_run_changes(altered_partitions):
     """Returns True if the changeset should run, otherwise returns False.
 
     Evaluate the list from plan_partition_changes and determine if the set of
@@ -487,7 +470,14 @@ def should_run_changes(altered_partitions):
 
 
 def generate_sql_reorganize_partition_commands(table, changes):
-    """Generates SQL commands to reorganize table to apply the changes."""
+    """Generates SQL commands to reorganize table to apply the changes.
+
+    Args:
+
+    table: a types.Table object
+
+    changes: a list of objects implenting types.PlannedPartition
+    """
     log = logging.getLogger(f"generate_sql_reorganize_partition_commands:{table.name}")
 
     modified_partitions = list()
@@ -548,3 +538,54 @@ def generate_sql_reorganize_partition_commands(table, changes):
         log.debug(f"Yielding {alter_cmd}")
 
         yield alter_cmd
+
+
+def get_pending_sql_reorganize_partition_commands(
+    *,
+    table,
+    partition_list,
+    current_positions,
+    allowed_lifespan,
+    num_empty_partitions,
+    evaluation_time,
+):
+    """Return a list of SQL commands to produce an optimally-partitioend table.
+
+    This algorithm is described in the README.md file as the Maintain Algorithm.
+
+    Args:
+
+    table: The table name and properties
+
+    partition_list: the currently-existing partition objects, each with
+        a name and either a starting position or are the tail MAXVALUE.
+
+    current_positions: a position-list representing the position IDs for
+        this table at the evaluation_time.
+
+    allowed_lifespan: a timedelta that represents how long a span of time
+        a partition should seek to cover.
+
+    num_empty_partitions: the number of empty partitions to seek to keep at the
+        tail, each aiming to span allowed_lifespan.
+
+    evaluation_time: a datetime instance that represents the time the
+        algorithm is running.
+    """
+
+    log = logging.getLogger("get_pending_sql_reorganize_partition_commands")
+
+    partition_changes = _plan_partition_changes(
+        partition_list,
+        current_positions,
+        evaluation_time,
+        allowed_lifespan,
+        num_empty_partitions,
+    )
+
+    if not _should_run_changes(partition_changes):
+        log.info(f"{table} does not need to be modified currently.")
+        return list()
+
+    log.debug(f"{table} has changes waiting.")
+    return generate_sql_reorganize_partition_commands(table, partition_changes)

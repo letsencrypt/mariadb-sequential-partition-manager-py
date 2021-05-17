@@ -115,7 +115,7 @@ orders:
 
 ## "Maintain" Algorithm
 
-The core algorithm is implemented in a method `plan_partition_changes` in `table_append_partition.py`. That algorithm is:
+The core algorithm is implemented in a method `get_pending_sql_reorganize_partition_commands` in `table_append_partition.py`. That algorithm is:
 
 For a given table and that table's intended partition period, desired end-state is to have:
 - All the existing partitions containing data,

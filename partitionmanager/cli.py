@@ -294,22 +294,19 @@ def do_partition(conf):
 
             ordered_positions = [positions[col] for col in map_data["range_cols"]]
 
-            partition_changes = pm_tap.plan_partition_changes(
-                map_data["partitions"],
-                ordered_positions,
-                conf.curtime,
-                duration,
-                conf.num_empty,
+            sql_cmds = pm_tap.get_pending_sql_reorganize_partition_commands(
+                table=table,
+                partition_list=map_data["partitions"],
+                current_positions=ordered_positions,
+                allowed_lifespan=duration,
+                num_empty_partitions=conf.num_empty,
+                evaluation_time=conf.curtime,
             )
 
-            if not pm_tap.should_run_changes(partition_changes):
-                log.info(f"{table} does not need to be modified currently.")
+            if not sql_cmds:
+                log.debug(f"{table} has no pending SQL updates.")
                 continue
-            log.debug(f"{table} has changes waiting.")
 
-            sql_cmds = pm_tap.generate_sql_reorganize_partition_commands(
-                table, partition_changes
-            )
             composite_sql_command = "\n".join(sql_cmds)
 
             if conf.noop:

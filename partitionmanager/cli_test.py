@@ -201,17 +201,32 @@ partitionmanager:
         )
 
     def test_partition_period_seven_days(self):
-        o = run_partition_cmd_yaml(
-            f"""
-partitionmanager:
-    num_empty: 1
-    partition_period:
-        days: 7
-    tables:
-        partitioned_yesterday:
-        partitioned_last_week:
-    mariadb: {str(fake_exec)}
-"""
+        with self.assertLogs("partition", level="DEBUG") as logctx:
+            o = run_partition_cmd_yaml(
+                f"""
+    partitionmanager:
+        num_empty: 1
+        partition_period:
+            days: 7
+        tables:
+            partitioned_yesterday:
+            partitioned_last_week:
+        mariadb: {str(fake_exec)}
+    """
+            )
+
+        self.assertEqual(
+            set(logctx.output),
+            set(
+                [
+                    "INFO:partition:Evaluating Table partitioned_last_week "
+                    "(duration=7 days, 0:00:00) (pos={'id': 150})",
+                    "DEBUG:partition:Table partitioned_last_week has no pending SQL updates.",
+                    "INFO:partition:Evaluating Table partitioned_yesterday "
+                    "(duration=7 days, 0:00:00) (pos={'id': 150})",
+                    "DEBUG:partition:Table partitioned_yesterday has no pending SQL updates.",
+                ]
+            ),
         )
         self.assertSequenceEqual(list(o), [])
 

@@ -18,20 +18,21 @@ from partitionmanager.types import (
     UnexpectedPartitionException,
 )
 from partitionmanager.table_append_partition import (
-    generate_sql_reorganize_partition_commands,
     _generate_weights,
-    get_current_positions,
-    get_partition_map,
     _get_position_increase_per_day,
-    get_table_compatibility_problems,
     _get_table_information_schema_problems,
     _get_weighted_position_increase_per_day_for_partitions,
     _parse_partition_map,
-    plan_partition_changes,
+    _plan_partition_changes,
     _predict_forward_position,
     _predict_forward_time,
-    should_run_changes,
+    _should_run_changes,
     _split_partitions_around_positions,
+    generate_sql_reorganize_partition_commands,
+    get_current_positions,
+    get_partition_map,
+    get_pending_sql_reorganize_partition_commands,
+    get_table_compatibility_problems,
 )
 
 from .types_test import mkPPart, mkTailPart
@@ -488,7 +489,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_plan_partition_changes_no_empty_partitions(self):
         with self.assertRaises(NoEmptyPartitionsAvailableException):
-            plan_partition_changes(
+            _plan_partition_changes(
                 [mkPPart("p_20201231", 0), mkPPart("p_20210102", 200)],
                 [50],
                 datetime(2021, 1, 1, tzinfo=timezone.utc),
@@ -498,7 +499,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_plan_partition_changes_imminent(self):
         with self.assertLogs("plan_partition_changes", level="INFO") as logctx:
-            planned = plan_partition_changes(
+            planned = _plan_partition_changes(
                 [
                     mkPPart("p_20201231", 100),
                     mkPPart("p_20210102", 200),
@@ -538,7 +539,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_plan_partition_changes_wildly_off_dates(self):
         with self.assertLogs("plan_partition_changes", level="INFO") as logctx:
-            planned = plan_partition_changes(
+            planned = _plan_partition_changes(
                 [
                     mkPPart("p_20201231", 100),
                     mkPPart("p_20210104", 200),
@@ -574,7 +575,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes_long_delay(self):
-        planned = plan_partition_changes(
+        planned = _plan_partition_changes(
             [
                 mkPPart("p_20210101", 100),
                 mkPPart("p_20210415", 200),
@@ -600,7 +601,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes_short_names(self):
-        planned = plan_partition_changes(
+        planned = _plan_partition_changes(
             [
                 mkPPart("p_2019", 1912499867),
                 mkPPart("p_2020", 8890030931),
@@ -641,7 +642,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes_bespoke_names(self):
-        planned = plan_partition_changes(
+        planned = _plan_partition_changes(
             [mkPPart("p_start", 100), mkTailPart("p_future")],
             [50],
             datetime(2021, 1, 6, tzinfo=timezone.utc),
@@ -675,7 +676,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes(self):
-        planned = plan_partition_changes(
+        planned = _plan_partition_changes(
             [
                 mkPPart("p_20201231", 100),
                 mkPPart("p_20210102", 200),
@@ -699,7 +700,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
         self.assertEqual(
-            plan_partition_changes(
+            _plan_partition_changes(
                 [
                     mkPPart("p_20201231", 100),
                     mkPPart("p_20210102", 200),
@@ -726,13 +727,13 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_should_run_changes(self):
         self.assertFalse(
-            should_run_changes(
+            _should_run_changes(
                 [ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position([300])]
             )
         )
 
         self.assertFalse(
-            should_run_changes(
+            _should_run_changes(
                 [
                     ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
                         [300]
@@ -745,7 +746,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
         with self.assertLogs("should_run_changes", level="DEBUG") as logctx:
             self.assertTrue(
-                should_run_changes(
+                _should_run_changes(
                     [
                         ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
                             [302]
@@ -769,7 +770,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
         with self.assertLogs("should_run_changes", level="DEBUG") as logctx:
             self.assertTrue(
-                should_run_changes(
+                _should_run_changes(
                     [
                         ChangePlannedPartition(mkPPart("p_20210102", 200)),
                         NewPlannedPartition()
@@ -786,7 +787,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ["DEBUG:should_run_changes:Add: [542] 2021-01-16 " "00:00:00+00:00 is new"],
         )
 
-    def test_generate_sql_reorganize_partition_commands_no_change(self):
+    def testgenerate_sql_reorganize_partition_commands_no_change(self):
         self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
@@ -796,7 +797,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [],
         )
 
-    def test_generate_sql_reorganize_partition_commands_single_change(self):
+    def testgenerate_sql_reorganize_partition_commands_single_change(self):
         self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
@@ -814,7 +815,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
-    def test_generate_sql_reorganize_partition_commands_two_changes(self):
+    def testgenerate_sql_reorganize_partition_commands_two_changes(self):
         self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
@@ -837,7 +838,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
-    def test_generate_sql_reorganize_partition_commands_new_partitions(self):
+    def testgenerate_sql_reorganize_partition_commands_new_partitions(self):
         self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
@@ -861,7 +862,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
-    def test_generate_sql_reorganize_partition_commands_maintain_new_partition(self):
+    def testgenerate_sql_reorganize_partition_commands_maintain_new_partition(self):
         self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
@@ -891,7 +892,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
-    def test_generate_sql_reorganize_partition_commands_with_duplicate(self):
+    def testgenerate_sql_reorganize_partition_commands_with_duplicate(self):
         with self.assertRaises(DuplicatePartitionException):
             list(
                 generate_sql_reorganize_partition_commands(
@@ -910,7 +911,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 )
             )
 
-    def test_generate_sql_reorganize_partition_commands_out_of_order(self):
+    def testgenerate_sql_reorganize_partition_commands_out_of_order(self):
         with self.assertRaises(AssertionError):
             list(
                 generate_sql_reorganize_partition_commands(
@@ -929,10 +930,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 )
             )
 
-    def test_plan_and_generate_sql_reorganize_partition_commands_with_future_partition(
+    def test_plan_andgenerate_sql_reorganize_partition_commands_with_future_partition(
         self
     ):
-        planned = plan_partition_changes(
+        planned = _plan_partition_changes(
             [
                 mkPPart("p_20201231", 100),
                 mkPPart("p_20210104", 200),
@@ -951,6 +952,68 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 "(PARTITION `p_20210109` VALUES LESS THAN MAXVALUE);",
                 "ALTER TABLE `water` REORGANIZE PARTITION `p_20210104` INTO "
                 "(PARTITION `p_20210102` VALUES LESS THAN (200));",
+            ],
+        )
+
+    def test_get_pending_sql_reorganize_partition_commands_no_changes(self):
+        with self.assertLogs(
+            "get_pending_sql_reorganize_partition_commands", level="INFO"
+        ) as logctx:
+            cmds = get_pending_sql_reorganize_partition_commands(
+                table=Table("plushies"),
+                partition_list=[
+                    mkPPart("p_20201231", 100),
+                    mkPPart("p_20210102", 200),
+                    mkTailPart("future"),
+                ],
+                current_positions=[50],
+                allowed_lifespan=timedelta(days=7),
+                num_empty_partitions=2,
+                evaluation_time=datetime(2021, 1, 1, tzinfo=timezone.utc),
+            )
+
+        self.assertEqual(
+            logctx.output,
+            [
+                "INFO:get_pending_sql_reorganize_partition_commands:"
+                "Table plushies does not need to be modified currently."
+            ],
+        )
+
+        self.assertEqual(cmds, [])
+
+    def test_get_pending_sql_reorganize_partition_commands_with_changes(self):
+        with self.assertLogs(
+            "get_pending_sql_reorganize_partition_commands", level="DEBUG"
+        ) as logctx:
+            cmds = get_pending_sql_reorganize_partition_commands(
+                table=Table("plushies"),
+                partition_list=[
+                    mkPPart("p_20201231", 100),
+                    mkPPart("p_20210102", 200),
+                    mkTailPart("future"),
+                ],
+                current_positions=[50],
+                allowed_lifespan=timedelta(days=7),
+                num_empty_partitions=4,
+                evaluation_time=datetime(2021, 1, 1, tzinfo=timezone.utc),
+            )
+
+        self.assertEqual(
+            logctx.output,
+            [
+                "DEBUG:get_pending_sql_reorganize_partition_commands:"
+                "Table plushies has changes waiting."
+            ],
+        )
+
+        self.assertEqual(
+            list(cmds),
+            [
+                "ALTER TABLE `plushies` REORGANIZE PARTITION `future` INTO "
+                "(PARTITION `p_20210109` VALUES LESS THAN (550), "
+                "PARTITION `p_20210116` VALUES LESS THAN (900), "
+                "PARTITION `p_20210123` VALUES LESS THAN MAXVALUE);"
             ],
         )
 
