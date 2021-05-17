@@ -32,7 +32,7 @@ Similar tools:
         days: 30
   prometheus_stats: "/tmp/prometheus-textcollect-partition-manager.prom"
 EOF
- → partition-manager --config /tmp/partman.conf.yml add --noop
+ → partition-manager --config /tmp/partman.conf.yml maintain --noop
 INFO:root:No-op mode
 INFO:partition:Evaluating Table dogs (duration=30 days, 0:00:00) (pos={'id': 150})
 INFO:partition:Table dogs planned SQL: ALTER TABLE `dogs` REORGANIZE PARTITION `p_20201204` INTO (PARTITION `p_20210422` VALUES LESS THAN (221), PARTITION `p_20210522` VALUES LESS THAN MAXVALUE);
@@ -53,7 +53,7 @@ dogs:
  → python3 -m pip install --editable .
  → partition-manager --log-level=debug  \
     --mariadb test_tools/fake_mariadb.sh \
-    add --noop --table tablename
+    maintain --noop --table tablename
 DEBUG:root:Auto_Increment column identified as id
 DEBUG:root:Partition range column identified as id
 DEBUG:root:Found partition before = (100)
@@ -110,10 +110,10 @@ orders:
 
 - At start, if any configuration file specified as a CLI argument, read that configuration file to set all other values.
 - Then, process all remaining command line arguments, overriding values loaded from the configuration file in case of conflicts.
-- From those command-line arguments, determine whether to collect statistics `stats`, determine an initial partition layout `bootstrap`, or operate in the normal `add` mode.
+- From those command-line arguments, determine whether to collect statistics `stats`, determine an initial partition layout `bootstrap`, or operate in the normal `maintain` mode.
 - Use the configuration information as inputs to the required algorithm.
 
-## "Add" Algorithm
+## "Maintain" Algorithm
 
 The core algorithm is implemented in a method `plan_partition_changes` in `table_append_partition.py`. That algorithm is:
 
@@ -152,13 +152,13 @@ Procedure:
   - Append the new partition to the intended empty partition list.
 - Return the lists of non-empty partitions, the current empty partitions, and the post-algorithm intended empty partitions.
 
-### "Add" Finalization
+### "Maintain" Finalization
 
 The results of the algorithm are converted into `ALTER` statements; if the user configured `--noop` they're emitted to console and the logs for each table. If not set to `--noop`, the application will execute the ALTERs at the database server and emit the results, including execution time as prometheus statistics if so configured.
 
 ## "Bootstrap" Algorithm
 
-The bootstrap mode is a limited form of the "Add" Algorithm, using a temporary state file to determine rates-of-change. The bootstrap mode also does not limit itself to only affecting empty partitions, it can and will request changes that will prmopt row copies, in order to prepare a table for future use of the "Add" algorithm.
+The bootstrap mode is a limited form of the "Maintain" Algorithm, using a temporary state file to determine rates-of-change. The bootstrap mode also does not limit itself to only affecting empty partitions, it can and will request changes that will prmopt row copies, in order to prepare a table for future use of the "Maintain" algorithm.
 
 # TODOs
 

@@ -173,7 +173,7 @@ def partition_cmd(args):
 
 
 SUBPARSERS = PARSER.add_subparsers(dest="subparser_name")
-PARTITION_PARSER = SUBPARSERS.add_parser("add", help="add partitions")
+PARTITION_PARSER = SUBPARSERS.add_parser("maintain", help="maintain partitions")
 PARTITION_PARSER.add_argument(
     "--noop",
     "-n",
