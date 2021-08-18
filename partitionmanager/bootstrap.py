@@ -61,10 +61,13 @@ def _plan_partitions_for_time_offsets(
     now_time, time_offsets, rate_of_change, ordered_current_pos, max_val_part
 ):
     """
-    Return a list of PlannedPartitions, starting from now, corresponding to
-    each supplied offset that will represent the positions then from the
-    supplied current positions and the rate of change. The first planned
-    partition will be altered out of the supplied MaxValue partition.
+    Return a list of PlannedPartitions whose positions are predicted to
+    lie upon the supplied time_offsets, given the initial conditions supplied.
+
+    types:
+        time_offsets: an ordered list of timedeltas to plan to reach
+
+        rate_of_change: an ordered list of positions per RATE_UNIT.
     """
     changes = list()
     for (i, offset), is_final in partitionmanager.tools.iter_show_end(
