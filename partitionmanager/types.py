@@ -396,7 +396,10 @@ class _PlannedPartition(abc.ABC):
         return self
 
     def set_important(self):
-        """Indicate this is an important partition."""
+        """Indicate this is an important partition. Used in the
+        _plan_partition_changes as a marker that there's a significant
+        change in this partition that should be committed even if the
+        overall map isn't changing much. """
         self._important = True
         return self
 
