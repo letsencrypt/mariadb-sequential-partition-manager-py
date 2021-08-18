@@ -507,7 +507,7 @@ def generate_sql_reorganize_partition_commands(table, changes):
 
     for p in changes:
         if isinstance(p, partitionmanager.types.ChangePlannedPartition):
-            assert not new_partitions, "Modified partitions must preceed new partitions"
+            assert not new_partitions, "Modified partitions must precede new partitions"
             modified_partitions.append(p)
         elif isinstance(p, partitionmanager.types.NewPlannedPartition):
             new_partitions.append(p)
