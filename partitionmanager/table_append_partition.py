@@ -513,7 +513,6 @@ def generate_sql_reorganize_partition_commands(table, changes):
         log.debug("No partitions have modifications and no new partitions")
         return
 
-    new_part_list = list()
     partition_names_set = set()
 
     for modified_partition, is_final in reversed(

@@ -133,7 +133,7 @@ class _Partition(abc.ABC):
     @property
     @abc.abstractmethod
     def num_columns(self):
-        """Return the number of columns this partition represents"""
+        """Return the number of columns included in this partition's range."""
 
     @property
     def has_real_time(self):
