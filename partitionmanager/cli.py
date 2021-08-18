@@ -264,7 +264,7 @@ def do_partition(conf):
     """
     log = logging.getLogger("partition")
     if conf.noop:
-        log.info("No-op mode")
+        log.info("Running in noop mode, no changes will be made")
 
     # Preflight
     if not all_configured_tables_are_compatible(conf):
