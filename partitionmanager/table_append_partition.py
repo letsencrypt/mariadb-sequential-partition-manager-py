@@ -54,6 +54,8 @@ def get_current_positions(database, table, columns):
 
     positions = dict()
     for column in columns:
+        if not isinstance(column, str):
+            raise ValueError("columns must be a list of strings")
         sql = f"SELECT {column} FROM `{table.name}` ORDER BY {column} DESC LIMIT 1;"
         rows = database.run(sql)
         if len(rows) > 1:
@@ -161,27 +163,27 @@ def _parse_partition_map(rows):
     return {"range_cols": range_cols, "partitions": partitions}
 
 
-def _split_partitions_around_positions(partition_list, current_positions):
+def _split_partitions_around_position(partition_list, current_position):
     """Divide up a partition list to three parts: filled, current, and empty.
 
     The first part is the filled partition list: those partitions for which
-    _all_ values are less than current_positions.
+    _all_ values are less than current_position.
 
-    The second is the a single partition whose values contain current_positions.
+    The second is the a single partition whose values contain current_position.
 
     The third part is a list of all the other, empty partitions yet-to-be-filled.
     """
     for p in partition_list:
         if not partitionmanager.types.is_partition_type(p):
             raise partitionmanager.types.UnexpectedPartitionException(p)
-    if not isinstance(current_positions, list):
+    if not isinstance(current_position, partitionmanager.types.Position):
         raise ValueError()
 
     less_than_partitions = list()
     greater_or_equal_partitions = list()
 
     for p in partition_list:
-        if p < current_positions:
+        if p < current_position:
             less_than_partitions.append(p)
         else:
             greater_or_equal_partitions.append(p)
@@ -216,7 +218,9 @@ def _get_position_increase_per_day(p1, p2):
         raise ValueError(f"p1 {p1} and p2 {p2} must have the same number of columns")
     delta_time = p2.timestamp() - p1.timestamp()
     delta_days = delta_time / timedelta(days=1)
-    delta_positions = list(map(operator.sub, p2.positions, p1.positions))
+    delta_positions = list(
+        map(operator.sub, p2.position.as_list(), p1.position.as_list())
+    )
     return list(map(lambda pos: pos / delta_days, delta_positions))
 
 
@@ -278,15 +282,20 @@ def _predict_forward_position(current_positions, rate_of_change, duration):
     return predicted_positions
 
 
-def _predict_forward_time(current_positions, end_positions, rates, evaluation_time):
+def _predict_forward_time(current_position, end_position, rates, evaluation_time):
     """Return a predicted datetime of when we'll exceed the end position-list.
 
-    Given the current_positions position-list and the rates, this calculates
+    Given the current_position position-list and the rates, this calculates
     a timestamp of when the positions will be beyond ALL of the end_positions
     position-list, as that is MariaDB's definition of when to start filling a
     partition.
     """
-    if not len(current_positions) == len(end_positions) == len(rates):
+    if not isinstance(
+        current_position, partitionmanager.types.Position
+    ) or not isinstance(end_position, partitionmanager.types.Position):
+        raise ValueError("Expected to be given Position types")
+
+    if not len(current_position) == len(end_position) == len(rates):
         raise ValueError("Expected identical list sizes")
 
     for neg_rate in filter(lambda r: r <= 0, rates):
@@ -297,7 +306,9 @@ def _predict_forward_time(current_positions, end_positions, rates, evaluation_ti
 
     days_remaining = [
         (end - now) / rate
-        for now, end, rate in zip(current_positions, end_positions, rates)
+        for now, end, rate in zip(
+            current_position.as_list(), end_position.as_list(), rates
+        )
     ]
 
     if max(days_remaining) < 0:
@@ -336,7 +347,7 @@ def _plan_partition_changes(
     """
     log = logging.getLogger("plan_partition_changes")
 
-    filled_partitions, active_partition, empty_partitions = _split_partitions_around_positions(
+    filled_partitions, active_partition, empty_partitions = _split_partitions_around_position(
         partition_list, current_positions
     )
     if not empty_partitions:
@@ -366,7 +377,7 @@ def _plan_partition_changes(
             active_partition.timestamp(), current_positions
         ),
         partitionmanager.types.InstantPartition(
-            evaluation_time, active_partition.positions
+            evaluation_time, active_partition.position
         ),
     ]
     rates = _get_weighted_position_increase_per_day_for_partitions(
@@ -394,7 +405,7 @@ def _plan_partition_changes(
             # match the partition's name, let's rename it and mark it as an
             # important change.
             start_of_fill_time = _predict_forward_time(
-                current_positions, last_changed.positions, rates, evaluation_time
+                current_positions, last_changed.position, rates, evaluation_time
             )
 
             if start_of_fill_time.date() != partition.timestamp().date():
@@ -415,7 +426,7 @@ def _plan_partition_changes(
                 last_changed.timestamp(), evaluation_time, allowed_lifespan
             )
             changed_part_pos = _predict_forward_position(
-                last_changed.positions, rates, allowed_lifespan
+                last_changed.position.as_list(), rates, allowed_lifespan
             )
             changed_partition.set_position(changed_part_pos).set_timestamp(
                 partition_start_time
@@ -431,7 +442,7 @@ def _plan_partition_changes(
         )
 
         new_part_pos = _predict_forward_position(
-            last_changed.positions, rates, allowed_lifespan
+            last_changed.position.as_list(), rates, allowed_lifespan
         )
         results.append(
             partitionmanager.types.NewPlannedPartition()
@@ -544,12 +555,12 @@ def get_pending_sql_reorganize_partition_commands(
     *,
     table,
     partition_list,
-    current_positions,
+    current_position,
     allowed_lifespan,
     num_empty_partitions,
     evaluation_time,
 ):
-    """Return a list of SQL commands to produce an optimally-partitioend table.
+    """Return a list of SQL commands to produce an optimally-partitioned table.
 
     This algorithm is described in the README.md file as the Maintain Algorithm.
 
@@ -560,7 +571,7 @@ def get_pending_sql_reorganize_partition_commands(
     partition_list: the currently-existing partition objects, each with
         a name and either a starting position or are the tail MAXVALUE.
 
-    current_positions: a position-list representing the position IDs for
+    current_position: a Position representing the position IDs for
         this table at the evaluation_time.
 
     allowed_lifespan: a timedelta that represents how long a span of time
@@ -577,7 +588,7 @@ def get_pending_sql_reorganize_partition_commands(
 
     partition_changes = _plan_partition_changes(
         partition_list,
-        current_positions,
+        current_position,
         evaluation_time,
         allowed_lifespan,
         num_empty_partitions,

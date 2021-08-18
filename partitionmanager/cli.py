@@ -39,7 +39,7 @@ GROUP = PARSER.add_mutually_exclusive_group()
 GROUP.add_argument("--mariadb", help="Path to mariadb command")
 GROUP.add_argument(
     "--dburl",
-    type=partitionmanager.types.toSqlUrl,
+    type=partitionmanager.types.to_sql_url,
     help="DB connection url, such as sql://user:pass@10.0.0.1:3306/database",
 )
 
@@ -107,7 +107,7 @@ class Config:
         if not self.dbcmd:
             if "dburl" in data:
                 self.dbcmd = partitionmanager.sql.IntegratedDatabaseCommand(
-                    partitionmanager.types.toSqlUrl(data["dburl"])
+                    partitionmanager.types.to_sql_url(data["dburl"])
                 )
             elif "mariadb" in data:
                 self.dbcmd = partitionmanager.sql.SubprocessDatabaseCommand(
@@ -292,12 +292,13 @@ def do_partition(conf):
 
             log.info(f"Evaluating {table} (duration={duration}) (pos={positions})")
 
-            ordered_positions = [positions[col] for col in map_data["range_cols"]]
+            cur_pos = partitionmanager.types.Position()
+            cur_pos.set_position([positions[col] for col in map_data["range_cols"]])
 
             sql_cmds = pm_tap.get_pending_sql_reorganize_partition_commands(
                 table=table,
                 partition_list=map_data["partitions"],
-                current_positions=ordered_positions,
+                current_position=cur_pos,
                 allowed_lifespan=duration,
                 num_empty_partitions=conf.num_empty,
                 evaluation_time=conf.curtime,

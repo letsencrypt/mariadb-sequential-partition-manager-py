@@ -163,6 +163,6 @@ The bootstrap mode is a limited form of the "Maintain" Algorithm, using a tempor
 # TODOs
 
 Lots:
-[X] Support for tables with partitions across multiple columns.
-[ ] A drop mechanism, for one. Initially it should take a retention period and log proposed `DROP` statements, not perform them.
-[ ] Yet more tests, particularly live integration tests with a test DB.
+- [x] Support for tables with partitions across multiple columns.
+- [ ] A drop mechanism, for one. Initially it should take a retention period and log proposed `DROP` statements, not perform them.
+- [ ] Yet more tests, particularly live integration tests with a test DB.

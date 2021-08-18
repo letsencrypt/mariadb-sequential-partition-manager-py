@@ -74,7 +74,7 @@ class SqlInput(str):
         return str(self)
 
 
-def toSqlUrl(urlstring):
+def to_sql_url(urlstring):
     """
     Parse a sql://user:pass@host:port/schema URL and return the tuple.
     """
@@ -110,7 +110,7 @@ class DatabaseCommand(abc.ABC):
 
 
 def is_partition_type(obj):
-    """ True if the object inherits from a _Position. """
+    """ True if the object inherits from a _Partition. """
     return isinstance(obj, _Partition)
 
 
@@ -189,64 +189,107 @@ class _Partition(abc.ABC):
         return f"{self.name}: {self.values()}"
 
 
-class PositionPartition(_Partition):
-    """A partition that has positions assocated with it.
+class Position:
+    """ An internal class that represents a position as an ordered list of
+    identifiers, matching the table's partition-by statement.
+    """
 
-    Partitions are independent table segments, and each has a name and a list of
-    positions. The positions-list is an ordered list of identifiers, matching
+    def __init__(self):
+        self._position = list()
+
+    def set_position(self, position_in):
+        """Set the list of identifiers for this position."""
+        if isinstance(position_in, Position):
+            self._position = position_in.as_list()
+        elif isinstance(position_in, list) or isinstance(position_in, tuple):
+            self._position = [int(p) for p in position_in]
+        else:
+            raise ValueError(f"Unexpected position input: {position_in}")
+
+        return self
+
+    def as_list(self):
+        """Return a copy of the list of identifiers representing this position"""
+        return self._position.copy()
+
+    def __len__(self):
+        return len(self._position)
+
+    def __eq__(self, other):
+        if isinstance(other, Position):
+            return self._position == other.as_list()
+        return False
+
+    def __str__(self):
+        return str(self._position)
+
+    def __repr__(self):
+        return repr(self._position)
+
+
+class PositionPartition(_Partition):
+    """A partition that has a position assocated with it.
+
+    Partitions are independent table segments, and each has a name and a current
+    position. The positions-list is an ordered list of identifiers, matching
     the order of the table's partition-by statement when the table was created.
     """
 
     def __init__(self, name):
         self._name = name
-        self._positions = list()
+        self._position = Position()
 
     @property
     def name(self):
         return self._name
 
-    def set_position(self, positions):
-        """Set the position list for this partition."""
-        self._positions = [int(p) for p in positions]
+    def set_position(self, position_in):
+        """Set the position for this partition."""
+        self._position.set_position(position_in)
         return self
 
     @property
-    def positions(self):
-        """Return the position list this partition represents"""
-        return self._positions
+    def position(self):
+        """Return the Position this partition represents"""
+        return self._position
 
     @property
     def num_columns(self):
-        return len(self._positions)
+        return len(self._position)
 
     def values(self):
-        return "(" + ", ".join([str(x) for x in self._positions]) + ")"
+        return "(" + ", ".join([str(x) for x in self._position.as_list()]) + ")"
 
     def __lt__(self, other):
         if isinstance(other, MaxValuePartition):
-            if len(self._positions) != other.num_columns:
+            if len(self._position) != other.num_columns:
                 raise UnexpectedPartitionException(
-                    f"Expected {len(self._positions)} columns but "
+                    f"Expected {len(self._position)} columns but "
                     f"partition has {other.num_columns}."
                 )
             return True
-        other_positions = None
+
+        other_position_list = None
         if isinstance(other, list):
-            other_positions = other
+            other_position_list = other
+        elif isinstance(other, Position):
+            other_position_list = other.as_list()
         elif isinstance(other, PositionPartition):
-            other_positions = other.positions
-        if not other_positions or len(self._positions) != len(other_positions):
+            other_position_list = other.position.as_list()
+
+        if not other_position_list or len(self._position) != len(other_position_list):
             raise UnexpectedPartitionException(
-                f"Expected {len(self._positions)} columns but partition has {other_positions}."
+                f"Expected {len(self._position)} columns but partition has {other_position_list}."
             )
-        for v_mine, v_other in zip(self._positions, other_positions):
+
+        for v_mine, v_other in zip(self._position.as_list(), other_position_list):
             if v_mine >= v_other:
                 return False
         return True
 
     def __eq__(self, other):
         if isinstance(other, PositionPartition):
-            return self.name == other.name and self._positions == other.positions
+            return self.name == other.name and self._position == other.position
         return False
 
 
@@ -274,7 +317,7 @@ class MaxValuePartition(_Partition):
 
     def __lt__(self, other):
         """MaxValuePartitions are always greater than every other partition."""
-        if isinstance(other, list):
+        if isinstance(other, list) or isinstance(other, Position):
             if self._count != len(other):
                 raise UnexpectedPartitionException(
                     f"Expected {self._count} columns but list has {len(other)}."
@@ -301,10 +344,10 @@ class InstantPartition(PositionPartition):
     of the rate calculation itself.
     """
 
-    def __init__(self, now, positions):
+    def __init__(self, now, position_in):
         super().__init__("Instant")
         self._instant = now
-        self._positions = positions
+        self._position.set_position(position_in)
 
     def timestamp(self):
         return self._instant
@@ -318,7 +361,7 @@ class _PlannedPartition(abc.ABC):
 
     def __init__(self):
         self._num_columns = None
-        self._positions = None
+        self._position = None
         self._timestamp = None
         self._important = False
 
@@ -330,19 +373,21 @@ class _PlannedPartition(abc.ABC):
         self._timestamp = timestamp.replace(hour=0, minute=0)
         return self
 
-    def set_position(self, pos):
+    def set_position(self, position_in):
         """Set the position of this modified partition.
 
         If this partition changes an existing partition, the positions of both
         must have identical length.
         """
-        if not isinstance(pos, list):
-            raise ValueError()
+        pos = Position()
+        pos.set_position(position_in)
+
         if self.num_columns is not None and len(pos) != self.num_columns:
             raise UnexpectedPartitionException(
-                f"Expected {self.num_columns} columns but list has {len(pos)}."
+                f"Expected {self.num_columns} columns but input has {len(pos)}."
             )
-        self._positions = pos
+
+        self._position = pos
         return self
 
     def set_important(self):
@@ -351,9 +396,9 @@ class _PlannedPartition(abc.ABC):
         return self
 
     @property
-    def positions(self):
-        """Get the positions for this modified partition."""
-        return self._positions
+    def position(self):
+        """Get the position for this modified partition."""
+        return self._position
 
     def timestamp(self):
         """The timestamp of this partition."""
@@ -375,17 +420,17 @@ class _PlannedPartition(abc.ABC):
 
     def set_as_max_value(self):
         """Represent this partition by MaxValuePartition from as_partition()"""
-        self._num_columns = len(self._positions)
-        self._positions = None
+        self._num_columns = len(self._position)
+        self._position = None
         return self
 
     def as_partition(self):
         """Return a concrete Partition that can be rendered into a SQL ALTER."""
         if not self._timestamp:
             raise ValueError()
-        if self._positions:
+        if self._position:
             return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(
-                self._positions
+                self._position
             )
         return MaxValuePartition(f"p_{self._timestamp:%Y%m%d}", count=self._num_columns)
 
@@ -396,7 +441,7 @@ class _PlannedPartition(abc.ABC):
         if isinstance(other, _PlannedPartition):
             return (
                 isinstance(self, type(other))
-                and self.positions == other.positions
+                and self.position == other.position
                 and self.timestamp() == other.timestamp()
                 and self.important() == other.important()
             )
@@ -416,15 +461,15 @@ class ChangePlannedPartition(_PlannedPartition):
         self._old = old_part
         self._num_columns = self._old.num_columns
         self._timestamp = self._old.timestamp()
-        self._old_positions = (
-            self._old.positions if isinstance(old_part, PositionPartition) else None
+        self._old_position = (
+            self._old.position if isinstance(old_part, PositionPartition) else None
         )
-        self._positions = self._old_positions
+        self._position = self._old_position
 
     @property
     def has_modifications(self):
         return (
-            self._positions != self._old_positions
+            self._position != self._old_position
             or self._old.timestamp() is None
             and self._timestamp is not None
             or self._timestamp.date() != self._old.timestamp().date()
@@ -437,7 +482,7 @@ class ChangePlannedPartition(_PlannedPartition):
 
     def __str__(self):
         imp = "[!!]" if self.important() else ""
-        return f"{self._old} => {self._positions} {imp} {self._timestamp}"
+        return f"{self._old} => {self.position} {imp} {self._timestamp}"
 
 
 class NewPlannedPartition(_PlannedPartition):
@@ -462,7 +507,7 @@ class NewPlannedPartition(_PlannedPartition):
         return False
 
     def __str__(self):
-        return f"Add: {self.positions} {self._timestamp}"
+        return f"Add: {self.position} {self._timestamp}"
 
 
 class MismatchedIdException(Exception):
