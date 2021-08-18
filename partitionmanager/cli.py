@@ -54,7 +54,7 @@ class Config:
     def __init__(self):
         self.tables = set()
         self.dbcmd = None
-        self.noop = False
+        self.noop = True
         self.num_empty = 2
         self.curtime = datetime.now(tz=timezone.utc)
         self.partition_period = timedelta(days=30)
