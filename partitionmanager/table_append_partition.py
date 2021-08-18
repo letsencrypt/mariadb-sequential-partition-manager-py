@@ -26,7 +26,6 @@ def get_table_compatibility_problems(database, table):
         "SELECT CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES "
         + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
     ).strip()
-
     return _get_table_information_schema_problems(database.run(sql_cmd), table.name)
 
 
@@ -38,7 +37,6 @@ def _get_table_information_schema_problems(rows, table_name):
     options = rows[0]
     if "partitioned" not in options["CREATE_OPTIONS"]:
         return [f"Table {table_name} is not partitioned"]
-
     return list()
 
 
@@ -159,7 +157,6 @@ def _parse_partition_map(rows):
         raise partitionmanager.types.UnexpectedPartitionException(
             "There was no tail partition"
         )
-
     return {"range_cols": range_cols, "partitions": partitions}
 
 
@@ -190,7 +187,6 @@ def _split_partitions_around_position(partition_list, current_position):
 
     # The active partition is always the first in the list of greater_or_equal
     active_partition = greater_or_equal_partitions.pop(0)
-
     return less_than_partitions, active_partition, greater_or_equal_partitions
 
 
@@ -256,7 +252,6 @@ def _get_weighted_position_increase_per_day_for_partitions(partitions):
     for p_r, weight in zip(pos_rates, weights):
         for idx, val in enumerate(p_r):
             weighted_sums[idx] += val * weight
-
     return list(map(lambda x: x / sum(weights), weighted_sums))
 
 
@@ -313,7 +308,6 @@ def _predict_forward_time(current_position, end_position, rates, evaluation_time
 
     if max(days_remaining) < 0:
         raise ValueError(f"All values are negative: {days_remaining}")
-
     return evaluation_time + (max(days_remaining) * timedelta(days=1))
 
 
@@ -465,7 +459,6 @@ def _plan_partition_changes(
     results[-1].set_as_max_value()
 
     log.debug(f"Planned {results}")
-
     return results
 
 
@@ -487,7 +480,6 @@ def _should_run_changes(altered_partitions):
             if p.important():
                 log.debug(f"{p} is marked important")
                 return True
-
     return False
 
 

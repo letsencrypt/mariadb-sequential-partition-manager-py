@@ -53,7 +53,6 @@ def _get_time_offsets(num_entries, first_delta, subseq_delta):
     while len(time_units) < num_entries:
         prev = time_units[-1]
         time_units.append(prev + subseq_delta)
-
     return time_units
 
 
@@ -62,7 +61,8 @@ def _plan_partitions_for_time_offsets(
 ):
     """
     Return a list of PlannedPartitions whose positions are predicted to
-    lie upon the supplied time_offsets, given the initial conditions supplied.
+    lie upon the supplied time_offsets, given the initial conditions supplied
+    in the other parameters.
 
     types:
         time_offsets: an ordered list of timedeltas to plan to reach
@@ -163,6 +163,9 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
         if table.partition_period:
             part_duration = table.partition_period
 
+        # Choose the times for each partition that we are configured to
+        # construct, beginning in the near future (see MINIMUM_FUTURE_DELTA),
+        # to provide a quick changeover into the new partition schema.
         time_offsets = _get_time_offsets(
             1 + conf.num_empty, MINIMUM_FUTURE_DELTA, part_duration
         )
@@ -178,5 +181,4 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
         commands[table.name] = list(
             pm_tap.generate_sql_reorganize_partition_commands(table, changes)
         )
-
     return commands

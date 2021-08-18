@@ -116,5 +116,4 @@ def get_statistics(partitions, current_timestamp, table):
 
     if max_d > timedelta():
         results["max_partition_delta"] = max_d
-
     return results

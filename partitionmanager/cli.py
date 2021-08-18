@@ -159,7 +159,6 @@ def all_configured_tables_are_compatible(conf):
         if table_problems:
             problems[table.name] = table_problems
             logging.error(f"Cannot proceed: {table} {table_problems}")
-
     return len(problems) == 0
 
 
@@ -231,7 +230,6 @@ def bootstrap_cmd(args):
         return partitionmanager.bootstrap.calculate_sql_alters_from_state_info(
             conf, args.infile
         )
-
     return {}
 
 
@@ -335,7 +333,6 @@ def do_partition(conf):
 
     if conf.prometheus_stats_path:
         do_stats(conf, metrics)
-
     return all_results
 
 
@@ -407,7 +404,6 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
 
         with conf.prometheus_stats_path.open(mode="w", encoding="utf-8") as fp:
             metrics.render(fp)
-
     return all_results
 
 

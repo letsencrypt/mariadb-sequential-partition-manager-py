@@ -145,7 +145,6 @@ class _Partition(abc.ABC):
         """
         if "p_start" in self.name or not self.name.startswith("p_"):
             return False
-
         return self.timestamp() is not None
 
     def timestamp(self):
@@ -179,7 +178,6 @@ class _Partition(abc.ABC):
             return datetime.strptime(self.name, "p_%Y").replace(tzinfo=timezone.utc)
         except ValueError:
             pass
-
         return None
 
     def __repr__(self):
@@ -205,7 +203,6 @@ class Position:
             self._position = [int(p) for p in position_in]
         else:
             raise ValueError(f"Unexpected position input: {position_in}")
-
         return self
 
     def as_list(self):

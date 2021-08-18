@@ -141,7 +141,6 @@ class SubprocessDatabaseCommand(partitionmanager.types.DatabaseCommand):
             raise partitionmanager.types.TableInformationException(
                 "Expected one result"
             )
-
         return partitionmanager.types.SqlInput(rows[0]["DATABASE()"])
 
 
