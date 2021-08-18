@@ -9,7 +9,7 @@ from .types import (
     NewPlannedPartition,
     Position,
     PositionPartition,
-    retention_from_dict,
+    timedelta_from_dict,
     SqlInput,
     Table,
     to_sql_url,
@@ -91,18 +91,18 @@ class TestTypes(unittest.TestCase):
         )
 
         with self.assertRaises(argparse.ArgumentTypeError):
-            retention_from_dict({"something": 1})
+            timedelta_from_dict({"something": 1})
 
         with self.assertRaises(argparse.ArgumentTypeError):
-            retention_from_dict({"another thing": 1, "days": 30})
+            timedelta_from_dict({"another thing": 1, "days": 30})
 
-        r = retention_from_dict(dict())
+        r = timedelta_from_dict(dict())
         self.assertEqual(None, r)
 
         with self.assertRaises(TypeError):
-            retention_from_dict({"days": "thirty"})
+            timedelta_from_dict({"days": "thirty"})
 
-        r = retention_from_dict({"days": 30})
+        r = timedelta_from_dict({"days": 30})
         self.assertEqual(timedelta(days=30), r)
 
     def test_changed_partition(self):

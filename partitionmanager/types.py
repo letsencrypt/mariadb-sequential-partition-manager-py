@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 
-def retention_from_dict(r):
+def timedelta_from_dict(r):
     """
     Process a dictionary, typically from YAML, which describes a table's
     retetntion period. Returns a timedelta or None, and raises an argparse

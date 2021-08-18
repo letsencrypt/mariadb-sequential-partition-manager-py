@@ -97,7 +97,7 @@ class Config:
         if "noop" in data:
             self.noop = data["noop"]
         if "partition_period" in data:
-            self.partition_period = partitionmanager.types.retention_from_dict(
+            self.partition_period = partitionmanager.types.timedelta_from_dict(
                 data["partition_period"]
             )
             if self.partition_period <= timedelta():
@@ -119,13 +119,13 @@ class Config:
                 tabledata = data["tables"][key]
                 if isinstance(tabledata, dict) and "retention" in tabledata:
                     tab.set_retention(
-                        partitionmanager.types.retention_from_dict(
+                        partitionmanager.types.timedelta_from_dict(
                             tabledata["retention"]
                         )
                     )
                 if isinstance(tabledata, dict) and "partition_period" in tabledata:
                     tab.set_partition_period(
-                        partitionmanager.types.retention_from_dict(
+                        partitionmanager.types.timedelta_from_dict(
                             tabledata["partition_period"]
                         )
                     )
