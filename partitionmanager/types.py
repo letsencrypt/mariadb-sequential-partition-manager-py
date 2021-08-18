@@ -290,7 +290,10 @@ class PositionPartition(_Partition):
     def __eq__(self, other):
         if isinstance(other, PositionPartition):
             return self.name == other.name and self._position == other.position
-        return False
+        elif isinstance(other, MaxValuePartition):
+            return False
+
+        raise ValueError(f"Unexpected equality with {other}")
 
 
 class MaxValuePartition(_Partition):
@@ -334,7 +337,9 @@ class MaxValuePartition(_Partition):
     def __eq__(self, other):
         if isinstance(other, MaxValuePartition):
             return self.name == other.name and self._count == other.num_columns
-        return False
+        elif isinstance(other, PositionPartition):
+            return False
+        raise ValueError(f"Unexpected equality with {other}")
 
 
 class InstantPartition(PositionPartition):
