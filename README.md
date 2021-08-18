@@ -1,6 +1,8 @@
 [![Build Status](https://circleci.com/gh/letsencrypt/mariadb-sequential-partition-manager-py.svg?style=shield)](https://circleci.com/gh/letsencrypt/mariadb-sequential-partition-manager-py)
 ![Maturity Level: Beta](https://img.shields.io/badge/maturity-beta-blue.svg)
 
+# Partman
+
 This tool partitions and manages MariaDB tables by sequential IDs.
 
 This is primarily a mechanism for dropping large numbers of rows of data without using `DELETE` statements.
@@ -11,7 +13,7 @@ Similar tools:
 * https://github.com/davidburger/gomypartition, intended for tables with date-based partitions
 * https://github.com/yahoo/mysql_partition_manager, which is archived and in pure SQL
 
-# Usage
+## Usage
 
 ```sh
  → git clone https://github.com/letsencrypt/mariadb-sequential-partition-manager-py.git
@@ -42,8 +44,7 @@ dogs:
  noop: True
 ```
 
-
-## Hacking on this Project
+### Running `partman` in your development environment
 
 ```sh
  → git clone https://github.com/letsencrypt/mariadb-sequential-partition-manager-py.git
@@ -61,11 +62,11 @@ DEBUG:root:Found tail partition named p_20201204
 INFO:root:No-op mode
 
 ALTER TABLE `dbname`.`tablename` REORGANIZE PARTITION `p_20201204` INTO (PARTITION `p_20201204` VALUES LESS THAN (3101009), PARTITION `p_20210122` VALUES LESS THAN MAXVALUE);
-
 ```
 
-# Configuration
+## Configuration
 You can use a yaml configuration file with the `--config` parameter of the form:
+
 ```yaml
 partitionmanager:
   dburl: sql://user:password@localhost/db-name
@@ -101,19 +102,18 @@ INFO:calculate_sql_alters:Reading prior state information
 INFO:calculate_sql_alters:Table orders, 24.0 hours, [9236] - [29236], [20000] pos_change, [832.706363653845]/hour
 orders:
  - ALTER TABLE `orders` REORGANIZE PARTITION `p_20210405` INTO (PARTITION `p_20210416` VALUES LESS THAN (30901), PARTITION `p_20210516` VALUES LESS THAN (630449), PARTITION `p_20210615` VALUES LESS THAN MAXVALUE);
-
 ```
 
-# Procedure
+## Getting started
 
-## Configuration Processing
+### Configuring `partman`
 
 - At start, if any configuration file specified as a CLI argument, read that configuration file to set all other values.
 - Then, process all remaining command line arguments, overriding values loaded from the configuration file in case of conflicts.
 - From those command-line arguments, determine whether to collect statistics `stats`, determine an initial partition layout `bootstrap`, or operate in the normal `maintain` mode.
 - Use the configuration information as inputs to the required algorithm.
 
-## "Maintain" Algorithm
+### How does `partman` determine when an additional partition is needed?
 
 The core algorithm is implemented in a method `get_pending_sql_reorganize_partition_commands` in `table_append_partition.py`. That algorithm is:
 
@@ -152,15 +152,15 @@ Procedure:
   - Append the new partition to the intended empty partition list.
 - Return the lists of non-empty partitions, the current empty partitions, and the post-algorithm intended empty partitions.
 
-### "Maintain" Finalization
+#### How do I run `partman` in `noop` mode?
 
 The results of the algorithm are converted into `ALTER` statements; if the user configured `--noop` they're emitted to console and the logs for each table. If not set to `--noop`, the application will execute the ALTERs at the database server and emit the results, including execution time as prometheus statistics if so configured.
 
-## "Bootstrap" Algorithm
+#### "Bootstrap" algorithm
 
-The bootstrap mode is a limited form of the "Maintain" Algorithm, using a temporary state file to determine rates-of-change. The bootstrap mode also does not limit itself to only affecting empty partitions, it can and will request changes that will prmopt row copies, in order to prepare a table for future use of the "Maintain" algorithm.
+The bootstrap mode is a limited form of the "Maintain" Algorithm, using a temporary state file to determine rates-of-change. The bootstrap mode also does not limit itself to only affecting empty partitions, it can and will request changes that will prompt row copies, in order to prepare a table for future use of the "Maintain" algorithm.
 
-# TODOs
+## TODOs
 
 Lots:
 - [x] Support for tables with partitions across multiple columns.
