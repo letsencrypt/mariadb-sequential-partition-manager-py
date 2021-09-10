@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 def timedelta_from_dict(r):
     """
     Process a dictionary, typically from YAML, which describes a table's
-    retetntion period. Returns a timedelta or None, and raises an argparse
+    retention or partition period. Returns a timedelta or None, and raises an argparse
     error if the arguments are not understood.
     """
     for k, v in r.items():
