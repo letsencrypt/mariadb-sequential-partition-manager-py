@@ -79,8 +79,8 @@ class TestPartitionCmd(unittest.TestCase):
                     "sql": (
                         "ALTER TABLE `testtable_noop` REORGANIZE PARTITION "
                         "`p_20201204` INTO "
-                        "(PARTITION `p_20201205` VALUES LESS THAN (548), "
-                        "PARTITION `p_20210104` VALUES LESS THAN MAXVALUE);"
+                        "(PARTITION `p_20201112` VALUES LESS THAN (548), "
+                        "PARTITION `p_20201212` VALUES LESS THAN MAXVALUE);"
                     ),
                     "noop": True,
                 }
@@ -101,8 +101,8 @@ class TestPartitionCmd(unittest.TestCase):
                     "sql": (
                         "ALTER TABLE `testtable_commit` REORGANIZE PARTITION "
                         "`p_20201204` INTO "
-                        "(PARTITION `p_20201205` VALUES LESS THAN (548), "
-                        "PARTITION `p_20210104` VALUES LESS THAN MAXVALUE);"
+                        "(PARTITION `p_20201112` VALUES LESS THAN (548), "
+                        "PARTITION `p_20201212` VALUES LESS THAN MAXVALUE);"
                     ),
                 }
             },
