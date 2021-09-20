@@ -128,7 +128,7 @@ class TestBootstrapTool(unittest.TestCase):
                     "DROP TABLE IF EXISTS test_new_20210303;",
                     "CREATE TABLE test_new_20210303 LIKE test;",
                     "ALTER TABLE test_new_20210303 REMOVE PARTITIONING;",
-                    "ALTER TABLE test_new_20210303 PARTITION BY RANGE(id) (",
+                    "ALTER TABLE test_new_20210303 PARTITION BY RANGE (id) (",
                     "\tPARTITION p_start VALUES LESS THAN MAXVALUE",
                     ");",
                     "ALTER TABLE `test_new_20210303` REORGANIZE PARTITION `p_start` "
@@ -152,14 +152,14 @@ class TestBootstrapTool(unittest.TestCase):
     def test_read_state_info_map_table(self):
         self.maxDiff = None
         conf = Config()
-        conf.assume_partitioned_on = ["order", "auth"]
+        conf.assume_partitioned_on = ["orderID", "authzID"]
         conf.curtime = datetime(2021, 3, 3)
         conf.dbcmd = MockDatabase()
-        conf.dbcmd._select_response = [[{"auth": 22}], [{"order": 11}]]
+        conf.dbcmd._select_response = [[{"authzID": 22}], [{"orderID": 11}]]
         conf.dbcmd._response = [
             [
-                {"Field": "order", "Type": "bigint UNSIGNED"},
-                {"Field": "auth", "Type": "bigint UNSIGNED"},
+                {"Field": "orderID", "Type": "bigint UNSIGNED"},
+                {"Field": "authzID", "Type": "bigint UNSIGNED"},
             ]
         ]
         conf.tables = [Table("map_table").set_partition_period(timedelta(days=30))]
@@ -167,7 +167,7 @@ class TestBootstrapTool(unittest.TestCase):
         state_fs = io.StringIO()
         yaml.dump(
             {
-                "tables": {"map_table": {"order": 11, "auth": 22}},
+                "tables": {"map_table": {"orderID": 10, "authzID": 20}},
                 "time": (conf.curtime - timedelta(days=1)),
             },
             state_fs,
@@ -183,20 +183,21 @@ class TestBootstrapTool(unittest.TestCase):
                     "DROP TABLE IF EXISTS map_table_new_20210303;",
                     "CREATE TABLE map_table_new_20210303 LIKE map_table;",
                     "ALTER TABLE map_table_new_20210303 REMOVE PARTITIONING;",
-                    "ALTER TABLE map_table_new_20210303 PARTITION BY RANGE(order, auth) (",
-                    "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
+                    "ALTER TABLE map_table_new_20210303 PARTITION BY RANGE "
+                    + "COLUMNS (orderID, authzID) (",
+                    "\tPARTITION p_assumed VALUES LESS THAN (MAXVALUE, MAXVALUE)",
                     ");",
                     "ALTER TABLE `map_table_new_20210303` REORGANIZE PARTITION "
                     + "`p_assumed` INTO (PARTITION `p_20210303` VALUES LESS THAN "
                     + "(11, 22), PARTITION `p_20210402` VALUES LESS THAN "
-                    + "(11, 22), PARTITION `p_20210502` VALUES LESS THAN "
-                    + "MAXVALUE, MAXVALUE);",
+                    + "(41, 82), PARTITION `p_20210502` VALUES LESS THAN "
+                    + "(MAXVALUE, MAXVALUE));",
                     "CREATE OR REPLACE TRIGGER copy_inserts_from_map_table_"
                     + "to_map_table_new_20210303",
                     "\tAFTER INSERT ON map_table FOR EACH ROW",
                     "\t\tINSERT INTO map_table_new_20210303 SET",
-                    "\t\t\t`auth` = NEW.`auth`,",
-                    "\t\t\t`order` = NEW.`order`;",
+                    "\t\t\t`authzID` = NEW.`authzID`,",
+                    "\t\t\t`orderID` = NEW.`orderID`;",
                 ]
             },
         )
@@ -242,7 +243,7 @@ class TestBootstrapTool(unittest.TestCase):
                 "DROP TABLE IF EXISTS new;",
                 "CREATE TABLE new LIKE old;",
                 "ALTER TABLE new REMOVE PARTITIONING;",
-                "ALTER TABLE new PARTITION BY RANGE(id) (",
+                "ALTER TABLE new PARTITION BY RANGE (id) (",
                 "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                 ");",
                 "STRAIGHT_UP_INSERTED",

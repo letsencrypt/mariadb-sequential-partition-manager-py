@@ -490,7 +490,7 @@ partitionmanager:
                         "ALTER TABLE partitioned_yesterday_new_20210421 "
                         + "REMOVE PARTITIONING;",
                         "ALTER TABLE partitioned_yesterday_new_20210421 "
-                        + "PARTITION BY RANGE(id) (",
+                        + "PARTITION BY RANGE (id) (",
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
                         "ALTER TABLE `partitioned_yesterday_new_20210421` "
@@ -515,7 +515,7 @@ partitionmanager:
                         "DROP TABLE IF EXISTS two_new_20210421;",
                         "CREATE TABLE two_new_20210421 LIKE two;",
                         "ALTER TABLE two_new_20210421 REMOVE PARTITIONING;",
-                        "ALTER TABLE two_new_20210421 PARTITION BY RANGE(id) (",
+                        "ALTER TABLE two_new_20210421 PARTITION BY RANGE (id) (",
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
                         "ALTER TABLE `two_new_20210421` REORGANIZE PARTITION "
@@ -575,7 +575,7 @@ partitionmanager:
                         "DROP TABLE IF EXISTS unpartitioned_new_20210421;",
                         "CREATE TABLE unpartitioned_new_20210421 LIKE unpartitioned;",
                         "ALTER TABLE unpartitioned_new_20210421 REMOVE PARTITIONING;",
-                        "ALTER TABLE unpartitioned_new_20210421 PARTITION BY RANGE(id) (",
+                        "ALTER TABLE unpartitioned_new_20210421 PARTITION BY RANGE (id) (",
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
                         "ALTER TABLE `unpartitioned_new_20210421` REORGANIZE "

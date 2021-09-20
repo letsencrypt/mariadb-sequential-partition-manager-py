@@ -149,11 +149,19 @@ def _generate_sql_copy_commands(
 
     range_id_string = ", ".join(map_data["range_cols"])
 
+    if len(map_data["range_cols"]) == 1:
+        range_cols_string = "RANGE"
+        max_val_string = "MAXVALUE"
+    else:
+        num_cols = len(map_data["range_cols"])
+        range_cols_string = "RANGE COLUMNS"
+        max_val_string = "(" + ", ".join(["MAXVALUE"] * num_cols) + ")"
+
     yield f"DROP TABLE IF EXISTS {new_table.name};"
     yield f"CREATE TABLE {new_table.name} LIKE {existing_table.name};"
     yield f"ALTER TABLE {new_table.name} REMOVE PARTITIONING;"
-    yield f"ALTER TABLE {new_table.name} PARTITION BY RANGE({range_id_string}) ("
-    yield f"\tPARTITION {max_val_part.name} VALUES LESS THAN MAXVALUE"
+    yield f"ALTER TABLE {new_table.name} PARTITION BY {range_cols_string} ({range_id_string}) ("
+    yield f"\tPARTITION {max_val_part.name} VALUES LESS THAN {max_val_string}"
     yield ");"
 
     for command in alter_commands_iter:
