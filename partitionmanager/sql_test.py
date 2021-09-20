@@ -1,16 +1,16 @@
 import unittest
-from .sql import destring, XmlResult
+from .sql import _destring, XmlResult
 from .types import TruncatedDatabaseResultException
 
 
 class TestSubprocessParsing(unittest.TestCase):
     def test_destring(self):
-        self.assertEqual(destring("not a number"), "not a number")
-        self.assertEqual(destring("99999"), 99999)
-        self.assertEqual(destring("999.99"), 999.99)
-        self.assertEqual(destring("9.9999"), 9.9999)
-        self.assertEqual(destring("1/2"), "1/2")
-        self.assertEqual(destring("NULL"), "NULL")
+        self.assertEqual(_destring("not a number"), "not a number")
+        self.assertEqual(_destring("99999"), 99999)
+        self.assertEqual(_destring("999.99"), 999.99)
+        self.assertEqual(_destring("9.9999"), 9.9999)
+        self.assertEqual(_destring("1/2"), "1/2")
+        self.assertEqual(_destring("NULL"), "NULL")
 
     def test_single_row(self):
         o = XmlResult().parse(

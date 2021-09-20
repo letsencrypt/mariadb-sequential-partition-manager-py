@@ -33,7 +33,7 @@ def get_config_from_args_and_yaml(args, yaml, time):
 def run_partition_cmd_yaml(yaml):
     with tempfile.NamedTemporaryFile() as tmpfile:
         insert_into_file(tmpfile, yaml)
-        args = PARSER.parse_args(["--config", tmpfile.name, "add"])
+        args = PARSER.parse_args(["--config", tmpfile.name, "maintain"])
         return partition_cmd(args)
 
 
@@ -51,7 +51,7 @@ class TestPartitionCmd(unittest.TestCase):
             [
                 "--mariadb",
                 str(nonexistant_exec),
-                "add",
+                "maintain",
                 "--noop",
                 "--table",
                 "testtable",
@@ -62,7 +62,14 @@ class TestPartitionCmd(unittest.TestCase):
 
     def test_partition_cmd_noop(self):
         args = PARSER.parse_args(
-            ["--mariadb", str(fake_exec), "add", "--noop", "--table", "testtable_noop"]
+            [
+                "--mariadb",
+                str(fake_exec),
+                "maintain",
+                "--noop",
+                "--table",
+                "testtable_noop",
+            ]
         )
         output = partition_cmd_at_time(args, datetime(2020, 11, 8, tzinfo=timezone.utc))
 
@@ -83,7 +90,7 @@ class TestPartitionCmd(unittest.TestCase):
 
     def test_partition_cmd_final(self):
         args = PARSER.parse_args(
-            ["--mariadb", str(fake_exec), "add", "--table", "testtable_commit"]
+            ["--mariadb", str(fake_exec), "maintain", "--table", "testtable_commit"]
         )
         output = partition_cmd_at_time(args, datetime(2020, 11, 8, tzinfo=timezone.utc))
 
@@ -107,7 +114,7 @@ class TestPartitionCmd(unittest.TestCase):
             [
                 "--mariadb",
                 str(fake_exec),
-                "add",
+                "maintain",
                 "--table",
                 "testtable",
                 "another_table",
@@ -194,17 +201,32 @@ partitionmanager:
         )
 
     def test_partition_period_seven_days(self):
-        o = run_partition_cmd_yaml(
-            f"""
-partitionmanager:
-    num_empty: 1
-    partition_period:
-        days: 7
-    tables:
-        partitioned_yesterday:
-        partitioned_last_week:
-    mariadb: {str(fake_exec)}
-"""
+        with self.assertLogs("partition", level="DEBUG") as logctx:
+            o = run_partition_cmd_yaml(
+                f"""
+    partitionmanager:
+        num_empty: 1
+        partition_period:
+            days: 7
+        tables:
+            partitioned_yesterday:
+            partitioned_last_week:
+        mariadb: {str(fake_exec)}
+    """
+            )
+
+        self.assertEqual(
+            set(logctx.output),
+            set(
+                [
+                    "INFO:partition:Evaluating Table partitioned_last_week "
+                    "(duration=7 days, 0:00:00) (pos={'id': 150})",
+                    "DEBUG:partition:Table partitioned_last_week has no pending SQL updates.",
+                    "INFO:partition:Evaluating Table partitioned_yesterday "
+                    "(duration=7 days, 0:00:00) (pos={'id': 150})",
+                    "DEBUG:partition:Table partitioned_yesterday has no pending SQL updates.",
+                ]
+            ),
         )
         self.assertSequenceEqual(list(o), [])
 

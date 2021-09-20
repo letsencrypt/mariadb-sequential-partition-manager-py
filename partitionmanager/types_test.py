@@ -4,19 +4,27 @@ from datetime import datetime, timedelta, timezone
 from .types import (
     ChangePlannedPartition,
     InstantPartition,
+    is_partition_type,
     MaxValuePartition,
     NewPlannedPartition,
+    Position,
     PositionPartition,
-    retention_from_dict,
+    timedelta_from_dict,
     SqlInput,
     Table,
-    toSqlUrl,
+    to_sql_url,
     UnexpectedPartitionException,
 )
 
 
+def mkPos(*pos):
+    p = Position()
+    p.set_position(pos)
+    return p
+
+
 def mkPPart(name, *pos):
-    return PositionPartition(name).set_position(pos)
+    return PositionPartition(name).set_position(mkPos(*pos))
 
 
 def mkTailPart(name, count=1):
@@ -26,43 +34,43 @@ def mkTailPart(name, count=1):
 class TestTypes(unittest.TestCase):
     def test_dburl_invalid(self):
         with self.assertRaises(argparse.ArgumentTypeError):
-            toSqlUrl("http://localhost/dbname")
+            to_sql_url("http://localhost/dbname")
 
     def test_dburl_without_db_path(self):
         with self.assertRaises(argparse.ArgumentTypeError):
-            toSqlUrl("sql://localhost")
+            to_sql_url("sql://localhost")
         with self.assertRaises(argparse.ArgumentTypeError):
-            toSqlUrl("sql://localhost/")
+            to_sql_url("sql://localhost/")
 
     def test_dburl_with_two_passwords(self):
-        u = toSqlUrl("sql://username:password:else@localhost:3306/database")
+        u = to_sql_url("sql://username:password:else@localhost:3306/database")
         self.assertEqual(u.username, "username")
         self.assertEqual(u.password, "password:else")
         self.assertEqual(u.port, 3306)
 
     def test_dburl_with_port(self):
-        u = toSqlUrl("sql://localhost:3306/database")
+        u = to_sql_url("sql://localhost:3306/database")
         self.assertEqual(u.hostname, "localhost")
         self.assertEqual(u.username, None)
         self.assertEqual(u.password, None)
         self.assertEqual(u.port, 3306)
 
     def test_dburl_with_no_port(self):
-        u = toSqlUrl("sql://localhost/database")
+        u = to_sql_url("sql://localhost/database")
         self.assertEqual(u.hostname, "localhost")
         self.assertEqual(u.username, None)
         self.assertEqual(u.password, None)
         self.assertEqual(u.port, None)
 
     def test_dburl_with_user_pass_and_no_port(self):
-        u = toSqlUrl("sql://username:password@localhost/database")
+        u = to_sql_url("sql://username:password@localhost/database")
         self.assertEqual(u.hostname, "localhost")
         self.assertEqual(u.username, "username")
         self.assertEqual(u.password, "password")
         self.assertEqual(u.port, None)
 
     def test_dburl_with_user_pass_and_port(self):
-        u = toSqlUrl("sql://username:password@localhost:911/database")
+        u = to_sql_url("sql://username:password@localhost:911/database")
         self.assertEqual(u.hostname, "localhost")
         self.assertEqual(u.username, "username")
         self.assertEqual(u.password, "password")
@@ -83,18 +91,18 @@ class TestTypes(unittest.TestCase):
         )
 
         with self.assertRaises(argparse.ArgumentTypeError):
-            retention_from_dict({"something": 1})
+            timedelta_from_dict({"something": 1})
 
         with self.assertRaises(argparse.ArgumentTypeError):
-            retention_from_dict({"another thing": 1, "days": 30})
+            timedelta_from_dict({"another thing": 1, "days": 30})
 
-        r = retention_from_dict(dict())
+        r = timedelta_from_dict(dict())
         self.assertEqual(None, r)
 
         with self.assertRaises(TypeError):
-            retention_from_dict({"days": "thirty"})
+            timedelta_from_dict({"days": "thirty"})
 
-        r = retention_from_dict({"days": 30})
+        r = timedelta_from_dict({"days": 30})
         self.assertEqual(timedelta(days=30), r)
 
     def test_changed_partition(self):
@@ -119,7 +127,7 @@ class TestTypes(unittest.TestCase):
         self.assertTrue(c.has_modifications)
 
         self.assertEqual(c.timestamp(), datetime(2021, 1, 2))
-        self.assertEqual(c.positions, [10, 10, 10, 10])
+        self.assertEqual(c.position.as_list(), [10, 10, 10, 10])
 
         self.assertEqual(
             c.as_partition(),
@@ -130,7 +138,7 @@ class TestTypes(unittest.TestCase):
             MaxValuePartition("p_20210101", count=1)
         ).set_position([1949])
         self.assertEqual(c_max.timestamp(), datetime(2021, 1, 1, tzinfo=timezone.utc))
-        self.assertEqual(c_max.positions, [1949])
+        self.assertEqual(c_max.position.as_list(), [1949])
 
         self.assertEqual(
             ChangePlannedPartition(
@@ -207,7 +215,7 @@ class TestTypes(unittest.TestCase):
             .set_position([3])
             .set_timestamp(datetime(2021, 12, 31))
             .as_partition(),
-            PositionPartition("p_20211231").set_position([3]),
+            PositionPartition("p_20211231").set_position(mkPos(3)),
         )
 
         self.assertEqual(
@@ -238,12 +246,20 @@ class TestTypes(unittest.TestCase):
 
 class TestPartition(unittest.TestCase):
     def test_partition_timestamps(self):
-        self.assertIsNone(PositionPartition("").timestamp())
-        self.assertIsNone(PositionPartition("not_a_date").timestamp())
-        self.assertIsNone(PositionPartition("p_202012310130").timestamp())
+        self.assertFalse(PositionPartition("p_start").has_real_time)
         self.assertEqual(
-            PositionPartition("p_20201231").timestamp(),
-            datetime(2020, 12, 31, tzinfo=timezone.utc),
+            PositionPartition("p_start").timestamp(),
+            datetime(2021, 1, 1, tzinfo=timezone.utc),
+        )
+        self.assertFalse(PositionPartition("not_a_date").has_real_time)
+        self.assertIsNone(PositionPartition("not_a_date").timestamp())
+        self.assertFalse(PositionPartition("p_202012310130").has_real_time)
+        self.assertIsNone(PositionPartition("p_202012310130").timestamp())
+
+        self.assertTrue(PositionPartition("p_20011231").has_real_time)
+        self.assertEqual(
+            PositionPartition("p_20011231").timestamp(),
+            datetime(2001, 12, 31, tzinfo=timezone.utc),
         )
 
         self.assertLess(mkPPart("a", 9), mkPPart("b", 11))
@@ -271,6 +287,13 @@ class TestPartition(unittest.TestCase):
         now = datetime.utcnow()
 
         ip = InstantPartition(now, [1, 2])
-        self.assertEqual(ip.positions, [1, 2])
+        self.assertEqual(ip.position.as_list(), [1, 2])
         self.assertEqual(ip.name, "Instant")
         self.assertEqual(ip.timestamp(), now)
+
+    def test_is_partition_type(self):
+        self.assertTrue(is_partition_type(mkPPart("b", 1, 2)))
+        self.assertTrue(is_partition_type(InstantPartition(datetime.utcnow(), [1, 2])))
+        self.assertFalse(is_partition_type(None))
+        self.assertFalse(is_partition_type(1))
+        self.assertFalse(is_partition_type(NewPlannedPartition()))

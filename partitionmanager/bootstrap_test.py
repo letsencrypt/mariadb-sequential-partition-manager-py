@@ -37,7 +37,6 @@ class MockDatabase(DatabaseCommand):
 
         if "SELECT" in cmd:
             return [{"id": 150}]
-
         return self.response
 
     def db_name(self):

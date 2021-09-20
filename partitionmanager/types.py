@@ -9,10 +9,10 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 
-def retention_from_dict(r):
+def timedelta_from_dict(r):
     """
     Process a dictionary, typically from YAML, which describes a table's
-    retetntion period. Returns a timedelta or None, and raises an argparse
+    retention or partition period. Returns a timedelta or None, and raises an argparse
     error if the arguments are not understood.
     """
     for k, v in r.items():
@@ -74,7 +74,7 @@ class SqlInput(str):
         return str(self)
 
 
-def toSqlUrl(urlstring):
+def to_sql_url(urlstring):
     """
     Parse a sql://user:pass@host:port/schema URL and return the tuple.
     """
@@ -109,55 +109,57 @@ class DatabaseCommand(abc.ABC):
         """
 
 
-class Partition(abc.ABC):
-    """
-    Abstract class which represents a single, currently-defined SQL table
-    partition. The subclasses represent: a partition with position information,
-    PositionPartition; those which are the tail partition and catch IDs beyond
-    the defined positions, MaxValuePartition; and a helper class,
-    InstantPartition, which is only used temporarily and never stored.
-    """
+def is_partition_type(obj):
+    """ True if the object inherits from a _Partition. """
+    return isinstance(obj, _Partition)
+
+
+class _Partition(abc.ABC):
+    """Abstract class which represents a existing table partition."""
 
     @abc.abstractmethod
     def values(self):
-        """
-        Return a SQL partition value string.
-        """
+        """Return a SQL partition value string."""
 
     @property
     @abc.abstractmethod
     def name(self):
-        """
-        Return the partition's name, which should generally represent the
-        date that the partition begins to fill, of the form p_yyyymmdd
+        """Name representing when the partition began to fill.
+
+        Generally this will be of the form p_yyyymmdd, but sometimes partitions
+        have names like p_initial, p_start, or any other valid SQL identifier.
         """
 
     @property
     @abc.abstractmethod
     def num_columns(self):
-        """
-        Return the number of columns this partition represents
-        """
+        """Return the number of columns included in this partition's range."""
 
     @property
-    def has_time(self):
+    def has_real_time(self):
+        """True if the partition has a non-synthetic timestamp.
+
+        This should be used to determine whether timestamp() should be used for
+        statistical purposes, as timestamp() generates a synthetic timestamp
+        for rate-of-change calculations in corner-cases.
         """
-        True if the partition has a timestamp, e.g. if timestamp() can be
-        reasonably assumed to be non-None. Doesn't gaurantee, as this only
-        allows for names to be of the form p_start or p_YYYY[MM[DD]].
-        """
-        if "start" in self.name:
+        if "p_start" in self.name or not self.name.startswith("p_"):
             return False
-        return True
+        return self.timestamp() is not None
 
     def timestamp(self):
-        """
-        Returns a datetime object representing this partition's
-        date, if the partition is of the form "p_YYYYMMDD", otherwise
-        returns None
+        """Returns datetime of this partition's date, or None.
+
+        This returns the date from the partition's name if the partition is of
+        the form "p_YYYYMMDD". If the name is "p_start", return a synthetic
+        timestamp (be sure to use self.has_real_time before using for
+        statistical purposes). Otherwise, returns None.
         """
 
-        if not self.has_time:
+        if not self.name.startswith("p_"):
+            return None
+
+        if "p_start" in self.name:
             # Gotta start somewhere, for partitions named things like
             # "p_start". This has the downside of causing abnormally-low
             # rate of change calculations, but they fall off quickly
@@ -176,7 +178,6 @@ class Partition(abc.ABC):
             return datetime.strptime(self.name, "p_%Y").replace(tzinfo=timezone.utc)
         except ValueError:
             pass
-
         return None
 
     def __repr__(self):
@@ -186,70 +187,122 @@ class Partition(abc.ABC):
         return f"{self.name}: {self.values()}"
 
 
-class PositionPartition(Partition):
+class Position:
+    """ An internal class that represents a position as an ordered list of
+    identifiers, matching the table's partition-by statement.
     """
-    A partition that may have positions assocated with it.
+
+    def __init__(self):
+        self._position = list()
+
+    def set_position(self, position_in):
+        """Set the list of identifiers for this position."""
+        if isinstance(position_in, Position):
+            self._position = position_in.as_list()
+        elif isinstance(position_in, list) or isinstance(position_in, tuple):
+            self._position = [int(p) for p in position_in]
+        else:
+            raise ValueError(f"Unexpected position input: {position_in}")
+        return self
+
+    def as_list(self):
+        """Return a copy of the list of identifiers representing this position"""
+        return self._position.copy()
+
+    def __len__(self):
+        return len(self._position)
+
+    def __eq__(self, other):
+        if isinstance(other, Position):
+            return self._position == other.as_list()
+        return False
+
+    def __str__(self):
+        return str(self._position)
+
+    def __repr__(self):
+        return repr(self._position)
+
+
+class PositionPartition(_Partition):
+    """A partition that has a position assocated with it.
+
+    Partitions are independent table segments, and each has a name and a current
+    position. The positions-list is an ordered list of identifiers, matching
+    the order of the table's partition-by statement when the table was created.
     """
 
     def __init__(self, name):
         self._name = name
-        self.positions = list()
+        self._position = Position()
 
     @property
     def name(self):
         return self._name
 
-    def set_position(self, positions):
-        """
-        Set the position list for this partition.
-        """
-        self.positions = [int(p) for p in positions]
+    def set_position(self, position_in):
+        """Set the position for this partition."""
+        self._position.set_position(position_in)
         return self
 
     @property
+    def position(self):
+        """Return the Position this partition represents"""
+        return self._position
+
+    @property
     def num_columns(self):
-        return len(self.positions)
+        return len(self._position)
 
     def values(self):
-        return "(" + ", ".join([str(x) for x in self.positions]) + ")"
+        return "(" + ", ".join([str(x) for x in self._position.as_list()]) + ")"
 
     def __lt__(self, other):
         if isinstance(other, MaxValuePartition):
-            if len(self.positions) != other.num_columns:
+            if len(self._position) != other.num_columns:
                 raise UnexpectedPartitionException(
-                    f"Expected {len(self.positions)} columns but "
+                    f"Expected {len(self._position)} columns but "
                     f"partition has {other.num_columns}."
                 )
             return True
-        other_positions = None
+
+        other_position_list = None
         if isinstance(other, list):
-            other_positions = other
+            other_position_list = other
+        elif isinstance(other, Position):
+            other_position_list = other.as_list()
         elif isinstance(other, PositionPartition):
-            other_positions = other.positions
-        if not other_positions or len(self.positions) != len(other_positions):
+            other_position_list = other.position.as_list()
+
+        if not other_position_list or len(self._position) != len(other_position_list):
             raise UnexpectedPartitionException(
-                f"Expected {len(self.positions)} columns but partition has {other_positions}."
+                f"Expected {len(self._position)} columns but partition has {other_position_list}."
             )
-        for v_mine, v_other in zip(self.positions, other_positions):
+
+        for v_mine, v_other in zip(self._position.as_list(), other_position_list):
             if v_mine >= v_other:
                 return False
         return True
 
     def __eq__(self, other):
         if isinstance(other, PositionPartition):
-            return self.name == other.name and self.positions == other.positions
-        return False
+            return self.name == other.name and self._position == other.position
+        elif isinstance(other, MaxValuePartition):
+            return False
+
+        raise ValueError(f"Unexpected equality with {other}")
 
 
-class MaxValuePartition(Partition):
-    """
-    A partition that lives at the tail of a partition list, saying
-    all remaining values belong in this partition.
+class MaxValuePartition(_Partition):
+    """A partition that includes all remaining values.
+
+    This kind of partition always resides at the tail of the partition list,
+    and is defined as containing values up to the reserved keyword MAXVALUE.
     """
 
     def __init__(self, name, count):
         self._name = name
-        self.count = count
+        self._count = count
 
     @property
     def name(self):
@@ -257,187 +310,191 @@ class MaxValuePartition(Partition):
 
     @property
     def num_columns(self):
-        return self.count
+        return self._count
 
     def values(self):
-        return ", ".join(["MAXVALUE"] * self.count)
+        return ", ".join(["MAXVALUE"] * self._count)
 
     def __lt__(self, other):
-        """
-        MaxValuePartitions are always greater than every other partition
-        """
-        if isinstance(other, list):
-            if self.count != len(other):
+        """MaxValuePartitions are always greater than every other partition."""
+        if isinstance(other, list) or isinstance(other, Position):
+            if self._count != len(other):
                 raise UnexpectedPartitionException(
-                    f"Expected {self.count} columns but list has {len(other)}."
+                    f"Expected {self._count} columns but list has {len(other)}."
                 )
             return False
-        if isinstance(other, Partition):
-            if self.count != other.num_columns:
+        if is_partition_type(other):
+            if self._count != other.num_columns:
                 raise UnexpectedPartitionException(
-                    f"Expected {self.count} columns but list has {other.num_columns}."
+                    f"Expected {self._count} columns but list has {other.num_columns}."
                 )
             return False
         return ValueError()
 
     def __eq__(self, other):
         if isinstance(other, MaxValuePartition):
-            return self.name == other.name and self.count == other.count
-        return False
+            return self.name == other.name and self._count == other.num_columns
+        elif isinstance(other, PositionPartition):
+            return False
+        raise ValueError(f"Unexpected equality with {other}")
 
 
 class InstantPartition(PositionPartition):
-    """
-    Represent a partition at the current moment, used for rate calculations
-    as a stand-in that only exists for the purposes of the rate calculation
-    itself.
+    """Represent a partition at the current moment.
+
+    Used for rate calculations as a stand-in that only exists for the purposes
+    of the rate calculation itself.
     """
 
-    def __init__(self, now, positions):
+    def __init__(self, now, position_in):
         super().__init__("Instant")
-        self.instant = now
-        self.positions = positions
+        self._instant = now
+        self._position.set_position(position_in)
 
     def timestamp(self):
-        return self.instant
+        return self._instant
 
 
-class PlannedPartition(abc.ABC):
-    """
-    An abstract class representing a partition this tool plans to emit. If
-    the partition is an edit to an existing one, it will be the concrete type
-    ChangePlannedPartition. For new partitions, it'll be NewPlannedPartition.
+class _PlannedPartition(abc.ABC):
+    """Represents a partition this tool plans to emit.
+
+    The method as_partition will make this a concrete type for later evaluation.
     """
 
     def __init__(self):
-        self.num_columns = None
-        self.positions = None
+        self._num_columns = None
+        self._position = None
         self._timestamp = None
         self._important = False
 
     def set_timestamp(self, timestamp):
-        """
-        Set the timestamp to be used for the modified partition. This
-        effectively changes the partition's name.
+        """Set the timestamp to be used for the modified partition.
+
+        This effectively changes the partition's name.
         """
         self._timestamp = timestamp.replace(hour=0, minute=0)
         return self
 
-    def set_position(self, pos):
+    def set_position(self, position_in):
+        """Set the position of this modified partition.
+
+        If this partition changes an existing partition, the positions of both
+        must have identical length.
         """
-        Set the position of this modified partition. If this partition
-        changes an existing partition, the positions of both must have
-        identical length.
-        """
-        if not isinstance(pos, list):
-            raise ValueError()
+        pos = Position()
+        pos.set_position(position_in)
+
         if self.num_columns is not None and len(pos) != self.num_columns:
             raise UnexpectedPartitionException(
-                f"Expected {self.num_columns} columns but list has {len(pos)}."
+                f"Expected {self.num_columns} columns but input has {len(pos)}."
             )
-        self.positions = pos
+
+        self._position = pos
         return self
 
     def set_important(self):
-        """
-        Indicate this is an important partition.
-        """
+        """Indicate this is an important partition. Used in the
+        _plan_partition_changes as a marker that there's a significant
+        change in this partition that should be committed even if the
+        overall map isn't changing much. """
         self._important = True
         return self
 
+    @property
+    def position(self):
+        """Get the position for this modified partition."""
+        return self._position
+
     def timestamp(self):
-        """
-        The timestamp of this partition.
-        """
+        """The timestamp of this partition."""
         return self._timestamp
 
     def important(self):
-        """
-        Whether this modified Partition is itself important enough to ensure
-        commitment.
-        """
+        """True if this Partition is important enough to ensure commitment."""
         return self._important
 
     @property
     @abc.abstractmethod
     def has_modifications(self):
-        """
-        True if this partition modifies another partition.
-        """
+        """True if this partition modifies another partition."""
+
+    @property
+    def num_columns(self):
+        """Return the number of columns this partition represents."""
+        return self._num_columns
 
     def set_as_max_value(self):
-        """
-        Make this partition represent MAXVALUE and be represented by a
-        MaxValuePartition by the as_partition method.
-        """
-        self.num_columns = len(self.positions)
-        self.positions = None
+        """Represent this partition by MaxValuePartition from as_partition()"""
+        self._num_columns = len(self._position)
+        self._position = None
         return self
 
     def as_partition(self):
-        """
-        Convert this from a Planned Partition to a Partition, which can then be
-        rendered into a SQL ALTER.
-        """
+        """Return a concrete Partition that can be rendered into a SQL ALTER."""
         if not self._timestamp:
             raise ValueError()
-        if self.positions:
+        if self._position:
             return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(
-                self.positions
+                self._position
             )
-        return MaxValuePartition(f"p_{self._timestamp:%Y%m%d}", count=self.num_columns)
+        return MaxValuePartition(f"p_{self._timestamp:%Y%m%d}", count=self._num_columns)
 
     def __repr__(self):
         return f"{type(self).__name__}<{str(self)}>"
 
     def __eq__(self, other):
-        if isinstance(other, PlannedPartition):
+        if isinstance(other, _PlannedPartition):
             return (
                 isinstance(self, type(other))
-                and self.positions == other.positions
+                and self.position == other.position
                 and self.timestamp() == other.timestamp()
                 and self.important() == other.important()
             )
         return False
 
 
-class ChangePlannedPartition(PlannedPartition):
-    """
-    Represents modifications to a Partition supplied during construction. Use
-    the parent class' methods to alter this change.
+class ChangePlannedPartition(_PlannedPartition):
+    """Represents modifications to a Partition supplied during construction.
+
+    Use the parent class' methods to alter this change.
     """
 
     def __init__(self, old_part):
-        if not isinstance(old_part, Partition):
+        if not is_partition_type(old_part):
             raise ValueError()
         super().__init__()
-        self.old = old_part
-        self.num_columns = self.old.num_columns
-        self._timestamp = self.old.timestamp()
-        self._old_positions = (
-            self.old.positions if isinstance(old_part, PositionPartition) else None
+        self._old = old_part
+        self._num_columns = self._old.num_columns
+        self._timestamp = self._old.timestamp()
+        self._old_position = (
+            self._old.position if isinstance(old_part, PositionPartition) else None
         )
-        self.positions = self._old_positions
+        self._position = self._old_position
 
     @property
     def has_modifications(self):
         return (
-            self.positions != self._old_positions
-            or self.old.timestamp() is None
+            self._position != self._old_position
+            or self._old.timestamp() is None
             and self._timestamp is not None
-            or self._timestamp.date() != self.old.timestamp().date()
+            or self._timestamp.date() != self._old.timestamp().date()
         )
+
+    @property
+    def old(self):
+        """Get the partition to be modified"""
+        return self._old
 
     def __str__(self):
         imp = "[!!]" if self.important() else ""
-        return f"{self.old} => {self.positions} {imp} {self._timestamp}"
+        return f"{self._old} => {self.position} {imp} {self._timestamp}"
 
 
-class NewPlannedPartition(PlannedPartition):
-    """
-    Represents a wholly new Partition to be constructed. After construction,
-    you must set the number of columns using set_columns before attempting
-    to use this in a plan.
+class NewPlannedPartition(_PlannedPartition):
+    """Represents a wholly new Partition to be constructed.
+
+    After construction, you must set the number of columns using set_columns
+    before attempting to use this in a plan.
     """
 
     def __init__(self):
@@ -445,11 +502,9 @@ class NewPlannedPartition(PlannedPartition):
         self.set_important()
 
     def set_columns(self, count):
-        """
-        Set the number of columns needed to represent a position for this
-        partition.
-        """
-        self.num_columns = count
+        """Set the number of columns needed to represent a position for this
+        partition."""
+        self._num_columns = count
         return self
 
     @property
@@ -457,40 +512,28 @@ class NewPlannedPartition(PlannedPartition):
         return False
 
     def __str__(self):
-        return f"Add: {self.positions} {self._timestamp}"
+        return f"Add: {self.position} {self._timestamp}"
 
 
 class MismatchedIdException(Exception):
-    """
-    Raised if the partition map doesn't use the primary key as its range id.
-    """
+    """ Raised if the partition map doesn't use the primary key as its range id."""
 
 
 class TruncatedDatabaseResultException(Exception):
-    """
-    Raised if the XML schema truncated over a subprocess interaction
-    """
+    """Raised if the XML schema truncated over a subprocess interaction"""
 
 
 class DuplicatePartitionException(Exception):
-    """
-    Raise if a partition being created already exists.
-    """
+    """Raise if a partition being created already exists."""
 
 
 class UnexpectedPartitionException(Exception):
-    """
-    Raised when the partition map is unexpected.
-    """
+    """Raised when the partition map is unexpected."""
 
 
 class TableInformationException(Exception):
-    """
-    Raised when the table's status doesn't include the information we need.
-    """
+    """Raised when the table's status doesn't include the information we need."""
 
 
 class NoEmptyPartitionsAvailableException(Exception):
-    """
-    Raised if no empty partitions are available to safely modify.
-    """
+    """Raised if no empty partitions are available to safely modify."""

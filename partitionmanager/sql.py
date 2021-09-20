@@ -10,18 +10,11 @@ import xml.parsers.expat
 import pymysql
 import pymysql.cursors
 
-from partitionmanager.types import (
-    DatabaseCommand,
-    TruncatedDatabaseResultException,
-    TableInformationException,
-    SqlInput,
-)
+import partitionmanager.types
 
 
-def destring(text):
-    """
-    Try and get a python type from a string. Used for SQL results.
-    """
+def _destring(text):
+    """Try and get a python type from a string. Used for SQL results."""
     try:
         return int(text)
     except ValueError:
@@ -34,9 +27,9 @@ def destring(text):
 
 
 class XmlResult:
-    """
-    Ugly class to parse XML results from the mariadb CLI client. The general
-    schema is:
+    """Parses XML results from the mariadb CLI client.
+
+    The general schema is:
     <resultset statement="sql query">
         <row>
             <field name="name" xsi:nil="true/false">data if any</field>
@@ -67,9 +60,7 @@ class XmlResult:
         self.statement = None
 
     def parse(self, data):
-        """
-        Return rows from an XML Result object.
-        """
+        """Return rows from an XML Result object."""
         if self.rows is not None:
             raise ValueError("XmlResult objects can only be used once")
 
@@ -77,7 +68,7 @@ class XmlResult:
         self.xmlparser.Parse(data)
 
         if self.current_elements:
-            raise TruncatedDatabaseResultException(
+            raise partitionmanager.types.TruncatedDatabaseResultException(
                 f"These XML tags are unclosed: {self.current_elements}"
             )
         return self.rows
@@ -112,7 +103,7 @@ class XmlResult:
             assert self.current_field is not None
             value = self.current_row[self.current_field]
             if value:
-                self.current_row[self.current_field] = destring(value)
+                self.current_row[self.current_field] = _destring(value)
             self.current_field = None
 
     def _char_data(self, data):
@@ -123,9 +114,9 @@ class XmlResult:
             self.current_row[self.current_field] += data
 
 
-class SubprocessDatabaseCommand(DatabaseCommand):
-    """
-    Run a database command via the CLI tool, getting the results in XML form.
+class SubprocessDatabaseCommand(partitionmanager.types.DatabaseCommand):
+    """Run a database command via the CLI tool, getting the results in XML form.
+
     This can be very convenient without explicit port-forwarding, but is a
     little slow.
     """
@@ -147,15 +138,16 @@ class SubprocessDatabaseCommand(DatabaseCommand):
     def db_name(self):
         rows = self.run("SELECT DATABASE();")
         if len(rows) != 1:
-            raise TableInformationException("Expected one result")
+            raise partitionmanager.types.TableInformationException(
+                "Expected one result"
+            )
+        return partitionmanager.types.SqlInput(rows[0]["DATABASE()"])
 
-        return SqlInput(rows[0]["DATABASE()"])
 
+class IntegratedDatabaseCommand(partitionmanager.types.DatabaseCommand):
+    """Run a database command via a direct socket connection and pymysql.
 
-class IntegratedDatabaseCommand(DatabaseCommand):
-    """
-    Run a database command via a direct socket connection and pymysql, a pure
-    Python PEP 249-compliant database connector.
+    Pymysql is a pure Python PEP 249-compliant database connector.
     """
 
     def __init__(self, url):
@@ -175,7 +167,7 @@ class IntegratedDatabaseCommand(DatabaseCommand):
         )
 
     def db_name(self):
-        return SqlInput(self.db)
+        return partitionmanager.types.SqlInput(self.db)
 
     def run(self, sql_cmd):
         with self.connection.cursor() as cursor:

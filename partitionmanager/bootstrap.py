@@ -8,18 +8,9 @@ import logging
 import operator
 import yaml
 
-from partitionmanager.types import (
-    ChangePlannedPartition,
-    MaxValuePartition,
-    NewPlannedPartition,
-)
-from partitionmanager.table_append_partition import (
-    table_is_compatible,
-    get_current_positions,
-    get_partition_map,
-    generate_sql_reorganize_partition_commands,
-)
-from .tools import iter_show_end
+import partitionmanager.table_append_partition as pm_tap
+import partitionmanager.tools
+import partitionmanager.types
 
 RATE_UNIT = timedelta(hours=1)
 MINIMUM_FUTURE_DELTA = timedelta(hours=2)
@@ -35,12 +26,14 @@ def write_state_info(conf, out_fp):
     log.info("Writing current state information")
     state_info = {"time": conf.curtime, "tables": dict()}
     for table in conf.tables:
-        problem = table_is_compatible(conf.dbcmd, table)
-        if problem:
-            raise Exception(problem)
+        problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
+        if problems:
+            raise Exception("; ".join(problems))
 
-        map_data = get_partition_map(conf.dbcmd, table)
-        positions = get_current_positions(conf.dbcmd, table, map_data["range_cols"])
+        map_data = pm_tap.get_partition_map(conf.dbcmd, table)
+        positions = pm_tap.get_current_positions(
+            conf.dbcmd, table, map_data["range_cols"]
+        )
 
         log.info(f'(Table("{table.name}"): {positions}),')
         state_info["tables"][str(table.name)] = positions
@@ -60,7 +53,6 @@ def _get_time_offsets(num_entries, first_delta, subseq_delta):
     while len(time_units) < num_entries:
         prev = time_units[-1]
         time_units.append(prev + subseq_delta)
-
     return time_units
 
 
@@ -68,13 +60,19 @@ def _plan_partitions_for_time_offsets(
     now_time, time_offsets, rate_of_change, ordered_current_pos, max_val_part
 ):
     """
-    Return a list of PlannedPartitions, starting from now, corresponding to
-    each supplied offset that will represent the positions then from the
-    supplied current positions and the rate of change. The first planned
-    partition will be altered out of the supplied MaxValue partition.
+    Return a list of PlannedPartitions whose positions are predicted to
+    lie upon the supplied time_offsets, given the initial conditions supplied
+    in the other parameters.
+
+    types:
+        time_offsets: an ordered list of timedeltas to plan to reach
+
+        rate_of_change: an ordered list of positions per RATE_UNIT.
     """
     changes = list()
-    for (i, offset), is_final in iter_show_end(enumerate(time_offsets)):
+    for (i, offset), is_final in partitionmanager.tools.iter_show_end(
+        enumerate(time_offsets)
+    ):
         increase = [x * offset / RATE_UNIT for x in rate_of_change]
         predicted_positions = [
             int(p + i) for p, i in zip(ordered_current_pos, increase)
@@ -84,13 +82,15 @@ def _plan_partitions_for_time_offsets(
         part = None
         if i == 0:
             part = (
-                ChangePlannedPartition(max_val_part)
+                partitionmanager.types.ChangePlannedPartition(max_val_part)
                 .set_position(predicted_positions)
                 .set_timestamp(predicted_time)
             )
 
         else:
-            part = NewPlannedPartition().set_timestamp(predicted_time)
+            part = partitionmanager.types.NewPlannedPartition().set_timestamp(
+                predicted_time
+            )
 
             if is_final:
                 part.set_columns(len(predicted_positions))
@@ -130,12 +130,12 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
             log.info(f"Skipping {table_name} as it is not in the current config")
             continue
 
-        problem = table_is_compatible(conf.dbcmd, table)
+        problem = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if problem:
             raise Exception(problem)
 
-        map_data = get_partition_map(conf.dbcmd, table)
-        current_positions = get_current_positions(
+        map_data = pm_tap.get_partition_map(conf.dbcmd, table)
+        current_positions = pm_tap.get_current_positions(
             conf.dbcmd, table, map_data["range_cols"]
         )
 
@@ -150,7 +150,7 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
         rate_of_change = list(map(lambda pos: pos / time_delta, delta_positions))
 
         max_val_part = map_data["partitions"][-1]
-        if not isinstance(max_val_part, MaxValuePartition):
+        if not isinstance(max_val_part, partitionmanager.types.MaxValuePartition):
             log.error(f"Expected a MaxValue partition, got {max_val_part}")
             raise Exception("Unexpected part?")
 
@@ -163,6 +163,9 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
         if table.partition_period:
             part_duration = table.partition_period
 
+        # Choose the times for each partition that we are configured to
+        # construct, beginning in the near future (see MINIMUM_FUTURE_DELTA),
+        # to provide a quick changeover into the new partition schema.
         time_offsets = _get_time_offsets(
             1 + conf.num_empty, MINIMUM_FUTURE_DELTA, part_duration
         )
@@ -176,7 +179,6 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
         )
 
         commands[table.name] = list(
-            generate_sql_reorganize_partition_commands(table, changes)
+            pm_tap.generate_sql_reorganize_partition_commands(table, changes)
         )
-
     return commands

@@ -11,7 +11,6 @@ from partitionmanager.types import (
     MismatchedIdException,
     NewPlannedPartition,
     NoEmptyPartitionsAvailableException,
-    Partition,
     PositionPartition,
     SqlInput,
     Table,
@@ -19,23 +18,24 @@ from partitionmanager.types import (
     UnexpectedPartitionException,
 )
 from partitionmanager.table_append_partition import (
-    evaluate_partition_changes,
+    _generate_weights,
+    _get_position_increase_per_day,
+    _get_table_information_schema_problems,
+    _get_weighted_position_increase_per_day_for_partitions,
+    _parse_partition_map,
+    _plan_partition_changes,
+    _predict_forward_position,
+    _predict_forward_time,
+    _should_run_changes,
+    _split_partitions_around_position,
     generate_sql_reorganize_partition_commands,
-    generate_weights,
     get_current_positions,
     get_partition_map,
-    get_position_increase_per_day,
-    get_weighted_position_increase_per_day_for_partitions,
-    parse_partition_map,
-    plan_partition_changes,
-    predict_forward_position,
-    predict_forward_time,
-    split_partitions_around_positions,
-    table_information_schema_is_compatible,
-    table_is_compatible,
+    get_pending_sql_reorganize_partition_commands,
+    get_table_compatibility_problems,
 )
 
-from .types_test import mkPPart, mkTailPart
+from .types_test import mkPPart, mkTailPart, mkPos
 
 
 class MockDatabase(DatabaseCommand):
@@ -58,26 +58,33 @@ class TestTypeEnforcement(unittest.TestCase):
 
     def test_get_autoincrement(self):
         self.assertEqual(
-            table_is_compatible(MockDatabase(), ""), "Unexpected table type: "
+            get_table_compatibility_problems(MockDatabase(), ""),
+            ["Unexpected table type: "],
         )
 
 
 class TestParseTableInformationSchema(unittest.TestCase):
     def test_not_partitioned_and_unexpected(self):
         info = [{"CREATE_OPTIONS": "exfoliated, disenchanted"}]
-        self.assertIsNotNone(table_information_schema_is_compatible(info, "extable"))
+        self.assertEqual(
+            _get_table_information_schema_problems(info, "extable"),
+            ["Table extable is not partitioned"],
+        )
 
     def test_not_partitioned(self):
         info = [{"CREATE_OPTIONS": "exfoliated"}]
-        self.assertIsNotNone(table_information_schema_is_compatible(info, "extable"))
+        self.assertEqual(
+            _get_table_information_schema_problems(info, "extable"),
+            ["Table extable is not partitioned"],
+        )
 
     def test_normal(self):
         info = [{"CREATE_OPTIONS": "partitioned"}]
-        self.assertIsNone(table_information_schema_is_compatible(info, "table"))
+        self.assertEqual(_get_table_information_schema_problems(info, "table"), list())
 
     def test_normal_multiple_create_options(self):
         info = [{"CREATE_OPTIONS": "magical, partitioned"}]
-        self.assertIsNone(table_information_schema_is_compatible(info, "table"))
+        self.assertEqual(_get_table_information_schema_problems(info, "table"), list())
 
 
 class TestParsePartitionMap(unittest.TestCase):
@@ -94,7 +101,7 @@ class TestParsePartitionMap(unittest.TestCase):
 """,
             }
         ]
-        results = parse_partition_map(create_stmt)
+        results = _parse_partition_map(create_stmt)
         self.assertEqual(len(results["partitions"]), 1)
         self.assertEqual(results["partitions"][0], mkTailPart("p_20201204"))
         self.assertEqual(results["range_cols"], ["id"])
@@ -113,7 +120,7 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
 """,
             }
         ]
-        results = parse_partition_map(create_stmt)
+        results = _parse_partition_map(create_stmt)
         self.assertEqual(len(results["partitions"]), 2)
         self.assertEqual(results["partitions"][0], mkPPart("before", 100))
         self.assertEqual(results["partitions"][1], mkTailPart("p_20201204"))
@@ -132,7 +139,7 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
               (PARTITION `p_start` VALUES LESS THAN (MAXVALUE, MAXVALUE) ENGINE = InnoDB)""",
             }
         ]
-        results = parse_partition_map(create_stmt)
+        results = _parse_partition_map(create_stmt)
         self.assertEqual(len(results["partitions"]), 1)
         self.assertEqual(results["partitions"][0], mkTailPart("p_start", count=2))
         self.assertEqual(results["range_cols"], ["firstID", "secondID"])
@@ -151,7 +158,7 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
                PARTITION `p_next` VALUES LESS THAN (MAXVALUE, MAXVALUE) ENGINE = InnoDB)""",
             }
         ]
-        results = parse_partition_map(create_stmt)
+        results = _parse_partition_map(create_stmt)
         self.assertEqual(len(results["partitions"]), 2)
         self.assertEqual(results["partitions"][0], mkPPart("p_start", 255, 1234567890))
         self.assertEqual(results["partitions"][1], mkTailPart("p_next", count=2))
@@ -171,7 +178,7 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
             }
         ]
         with self.assertRaises(TableInformationException):
-            parse_partition_map(create_stmt)
+            _parse_partition_map(create_stmt)
 
     def test_missing_part_definition_and_just_tail(self):
         create_stmt = [
@@ -186,7 +193,7 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
             }
         ]
         with self.assertRaises(TableInformationException):
-            parse_partition_map(create_stmt)
+            _parse_partition_map(create_stmt)
 
     def test_missing_part_tail(self):
         create_stmt = [
@@ -201,7 +208,7 @@ PARTITION `p_20201204` VALUES LESS THAN MAXVALUE ENGINE = InnoDB)
             }
         ]
         with self.assertRaises(UnexpectedPartitionException):
-            parse_partition_map(create_stmt)
+            _parse_partition_map(create_stmt)
 
 
 class TestSqlInput(unittest.TestCase):
@@ -249,57 +256,57 @@ class TestGetPositions(unittest.TestCase):
 class TestPartitionAlgorithm(unittest.TestCase):
     def test_split(self):
         with self.assertRaises(UnexpectedPartitionException):
-            split_partitions_around_positions(
-                [mkPPart("a", 1), mkTailPart("z")], [10, 10]
+            _split_partitions_around_position(
+                [mkPPart("a", 1), mkTailPart("z")], mkPos(10, 10)
             )
         with self.assertRaises(UnexpectedPartitionException):
-            split_partitions_around_positions(
-                [mkPPart("a", 1, 1), mkTailPart("z")], [10, 10]
+            _split_partitions_around_position(
+                [mkPPart("a", 1, 1), mkTailPart("z")], mkPos(10, 10)
             )
         with self.assertRaises(UnexpectedPartitionException):
-            split_partitions_around_positions(
-                [mkPPart("a", 1), mkTailPart("z", count=2)], [10, 10]
+            _split_partitions_around_position(
+                [mkPPart("a", 1), mkTailPart("z", count=2)], mkPos(10, 10)
             )
 
         self.assertEqual(
-            split_partitions_around_positions(
-                [mkPPart("a", 1), mkPPart("b", 2), mkTailPart("z")], [10]
+            _split_partitions_around_position(
+                [mkPPart("a", 1), mkPPart("b", 2), mkTailPart("z")], mkPos(10)
             ),
             ([mkPPart("a", 1), mkPPart("b", 2)], mkTailPart("z"), []),
         )
 
         self.assertEqual(
-            split_partitions_around_positions(
-                [mkPPart("a", 100), mkPPart("b", 200), mkTailPart("z")], [10]
+            _split_partitions_around_position(
+                [mkPPart("a", 100), mkPPart("b", 200), mkTailPart("z")], mkPos(10)
             ),
             ([], mkPPart("a", 100), [mkPPart("b", 200), mkTailPart("z")]),
         )
 
         self.assertEqual(
-            split_partitions_around_positions(
-                [mkPPart("a", 1), mkPPart("b", 10), mkTailPart("z")], [10]
+            _split_partitions_around_position(
+                [mkPPart("a", 1), mkPPart("b", 10), mkTailPart("z")], mkPos(10)
             ),
             ([mkPPart("a", 1)], mkPPart("b", 10), [mkTailPart("z")]),
         )
         self.assertEqual(
-            split_partitions_around_positions(
-                [mkPPart("a", 1), mkPPart("b", 11), mkTailPart("z")], [10]
+            _split_partitions_around_position(
+                [mkPPart("a", 1), mkPPart("b", 11), mkTailPart("z")], mkPos(10)
             ),
             ([mkPPart("a", 1)], mkPPart("b", 11), [mkTailPart("z")]),
         )
 
         self.assertEqual(
-            split_partitions_around_positions(
+            _split_partitions_around_position(
                 [mkPPart("a", 1), mkPPart("b", 11), mkPPart("c", 11), mkTailPart("z")],
-                [10],
+                mkPos(10),
             ),
             ([mkPPart("a", 1)], mkPPart("b", 11), [mkPPart("c", 11), mkTailPart("z")]),
         )
 
         self.assertEqual(
-            split_partitions_around_positions(
+            _split_partitions_around_position(
                 [mkPPart("a", 1), mkPPart("b", 11), mkPPart("c", 11), mkTailPart("z")],
-                [0],
+                mkPos(0),
             ),
             (
                 [],
@@ -309,9 +316,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
         self.assertEqual(
-            split_partitions_around_positions(
+            _split_partitions_around_position(
                 [mkPPart("a", 1), mkPPart("b", 11), mkPPart("c", 11), mkTailPart("z")],
-                [200],
+                mkPos(200),
             ),
             (
                 [mkPPart("a", 1), mkPPart("b", 11), mkPPart("c", 11)],
@@ -321,9 +328,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
         self.assertEqual(
-            split_partitions_around_positions(
+            _split_partitions_around_position(
                 [mkPPart("a", 1, 100), mkPPart("b", 2, 200), mkTailPart("z", count=2)],
-                [10, 1000],
+                mkPos(10, 1000),
             ),
             (
                 [mkPPart("a", 1, 100), mkPPart("b", 2, 200)],
@@ -333,74 +340,74 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
         self.assertEqual(
-            split_partitions_around_positions(
+            _split_partitions_around_position(
                 [mkPPart("a", 10, 10), mkPPart("b", 20, 20), mkTailPart("z", count=2)],
-                [19, 500],
+                mkPos(19, 500),
             ),
             ([mkPPart("a", 10, 10)], mkPPart("b", 20, 20), [mkTailPart("z", count=2)]),
         )
 
     def test_get_position_increase_per_day(self):
         with self.assertRaises(ValueError):
-            get_position_increase_per_day(
+            _get_position_increase_per_day(
                 mkTailPart("p_20201231"), mkPPart("p_20210101", 42)
             )
         with self.assertRaises(ValueError):
-            get_position_increase_per_day(
+            _get_position_increase_per_day(
                 mkPPart("p_20211231", 99), mkPPart("p_20210101", 42)
             )
         with self.assertRaises(ValueError):
-            get_position_increase_per_day(
+            _get_position_increase_per_day(
                 mkPPart("p_20201231", 1, 99), mkPPart("p_20210101", 42)
             )
 
         self.assertEqual(
-            get_position_increase_per_day(
+            _get_position_increase_per_day(
                 mkPPart("p_20201231", 0), mkPPart("p_20210101", 100)
             ),
             [100],
         )
         self.assertEqual(
-            get_position_increase_per_day(
+            _get_position_increase_per_day(
                 mkPPart("p_20201231", 0), mkPPart("p_20210410", 100)
             ),
             [1],
         )
         self.assertEqual(
-            get_position_increase_per_day(
+            _get_position_increase_per_day(
                 mkPPart("p_20201231", 0, 10), mkPPart("p_20210410", 100, 1000)
             ),
             [1, 9.9],
         )
 
     def test_generate_weights(self):
-        self.assertEqual(generate_weights(1), [10000])
-        self.assertEqual(generate_weights(3), [10000 / 3, 5000, 10000])
+        self.assertEqual(_generate_weights(1), [10000])
+        self.assertEqual(_generate_weights(3), [10000 / 3, 5000, 10000])
 
     def test_get_weighted_position_increase_per_day_for_partitions(self):
         with self.assertRaises(ValueError):
-            get_weighted_position_increase_per_day_for_partitions(list())
+            _get_weighted_position_increase_per_day_for_partitions(list())
 
         self.assertEqual(
-            get_weighted_position_increase_per_day_for_partitions(
+            _get_weighted_position_increase_per_day_for_partitions(
                 [mkPPart("p_20201231", 0), mkPPart("p_20210101", 100)]
             ),
             [100],
         )
         self.assertEqual(
-            get_weighted_position_increase_per_day_for_partitions(
+            _get_weighted_position_increase_per_day_for_partitions(
                 [mkPPart("p_20201231", 0), mkPPart("p_20210410", 100)]
             ),
             [1],
         )
         self.assertEqual(
-            get_weighted_position_increase_per_day_for_partitions(
+            _get_weighted_position_increase_per_day_for_partitions(
                 [mkPPart("p_20201231", 50, 50), mkPPart("p_20210410", 100, 500)]
             ),
             [0.5, 4.5],
         )
         self.assertEqual(
-            get_weighted_position_increase_per_day_for_partitions(
+            _get_weighted_position_increase_per_day_for_partitions(
                 [
                     mkPPart("p_20200922", 0),
                     mkPPart("p_20201231", 100),  # rate = 1/day
@@ -410,7 +417,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [7],
         )
         self.assertEqual(
-            get_weighted_position_increase_per_day_for_partitions(
+            _get_weighted_position_increase_per_day_for_partitions(
                 [
                     mkPPart("p_20200922", 0),
                     mkPPart("p_20201231", 100),  # 1/day
@@ -423,59 +430,71 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_predict_forward_position(self):
         with self.assertRaises(ValueError):
-            predict_forward_position([0], [1, 2], timedelta(days=1))
+            _predict_forward_position([0], [1, 2], timedelta(days=1))
         with self.assertRaises(ValueError):
-            predict_forward_position([1, 2], [3], timedelta(days=1))
+            _predict_forward_position([1, 2], [3], timedelta(days=1))
         with self.assertRaises(ValueError):
-            predict_forward_position([1, 2], [-1], timedelta(days=1))
+            _predict_forward_position([1, 2], [-1], timedelta(days=1))
 
-        self.assertEqual(predict_forward_position([0], [500], timedelta(days=1)), [500])
+        self.assertEqual(
+            _predict_forward_position([0], [500], timedelta(days=1)), [500]
+        )
 
-        self.assertEqual(predict_forward_position([0], [125], timedelta(days=4)), [500])
+        self.assertEqual(
+            _predict_forward_position([0], [125], timedelta(days=4)), [500]
+        )
 
     def test_predict_forward_time(self):
         t = datetime(2000, 1, 1)
 
         with self.assertRaises(ValueError):
-            predict_forward_time([0, 0], [100], [100], t)
+            _predict_forward_time(mkPos(0, 0), mkPos(100), [100], t)
         with self.assertRaises(ValueError):
-            predict_forward_time([0], [100, 0], [100], t)
+            _predict_forward_time(mkPos(0), mkPos(100, 0), [100], t)
         with self.assertRaises(ValueError):
-            predict_forward_time([0], [100, 0], [100, 100], t)
+            _predict_forward_time(mkPos(0), mkPos(100, 0), [100, 100], t)
         with self.assertRaises(ValueError):
-            predict_forward_time([0], [100], [100, 100], t)
+            _predict_forward_time(mkPos(0), mkPos(100), [100, 100], t)
         with self.assertRaises(ValueError):
-            predict_forward_time([0], [100], [-1], t)
+            _predict_forward_time(mkPos(0), mkPos(100), [-1], t)
         with self.assertRaises(ValueError):
-            predict_forward_time([100], [99], [1], t)
+            _predict_forward_time(mkPos(100), mkPos(99), [1], t)
         with self.assertRaises(ValueError):
             # We should never be asked to operate on positions in the incorrect
             # order
-            predict_forward_time([101, 101], [100, 100], [200, 200], t)
+            _predict_forward_time(mkPos(101, 101), mkPos(100, 100), [200, 200], t)
+        with self.assertRaises(ValueError):
+            # Nonzero rates of change are bad too.
+            _predict_forward_time(mkPos(0, 0, 0), mkPos(100, 100, 100), [1, 1, 0], t)
 
         self.assertEqual(
-            predict_forward_time([0], [100], [100], t), t + timedelta(hours=24)
+            _predict_forward_time(mkPos(0), mkPos(100), [100], t),
+            t + timedelta(hours=24),
         )
         self.assertEqual(
-            predict_forward_time([0], [100], [200], t), t + timedelta(hours=12)
+            _predict_forward_time(mkPos(0), mkPos(100), [200], t),
+            t + timedelta(hours=12),
         )
         self.assertEqual(
-            predict_forward_time([0], [100], [200], t), t + timedelta(hours=12)
+            _predict_forward_time(mkPos(0), mkPos(100), [200], t),
+            t + timedelta(hours=12),
         )
 
         # It must be OK to have some positions already well beyond the endpoint
         self.assertEqual(
-            predict_forward_time([0, 200], [100, 100], [200, 200], t),
+            _predict_forward_time(mkPos(0, 200), mkPos(100, 100), [200, 200], t),
             t + timedelta(hours=12),
         )
 
-        self.assertEqual(predict_forward_time([100, 100], [100, 100], [200, 200], t), t)
+        self.assertEqual(
+            _predict_forward_time(mkPos(100, 100), mkPos(100, 100), [200, 200], t), t
+        )
 
     def test_plan_partition_changes_no_empty_partitions(self):
         with self.assertRaises(NoEmptyPartitionsAvailableException):
-            plan_partition_changes(
+            _plan_partition_changes(
                 [mkPPart("p_20201231", 0), mkPPart("p_20210102", 200)],
-                [50],
+                mkPos(50),
                 datetime(2021, 1, 1, tzinfo=timezone.utc),
                 timedelta(days=7),
                 2,
@@ -483,13 +502,13 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_plan_partition_changes_imminent(self):
         with self.assertLogs("plan_partition_changes", level="INFO") as logctx:
-            planned = plan_partition_changes(
+            planned = _plan_partition_changes(
                 [
                     mkPPart("p_20201231", 100),
                     mkPPart("p_20210102", 200),
                     mkTailPart("future"),
                 ],
-                [50],
+                mkPos(50),
                 datetime(2021, 1, 1, hour=23, minute=55, tzinfo=timezone.utc),
                 timedelta(days=2),
                 3,
@@ -523,13 +542,13 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_plan_partition_changes_wildly_off_dates(self):
         with self.assertLogs("plan_partition_changes", level="INFO") as logctx:
-            planned = plan_partition_changes(
+            planned = _plan_partition_changes(
                 [
                     mkPPart("p_20201231", 100),
                     mkPPart("p_20210104", 200),
                     mkTailPart("future"),
                 ],
-                [50],
+                mkPos(50),
                 datetime(2021, 1, 1, tzinfo=timezone.utc),
                 timedelta(days=7),
                 2,
@@ -559,13 +578,13 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes_long_delay(self):
-        planned = plan_partition_changes(
+        planned = _plan_partition_changes(
             [
                 mkPPart("p_20210101", 100),
                 mkPPart("p_20210415", 200),
                 mkTailPart("future"),
             ],
-            [50],
+            mkPos(50),
             datetime(2021, 3, 31, tzinfo=timezone.utc),
             timedelta(days=7),
             2,
@@ -585,14 +604,14 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes_short_names(self):
-        planned = plan_partition_changes(
+        planned = _plan_partition_changes(
             [
                 mkPPart("p_2019", 1912499867),
                 mkPPart("p_2020", 8890030931),
                 mkPPart("p_20210125", 12010339136),
                 mkTailPart("p_future"),
             ],
-            [10810339136],
+            mkPos(10810339136),
             datetime(2021, 1, 30, tzinfo=timezone.utc),
             timedelta(days=7),
             2,
@@ -626,9 +645,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes_bespoke_names(self):
-        planned = plan_partition_changes(
+        planned = _plan_partition_changes(
             [mkPPart("p_start", 100), mkTailPart("p_future")],
-            [50],
+            mkPos(50),
             datetime(2021, 1, 6, tzinfo=timezone.utc),
             timedelta(days=7),
             2,
@@ -660,13 +679,13 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes(self):
-        planned = plan_partition_changes(
+        planned = _plan_partition_changes(
             [
                 mkPPart("p_20201231", 100),
                 mkPPart("p_20210102", 200),
                 mkTailPart("future"),
             ],
-            [50],
+            mkPos(50),
             datetime(2021, 1, 1, tzinfo=timezone.utc),
             timedelta(days=7),
             2,
@@ -684,13 +703,13 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
         self.assertEqual(
-            plan_partition_changes(
+            _plan_partition_changes(
                 [
                     mkPPart("p_20201231", 100),
                     mkPPart("p_20210102", 200),
                     mkTailPart("future"),
                 ],
-                [199],
+                mkPos(199),
                 datetime(2021, 1, 3, tzinfo=timezone.utc),
                 timedelta(days=7),
                 3,
@@ -709,15 +728,47 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
-    def test_evaluate_partition_changes(self):
+    def test_plan_partition_changes_misprediction(self):
+        """ We have to handle the case where the partition list doesn't cleanly
+        match reality. """
+        planned = _plan_partition_changes(
+            [
+                mkPPart("p_20210505", 9505010028),
+                mkPPart("p_20210604", 10152257517),
+                mkPPart("p_20210704", 10799505006),
+                mkTailPart("p_20210803"),
+            ],
+            mkPos(10264818175),
+            datetime(2021, 6, 8, tzinfo=timezone.utc),
+            timedelta(days=30),
+            3,
+        )
+
+        self.assertEqual(
+            planned,
+            [
+                ChangePlannedPartition(mkPPart("p_20210704", 10799505006)),
+                ChangePlannedPartition(mkTailPart("p_20210803")).set_position(
+                    [11578057459]
+                ),
+                NewPlannedPartition()
+                .set_position([12356609912])
+                .set_timestamp(datetime(2021, 9, 2, tzinfo=timezone.utc)),
+                NewPlannedPartition()
+                .set_columns(1)
+                .set_timestamp(datetime(2021, 10, 2, tzinfo=timezone.utc)),
+            ],
+        )
+
+    def test_should_run_changes(self):
         self.assertFalse(
-            evaluate_partition_changes(
+            _should_run_changes(
                 [ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position([300])]
             )
         )
 
         self.assertFalse(
-            evaluate_partition_changes(
+            _should_run_changes(
                 [
                     ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
                         [300]
@@ -728,9 +779,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 ]
             )
         )
-        with self.assertLogs("evaluate_partition_changes", level="DEBUG") as logctx:
+        with self.assertLogs("should_run_changes", level="DEBUG") as logctx:
             self.assertTrue(
-                evaluate_partition_changes(
+                _should_run_changes(
                     [
                         ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
                             [302]
@@ -749,15 +800,12 @@ class TestPartitionAlgorithm(unittest.TestCase):
             )
         self.assertEqual(
             logctx.output,
-            [
-                "DEBUG:evaluate_partition_changes:Add: [542] 2021-01-16 "
-                "00:00:00+00:00 is new"
-            ],
+            ["DEBUG:should_run_changes:Add: [542] 2021-01-16 " "00:00:00+00:00 is new"],
         )
 
-        with self.assertLogs("evaluate_partition_changes", level="DEBUG") as logctx:
+        with self.assertLogs("should_run_changes", level="DEBUG") as logctx:
             self.assertTrue(
-                evaluate_partition_changes(
+                _should_run_changes(
                     [
                         ChangePlannedPartition(mkPPart("p_20210102", 200)),
                         NewPlannedPartition()
@@ -771,13 +819,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
             )
         self.assertEqual(
             logctx.output,
-            [
-                "DEBUG:evaluate_partition_changes:Add: [542] 2021-01-16 "
-                "00:00:00+00:00 is new"
-            ],
+            ["DEBUG:should_run_changes:Add: [542] 2021-01-16 " "00:00:00+00:00 is new"],
         )
 
-    def test_generate_sql_reorganize_partition_commands_no_change(self):
+    def testgenerate_sql_reorganize_partition_commands_no_change(self):
         self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
@@ -787,7 +832,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [],
         )
 
-    def test_generate_sql_reorganize_partition_commands_single_change(self):
+    def testgenerate_sql_reorganize_partition_commands_single_change(self):
         self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
@@ -805,7 +850,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
-    def test_generate_sql_reorganize_partition_commands_two_changes(self):
+    def testgenerate_sql_reorganize_partition_commands_two_changes(self):
         self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
@@ -828,7 +873,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
-    def test_generate_sql_reorganize_partition_commands_new_partitions(self):
+    def testgenerate_sql_reorganize_partition_commands_new_partitions(self):
         self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
@@ -852,7 +897,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
-    def test_generate_sql_reorganize_partition_commands_maintain_new_partition(self):
+    def testgenerate_sql_reorganize_partition_commands_maintain_new_partition(self):
         self.assertEqual(
             list(
                 generate_sql_reorganize_partition_commands(
@@ -882,7 +927,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
-    def test_generate_sql_reorganize_partition_commands_with_duplicate(self):
+    def testgenerate_sql_reorganize_partition_commands_with_duplicate(self):
         with self.assertRaises(DuplicatePartitionException):
             list(
                 generate_sql_reorganize_partition_commands(
@@ -901,16 +946,35 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 )
             )
 
-    def test_plan_and_generate_sql_reorganize_partition_commands_with_future_partition(
+    def testgenerate_sql_reorganize_partition_commands_out_of_order(self):
+        with self.assertRaises(AssertionError):
+            list(
+                generate_sql_reorganize_partition_commands(
+                    Table("table_with_out_of_order_changeset"),
+                    [
+                        ChangePlannedPartition(mkTailPart("past"))
+                        .set_position([800])
+                        .set_timestamp(datetime(2021, 1, 14, tzinfo=timezone.utc)),
+                        NewPlannedPartition()
+                        .set_position([1000])
+                        .set_timestamp(datetime(2021, 1, 15, tzinfo=timezone.utc)),
+                        ChangePlannedPartition(mkTailPart("future"))
+                        .set_position([1200])
+                        .set_timestamp(datetime(2021, 1, 16, tzinfo=timezone.utc)),
+                    ],
+                )
+            )
+
+    def test_plan_andgenerate_sql_reorganize_partition_commands_with_future_partition(
         self
     ):
-        planned = plan_partition_changes(
+        planned = _plan_partition_changes(
             [
                 mkPPart("p_20201231", 100),
                 mkPPart("p_20210104", 200),
                 mkTailPart("future"),
             ],
-            [50],
+            mkPos(50),
             datetime(2021, 1, 1, tzinfo=timezone.utc),
             timedelta(days=7),
             2,
@@ -923,6 +987,68 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 "(PARTITION `p_20210109` VALUES LESS THAN MAXVALUE);",
                 "ALTER TABLE `water` REORGANIZE PARTITION `p_20210104` INTO "
                 "(PARTITION `p_20210102` VALUES LESS THAN (200));",
+            ],
+        )
+
+    def test_get_pending_sql_reorganize_partition_commands_no_changes(self):
+        with self.assertLogs(
+            "get_pending_sql_reorganize_partition_commands", level="INFO"
+        ) as logctx:
+            cmds = get_pending_sql_reorganize_partition_commands(
+                table=Table("plushies"),
+                partition_list=[
+                    mkPPart("p_20201231", 100),
+                    mkPPart("p_20210102", 200),
+                    mkTailPart("future"),
+                ],
+                current_position=mkPos(50),
+                allowed_lifespan=timedelta(days=7),
+                num_empty_partitions=2,
+                evaluation_time=datetime(2021, 1, 1, tzinfo=timezone.utc),
+            )
+
+        self.assertEqual(
+            logctx.output,
+            [
+                "INFO:get_pending_sql_reorganize_partition_commands:"
+                "Table plushies does not need to be modified currently."
+            ],
+        )
+
+        self.assertEqual(cmds, [])
+
+    def test_get_pending_sql_reorganize_partition_commands_with_changes(self):
+        with self.assertLogs(
+            "get_pending_sql_reorganize_partition_commands", level="DEBUG"
+        ) as logctx:
+            cmds = get_pending_sql_reorganize_partition_commands(
+                table=Table("plushies"),
+                partition_list=[
+                    mkPPart("p_20201231", 100),
+                    mkPPart("p_20210102", 200),
+                    mkTailPart("future"),
+                ],
+                current_position=mkPos(50),
+                allowed_lifespan=timedelta(days=7),
+                num_empty_partitions=4,
+                evaluation_time=datetime(2021, 1, 1, tzinfo=timezone.utc),
+            )
+
+        self.assertEqual(
+            logctx.output,
+            [
+                "DEBUG:get_pending_sql_reorganize_partition_commands:"
+                "Table plushies has changes waiting."
+            ],
+        )
+
+        self.assertEqual(
+            list(cmds),
+            [
+                "ALTER TABLE `plushies` REORGANIZE PARTITION `future` INTO "
+                "(PARTITION `p_20210109` VALUES LESS THAN (550), "
+                "PARTITION `p_20210116` VALUES LESS THAN (900), "
+                "PARTITION `p_20210123` VALUES LESS THAN MAXVALUE);"
             ],
         )
 
