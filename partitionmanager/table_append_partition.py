@@ -308,7 +308,8 @@ def _predict_forward_time(current_position, end_position, rates, evaluation_time
 
     if max(days_remaining) < 0:
         raise ValueError(f"All values are negative: {days_remaining}")
-    return evaluation_time + (max(days_remaining) * timedelta(days=1))
+    calculated = evaluation_time + (max(days_remaining) * timedelta(days=1))
+    return calculated.replace(minute=0, second=0, microsecond=0)
 
 
 def _calculate_start_time(last_changed_time, evaluation_time, allowed_lifespan):
@@ -323,7 +324,7 @@ def _calculate_start_time(last_changed_time, evaluation_time, allowed_lifespan):
     if partition_start_time < evaluation_time:
         # Partition start times should never be in the past.
         return evaluation_time
-    return partition_start_time
+    return partition_start_time.replace(minute=0, second=0, microsecond=0)
 
 
 def _plan_partition_changes(
@@ -378,10 +379,13 @@ def _plan_partition_changes(
         # to exclude the future-dated, irrelevant partition.
         log.debug(
             f"Misprediction: Evaluation time ({evaluation_time}) is "
-            f"before the active partition {active_partition}. Excluding from "
-            "rate calculations."
+            f"before the active partition {active_partition}. Excluding "
+            "mispredicted partitions from the rate calculations."
         )
-        rate_relevant_partitions = filled_partitions + [
+        filled_partitions = filter(
+            lambda f: f.timestamp() < evaluation_time, filled_partitions
+        )
+        rate_relevant_partitions = list(filled_partitions) + [
             partitionmanager.types.InstantPartition(evaluation_time, current_position)
         ]
 
@@ -403,16 +407,16 @@ def _plan_partition_changes(
 
         changed_partition = partitionmanager.types.ChangePlannedPartition(partition)
 
+        start_of_fill_time = _predict_forward_time(
+            current_position, last_changed.position, rates, evaluation_time
+        )
+
         if isinstance(partition, partitionmanager.types.PositionPartition):
             # We can't change the position on this partition, but we can adjust
             # the name to be more exact as to what date we expect it to begin
             # filling. If we calculate the start-of-fill date and it doesn't
             # match the partition's name, let's rename it and mark it as an
             # important change.
-            start_of_fill_time = _predict_forward_time(
-                current_position, last_changed.position, rates, evaluation_time
-            )
-
             if start_of_fill_time.date() != partition.timestamp().date():
                 log.info(
                     f"Start-of-fill predicted at {start_of_fill_time.date()} "
@@ -427,15 +431,21 @@ def _plan_partition_changes(
             # we calculate forward what position we expect and use it in the
             # future.
 
-            partition_start_time = _calculate_start_time(
+            nominal_partition_start_time = _calculate_start_time(
                 last_changed.timestamp(), evaluation_time, allowed_lifespan
             )
+
+            # We use the nearest timestamp, which should generally be the
+            # calculated time, but could be the fill time based on predicting
+            # forward if we have gotten far off in our predictions in the past.
+            changed_partition.set_timestamp(
+                min(nominal_partition_start_time, start_of_fill_time)
+            )
+
             changed_part_pos = _predict_forward_position(
                 last_changed.position.as_list(), rates, allowed_lifespan
             )
-            changed_partition.set_position(changed_part_pos).set_timestamp(
-                partition_start_time
-            )
+            changed_partition.set_position(changed_part_pos)
 
         results.append(changed_partition)
 
@@ -454,6 +464,27 @@ def _plan_partition_changes(
             .set_position(new_part_pos)
             .set_timestamp(partition_start_time)
         )
+
+    # Confirm we won't make timestamp conflicts
+    existing_timestamps = list(map(lambda p: p.timestamp(), partition_list))
+    conflict_found = True
+    while conflict_found:
+        conflict_found = False
+        for partition in results:
+            if partition.timestamp() in existing_timestamps:
+                if (
+                    isinstance(partition, partitionmanager.types.ChangePlannedPartition)
+                    and partition.timestamp() == partition.old.timestamp()
+                ):
+                    # That's not a conflict
+                    continue
+
+                log.debug(
+                    f"{partition} has a conflict for its timestamp, increasing by 1 day."
+                )
+                partition.set_timestamp(partition.timestamp() + timedelta(days=1))
+                conflict_found = True
+                break
 
     # Final result is always MAXVALUE
     results[-1].set_as_max_value()
