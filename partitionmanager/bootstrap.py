@@ -28,6 +28,18 @@ def _override_config_to_map_data(conf):
     }
 
 
+def _get_map_data_from_config(conf, table):
+    """ Helper to return a partition map for the table, either directly or
+        from a configuration override. """
+    if not conf.assume_partitioned_on:
+        problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
+        if problems:
+            raise Exception("; ".join(problems))
+        return pm_tap.get_partition_map(conf.dbcmd, table)
+
+    return _override_config_to_map_data(conf)
+
+
 def write_state_info(conf, out_fp):
     """
     Write the state info for tables defined in conf to the provided file-like
@@ -38,14 +50,7 @@ def write_state_info(conf, out_fp):
     log.info("Writing current state information")
     state_info = {"time": conf.curtime, "tables": dict()}
     for table in conf.tables:
-        map_data = None
-        if not conf.assume_partitioned_on:
-            problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
-            if problems:
-                raise Exception("; ".join(problems))
-            map_data = pm_tap.get_partition_map(conf.dbcmd, table)
-        else:
-            map_data = _override_config_to_map_data(conf)
+        map_data = _get_map_data_from_config(conf, table)
 
         positions = pm_tap.get_current_positions(
             conf.dbcmd, table, map_data["range_cols"]
@@ -144,8 +149,9 @@ def _generate_sql_copy_commands(
 
     max_val_part = map_data["partitions"][-1]
     if not isinstance(max_val_part, partitionmanager.types.MaxValuePartition):
-        log.error(f"Expected a MaxValue partition, got {max_val_part}")
-        raise Exception("Unexpected part?")
+        msg = f"Expected a MaxValue partition, got {max_val_part}"
+        log.error(msg)
+        raise Exception(msg)
 
     range_id_string = ", ".join(map_data["range_cols"])
 
@@ -231,15 +237,7 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
             log.info(f"Skipping {table_name} as it is not in the current config")
             continue
 
-        map_data = None
-
-        if not conf.assume_partitioned_on:
-            problem = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
-            if problem:
-                raise Exception(problem)
-            map_data = pm_tap.get_partition_map(conf.dbcmd, table)
-        else:
-            map_data = _override_config_to_map_data(conf)
+        map_data = _get_map_data_from_config(conf, table)
 
         current_positions = pm_tap.get_current_positions(
             conf.dbcmd, table, map_data["range_cols"]
