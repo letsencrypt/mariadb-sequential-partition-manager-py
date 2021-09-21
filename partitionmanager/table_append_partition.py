@@ -160,6 +160,32 @@ def _parse_partition_map(rows):
     return {"range_cols": range_cols, "partitions": partitions}
 
 
+def get_columns(database, table):
+    """ Gather the columns list via the database command tool. """
+    if not isinstance(table, partitionmanager.types.Table) or not isinstance(
+        table.name, partitionmanager.types.SqlInput
+    ):
+        raise ValueError("Unexpected type")
+    sql_cmd = f"DESCRIBE `{table.name}`;"
+    return _parse_columns(table, database.run(sql_cmd))
+
+
+def _parse_columns(table, rows):
+    """ Read the columns description and return a list of the columns, where
+    each entry is a dict containing Field and Type. """
+    log = logging.getLogger("parse_columns")
+    if not rows:
+        raise partitionmanager.types.TableInformationException("No column information")
+
+    for r in rows:
+        if "Field" not in r or "Type" not in r:
+            raise partitionmanager.types.TableInformationException(
+                "Described table does not include sufficient column details"
+            )
+        log.debug(f"{table.name} column {r['Field']} has type {r['Type']}")
+    return rows
+
+
 def _split_partitions_around_position(partition_list, current_position):
     """Divide up a partition list to three parts: filled, current, and empty.
 

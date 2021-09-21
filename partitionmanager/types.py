@@ -313,7 +313,9 @@ class MaxValuePartition(_Partition):
         return self._count
 
     def values(self):
-        return ", ".join(["MAXVALUE"] * self._count)
+        if self._count == 1:
+            return "MAXVALUE"
+        return "(" + ", ".join(["MAXVALUE"] * self._count) + ")"
 
     def __lt__(self, other):
         """MaxValuePartitions are always greater than every other partition."""

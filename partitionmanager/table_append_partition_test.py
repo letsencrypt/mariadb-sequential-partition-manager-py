@@ -22,6 +22,7 @@ from partitionmanager.table_append_partition import (
     _get_position_increase_per_day,
     _get_table_information_schema_problems,
     _get_weighted_position_increase_per_day_for_partitions,
+    _parse_columns,
     _parse_partition_map,
     _plan_partition_changes,
     _predict_forward_position,
@@ -33,6 +34,7 @@ from partitionmanager.table_append_partition import (
     get_partition_map,
     get_pending_sql_reorganize_partition_commands,
     get_table_compatibility_problems,
+    get_columns,
 )
 
 from .types_test import mkPPart, mkTailPart, mkPos
@@ -1054,6 +1056,35 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 "PARTITION `p_20210118` VALUES LESS THAN MAXVALUE);"
             ],
         )
+
+    def test_get_columns(self):
+        db = MockDatabase()
+        db.response = [{"Field": "id", "Type": "int"}, {"Field": "day", "Type": "int"}]
+
+        columns = get_columns(db, Table("table"))
+
+        self.assertEqual(columns, db.response)
+
+    def test_parse_columns(self):
+        column_descriptions = [
+            {"Field": "id", "Type": "int", "Extra": 3},
+            {"Field": "day", "Type": "int"},
+        ]
+        self.assertEqual(
+            _parse_columns(Table("table"), column_descriptions), column_descriptions
+        )
+
+        with self.assertRaises(TableInformationException):
+            _parse_columns(Table("table"), [])
+
+        with self.assertRaises(TableInformationException):
+            _parse_columns(Table("table"), [{"Type": "melee_range"}])
+
+        with self.assertRaises(TableInformationException):
+            _parse_columns(Table("table"), [{"Field": "five_feet"}])
+
+        with self.assertRaises(TableInformationException):
+            _parse_columns(Table("table"), [{"Field": "five_feet"}])
 
 
 if __name__ == "__main__":

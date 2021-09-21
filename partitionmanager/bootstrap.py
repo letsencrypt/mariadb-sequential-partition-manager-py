@@ -16,6 +16,30 @@ RATE_UNIT = timedelta(hours=1)
 MINIMUM_FUTURE_DELTA = timedelta(hours=2)
 
 
+def _override_config_to_map_data(conf):
+    """Return an analog to get_partition_map from override data in conf"""
+    return {
+        "range_cols": [str(x) for x in conf.assume_partitioned_on],
+        "partitions": [
+            partitionmanager.types.MaxValuePartition(
+                "p_assumed", count=len(conf.assume_partitioned_on)
+            )
+        ],
+    }
+
+
+def _get_map_data_from_config(conf, table):
+    """ Helper to return a partition map for the table, either directly or
+        from a configuration override. """
+    if not conf.assume_partitioned_on:
+        problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
+        if problems:
+            raise Exception("; ".join(problems))
+        return pm_tap.get_partition_map(conf.dbcmd, table)
+
+    return _override_config_to_map_data(conf)
+
+
 def write_state_info(conf, out_fp):
     """
     Write the state info for tables defined in conf to the provided file-like
@@ -26,11 +50,8 @@ def write_state_info(conf, out_fp):
     log.info("Writing current state information")
     state_info = {"time": conf.curtime, "tables": dict()}
     for table in conf.tables:
-        problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
-        if problems:
-            raise Exception("; ".join(problems))
+        map_data = _get_map_data_from_config(conf, table)
 
-        map_data = pm_tap.get_partition_map(conf.dbcmd, table)
         positions = pm_tap.get_current_positions(
             conf.dbcmd, table, map_data["range_cols"]
         )
@@ -73,7 +94,7 @@ def _plan_partitions_for_time_offsets(
     for (i, offset), is_final in partitionmanager.tools.iter_show_end(
         enumerate(time_offsets)
     ):
-        increase = [x * offset / RATE_UNIT for x in rate_of_change]
+        increase = [x * (offset / RATE_UNIT) for x in rate_of_change]
         predicted_positions = [
             int(p + i) for p, i in zip(ordered_current_pos, increase)
         ]
@@ -99,6 +120,92 @@ def _plan_partitions_for_time_offsets(
 
         changes.append(part)
     return changes
+
+
+def _suffix(lines, *, indent="", mid_suffix="", final_suffix=""):
+    """ Helper that suffixes each line with either mid- or final- suffix """
+    for line, is_final in partitionmanager.tools.iter_show_end(lines):
+        if is_final:
+            yield indent + line + final_suffix
+        else:
+            yield indent + line + mid_suffix
+
+
+def _trigger_column_copies(cols):
+    """ Helper that returns lines copying each column for a trigger. """
+    for c in cols:
+        yield f"`{c}` = NEW.`{c}`"
+
+
+def _generate_sql_copy_commands(
+    existing_table, map_data, columns, new_table, alter_commands_iter
+):
+    """ Generate a series of SQL commands to start a copy of the existing_table
+    to a new_table, applying the supplied alterations before starting the
+    triggers. """
+    log = logging.getLogger(
+        f"_generate_sql_copy_commands:{existing_table.name} to {new_table.name}"
+    )
+
+    max_val_part = map_data["partitions"][-1]
+    if not isinstance(max_val_part, partitionmanager.types.MaxValuePartition):
+        msg = f"Expected a MaxValue partition, got {max_val_part}"
+        log.error(msg)
+        raise Exception(msg)
+
+    range_id_string = ", ".join(map_data["range_cols"])
+
+    if len(map_data["range_cols"]) == 1:
+        range_cols_string = "RANGE"
+        max_val_string = "MAXVALUE"
+    else:
+        num_cols = len(map_data["range_cols"])
+        range_cols_string = "RANGE COLUMNS"
+        max_val_string = "(" + ", ".join(["MAXVALUE"] * num_cols) + ")"
+
+    yield f"DROP TABLE IF EXISTS {new_table.name};"
+    yield f"CREATE TABLE {new_table.name} LIKE {existing_table.name};"
+    yield f"ALTER TABLE {new_table.name} REMOVE PARTITIONING;"
+    yield f"ALTER TABLE {new_table.name} PARTITION BY {range_cols_string} ({range_id_string}) ("
+    yield f"\tPARTITION {max_val_part.name} VALUES LESS THAN {max_val_string}"
+    yield ");"
+
+    for command in alter_commands_iter:
+        yield command
+
+    cols = set(columns)
+
+    yield f"CREATE OR REPLACE TRIGGER copy_inserts_from_{existing_table.name}_to_{new_table.name}"
+    yield f"\tAFTER INSERT ON {existing_table.name} FOR EACH ROW"
+    yield f"\t\tINSERT INTO {new_table.name} SET"
+
+    for line in _suffix(
+        _trigger_column_copies(sorted(cols)),
+        indent="\t\t\t",
+        mid_suffix=",",
+        final_suffix=";",
+    ):
+        yield line
+
+    update_columns = cols.difference(set(map_data["range_cols"]))
+    if not update_columns:
+        log.info("No columns to copy, so no UPDATE trigger being constructed.")
+        return
+
+    yield f"CREATE OR REPLACE TRIGGER copy_updates_from_{existing_table.name}_to_{new_table.name}"
+    yield f"\tAFTER UPDATE ON {existing_table.name} FOR EACH ROW"
+    yield f"\t\tUPDATE {new_table.name} SET"
+
+    for line in _suffix(
+        _trigger_column_copies(sorted(update_columns)), indent="\t\t\t", mid_suffix=","
+    ):
+        yield line
+
+    yield "\t\tWHERE " + " AND ".join(
+        _trigger_column_copies(map_data["range_cols"])
+    ) + ";"
+
+    return
 
 
 def calculate_sql_alters_from_state_info(conf, in_fp):
@@ -130,14 +237,13 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
             log.info(f"Skipping {table_name} as it is not in the current config")
             continue
 
-        problem = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
-        if problem:
-            raise Exception(problem)
+        map_data = _get_map_data_from_config(conf, table)
 
-        map_data = pm_tap.get_partition_map(conf.dbcmd, table)
         current_positions = pm_tap.get_current_positions(
             conf.dbcmd, table, map_data["range_cols"]
         )
+
+        columns = [r["Field"] for r in pm_tap.get_columns(conf.dbcmd, table)]
 
         ordered_current_pos = [
             current_positions[name] for name in map_data["range_cols"]
@@ -178,7 +284,17 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
             max_val_part,
         )
 
+        table_new = partitionmanager.types.Table(
+            f"{table.name}_new_{conf.curtime:%Y%m%d}"
+        )
+
+        alter_commands_iter = pm_tap.generate_sql_reorganize_partition_commands(
+            table_new, changes
+        )
+
         commands[table.name] = list(
-            pm_tap.generate_sql_reorganize_partition_commands(table, changes)
+            _generate_sql_copy_commands(
+                table, map_data, columns, table_new, alter_commands_iter
+            )
         )
     return commands
