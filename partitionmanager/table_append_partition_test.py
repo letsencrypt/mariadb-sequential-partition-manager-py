@@ -356,13 +356,15 @@ class TestPartitionAlgorithm(unittest.TestCase):
             )
         with self.assertRaises(ValueError):
             _get_position_increase_per_day(
-                mkPPart("p_20211231", 99), mkPPart("p_20210101", 42)
-            )
-        with self.assertRaises(ValueError):
-            _get_position_increase_per_day(
                 mkPPart("p_20201231", 1, 99), mkPPart("p_20210101", 42)
             )
 
+        self.assertEqual(
+            _get_position_increase_per_day(
+                mkPPart("p_20211231", 99), mkPPart("p_20210101", 42)
+            ),
+            [],
+        )
         self.assertEqual(
             _get_position_increase_per_day(
                 mkPPart("p_20201231", 0), mkPPart("p_20210101", 100)

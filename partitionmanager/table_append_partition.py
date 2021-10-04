@@ -225,19 +225,26 @@ def _get_position_increase_per_day(p1, p2):
     position. For partitions with only a single position, this will be a list of
     size 1.
     """
+    log = logging.getLogger("get_position_increase_per_day")
+
     if not isinstance(p1, partitionmanager.types.PositionPartition) or not isinstance(
         p2, partitionmanager.types.PositionPartition
     ):
         raise ValueError(
             "Both partitions must be partitionmanager.types.PositionPartition type"
         )
+    if p1.num_columns != p2.num_columns:
+        raise ValueError(f"p1 {p1} and p2 {p2} must have the same number of columns")
+
     if None in (p1.timestamp(), p2.timestamp()):
         # An empty list skips this pair in get_weighted_position_increase
         return list()
     if p1.timestamp() >= p2.timestamp():
-        raise ValueError(f"p1 {p1} must have a timestamp before p2 {p2}")
-    if p1.num_columns != p2.num_columns:
-        raise ValueError(f"p1 {p1} and p2 {p2} must have the same number of columns")
+        log.warning(
+            f"Skipping rate of change between p1 {p1} and p2 {p2} as they are out-of-order"
+        )
+        return list()
+
     delta_time = p2.timestamp() - p1.timestamp()
     delta_days = delta_time / timedelta(days=1)
     delta_positions = list(
