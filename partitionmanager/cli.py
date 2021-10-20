@@ -165,6 +165,14 @@ def all_configured_tables_are_compatible(conf):
     return len(problems) == 0
 
 
+def is_read_only(conf):
+    """Pre-flight test whether the database is read-only; returns True/False."""
+    rows = conf.dbcmd.run("SELECT @@READ_ONLY;")
+    if len(rows) != 1:
+        raise ValueError("Couldn't determine READ_ONLY status")
+    return rows[0] == "1"
+
+
 def partition_cmd(args):
     """Runs do_partition on the config that results from the CLI arguments.
 
@@ -271,12 +279,17 @@ def do_partition(conf):
     as well.
     """
     log = logging.getLogger("partition")
-    if conf.noop:
-        log.info("Running in noop mode, no changes will be made")
 
     # Preflight
+    if is_read_only(conf):
+        log.info("Database is read-only, forcing noop mode")
+        conf.noop = True
+
     if not all_configured_tables_are_compatible(conf):
         return dict()
+
+    if conf.noop:
+        log.info("Running in noop mode, no changes will be made")
 
     metrics = partitionmanager.stats.PrometheusMetrics()
     metrics.describe(
