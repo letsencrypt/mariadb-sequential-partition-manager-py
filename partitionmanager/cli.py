@@ -170,7 +170,7 @@ def is_read_only(conf):
     rows = conf.dbcmd.run("SELECT @@READ_ONLY;")
     if len(rows) != 1:
         raise ValueError("Couldn't determine READ_ONLY status")
-    return rows[0] == "1"
+    return rows.pop()["@@READ_ONLY"] == 1
 
 
 def partition_cmd(args):
