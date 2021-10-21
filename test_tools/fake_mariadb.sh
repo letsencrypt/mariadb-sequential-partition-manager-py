@@ -6,6 +6,20 @@ if echo "$*" | grep "v" >/dev/null; then
   echo "stdin was: $stdin" >&2
 fi
 
+if echo $stdin | grep "@@READ_ONLY" >/dev/null; then
+  cat <<EOF
+<?xml version="1.0"?>
+
+<resultset statement="SELECT @@READ_ONLY" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <row>
+    <field name="@@READ_ONLY">0</field>
+  </row>
+</resultset>
+EOF
+  exit
+fi
+
+
 if echo $stdin | grep "INFORMATION_SCHEMA" >/dev/null; then
   if echo $stdin | grep "unpartitioned" >/dev/null; then
     cat <<EOF
