@@ -8,7 +8,7 @@ jobs:
     executor: python/default
     steps:
       - checkout
-      - run: pip install --editable .
+      - run: pip install --editable ".[pymysql]"
       - run:
           name: make test-reesults dir
           command: |
