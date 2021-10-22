@@ -284,8 +284,10 @@ def do_partition(conf):
 
     # Preflight
     if is_read_only(conf):
-        log.info("Database is read-only, forcing noop mode")
-        conf.noop = True
+        log.info("Database is read-only, only emitting statistics")
+        if conf.prometheus_stats_path:
+            do_stats(conf)
+        return dict()
 
     if not all_configured_tables_are_compatible(conf):
         return dict()
@@ -357,7 +359,7 @@ def do_partition(conf):
             )
 
     if conf.prometheus_stats_path:
-        do_stats(conf, metrics)
+        do_stats(conf, metrics=metrics)
     return all_results
 
 
