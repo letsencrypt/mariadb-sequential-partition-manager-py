@@ -20,7 +20,7 @@ Similar tools:
  → cd mariadb-sequential-partition-manager-py
  → python3 -m venv .venv
  → . .venv/bin/activate
- → python3 -m pip install .
+ → python3 -m pip install ".[pymysql]"
  → tee /tmp/partman.conf.yml <<EOF
  partitionmanager:
   num_empty: 2
@@ -51,7 +51,7 @@ dogs:
  → cd mariadb-sequential-partition-manager-py
  → python3 -m venv .venv
  → . .venv/bin/activate
- → python3 -m pip install --editable .
+ → python3 -m pip install --editable ".[pymysql]"
  → partition-manager --log-level=debug  \
     --mariadb test_tools/fake_mariadb.sh \
     maintain --noop --table tablename

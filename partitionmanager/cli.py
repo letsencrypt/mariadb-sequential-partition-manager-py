@@ -156,12 +156,14 @@ def all_configured_tables_are_compatible(conf):
     Returns True only if all are compatible, otherwise logs errors and returns
     False.
     """
+    log = logging.getLogger("all_configured_tables_are_compatible")
+
     problems = dict()
     for table in conf.tables:
         table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if table_problems:
             problems[table.name] = table_problems
-            logging.error(f"Cannot proceed: {table} {table_problems}")
+            log.error(f"Cannot proceed: {table} {table_problems}")
     return len(problems) == 0
 
 
@@ -282,8 +284,10 @@ def do_partition(conf):
 
     # Preflight
     if is_read_only(conf):
-        log.info("Database is read-only, forcing noop mode")
-        conf.noop = True
+        log.info("Database is read-only, only emitting statistics")
+        if conf.prometheus_stats_path:
+            do_stats(conf)
+        return dict()
 
     if not all_configured_tables_are_compatible(conf):
         return dict()
@@ -355,17 +359,22 @@ def do_partition(conf):
             )
 
     if conf.prometheus_stats_path:
-        do_stats(conf, metrics)
+        do_stats(conf, metrics=metrics)
     return all_results
 
 
 def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
     """Populates a metrics object from the tables in the configuration."""
-    if not all_configured_tables_are_compatible(conf):
-        return dict()
+
+    log = logging.getLogger("do_stats")
 
     all_results = dict()
     for table in conf.tables:
+        table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
+        if table_problems:
+            log.error(f"Cannot proceed: {table} {table_problems}")
+            continue
+
         map_data = pm_tap.get_partition_map(conf.dbcmd, table)
         statistics = partitionmanager.stats.get_statistics(
             map_data["partitions"], conf.curtime, table
@@ -433,7 +442,8 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
 def main():
     """Start here."""
     args = PARSER.parse_args()
-    logging.basicConfig(level=args.log_level)
+    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    logging.basicConfig(level=args.log_level, format=log_format)
     if "func" not in args:
         PARSER.print_help()
         return
