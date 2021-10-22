@@ -156,12 +156,14 @@ def all_configured_tables_are_compatible(conf):
     Returns True only if all are compatible, otherwise logs errors and returns
     False.
     """
+    log = logging.getLogger("all_configured_tables_are_compatible")
+
     problems = dict()
     for table in conf.tables:
         table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if table_problems:
             problems[table.name] = table_problems
-            logging.error(f"Cannot proceed: {table} {table_problems}")
+            log.error(f"Cannot proceed: {table} {table_problems}")
     return len(problems) == 0
 
 
@@ -433,7 +435,8 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
 def main():
     """Start here."""
     args = PARSER.parse_args()
-    logging.basicConfig(level=args.log_level)
+    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    logging.basicConfig(level=args.log_level, format=log_format)
     if "func" not in args:
         PARSER.print_help()
         return

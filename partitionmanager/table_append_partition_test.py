@@ -497,6 +497,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
     def test_plan_partition_changes_no_empty_partitions(self):
         with self.assertRaises(NoEmptyPartitionsAvailableException):
             _plan_partition_changes(
+                Table("table"),
                 [mkPPart("p_20201231", 0), mkPPart("p_20210102", 200)],
                 mkPos(50),
                 datetime(2021, 1, 1, tzinfo=timezone.utc),
@@ -505,8 +506,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
             )
 
     def test_plan_partition_changes_imminent(self):
-        with self.assertLogs("plan_partition_changes", level="INFO") as logctx:
+        with self.assertLogs("plan_partition_changes:table", level="INFO") as logctx:
             planned = _plan_partition_changes(
+                Table("table"),
                 [
                     mkPPart("p_20201231", 100),
                     mkPPart("p_20210102", 200),
@@ -521,7 +523,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             logctx.output,
             [
-                "INFO:plan_partition_changes:Start-of-fill predicted at "
+                "INFO:plan_partition_changes:table:Start-of-fill predicted at "
                 "2021-01-03 which is not 2021-01-02. This change will be marked "
                 "as important to ensure that p_20210102: (200) is moved to "
                 "2021-01-03"
@@ -545,8 +547,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes_wildly_off_dates(self):
-        with self.assertLogs("plan_partition_changes", level="INFO") as logctx:
+        with self.assertLogs("plan_partition_changes:table", level="INFO") as logctx:
             planned = _plan_partition_changes(
+                Table("table"),
                 [
                     mkPPart("p_20201231", 100),
                     mkPPart("p_20210104", 200),
@@ -561,7 +564,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             logctx.output,
             [
-                "INFO:plan_partition_changes:Start-of-fill predicted at "
+                "INFO:plan_partition_changes:table:Start-of-fill predicted at "
                 "2021-01-02 which is not 2021-01-04. This change will be marked "
                 "as important to ensure that p_20210104: (200) is moved to "
                 "2021-01-02"
@@ -583,6 +586,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_plan_partition_changes_long_delay(self):
         planned = _plan_partition_changes(
+            Table("table"),
             [
                 mkPPart("p_20210101", 100),
                 mkPPart("p_20210415", 200),
@@ -610,6 +614,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
     def test_plan_partition_changes_short_names(self):
         self.maxDiff = None
         planned = _plan_partition_changes(
+            Table("table"),
             [
                 mkPPart("p_2019", 1912499867),
                 mkPPart("p_2020", 8890030931),
@@ -651,6 +656,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_plan_partition_changes_bespoke_names(self):
         planned = _plan_partition_changes(
+            Table("table"),
             [mkPPart("p_start", 100), mkTailPart("p_future")],
             mkPos(50),
             datetime(2021, 1, 6, tzinfo=timezone.utc),
@@ -686,6 +692,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
     def test_plan_partition_changes(self):
         self.maxDiff = None
         planned = _plan_partition_changes(
+            Table("table"),
             [
                 mkPPart("p_20201231", 100),
                 mkPPart("p_20210102", 200),
@@ -710,6 +717,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
         self.assertEqual(
             _plan_partition_changes(
+                Table("table"),
                 [
                     mkPPart("p_20201231", 100),
                     mkPPart("p_20210102", 200),
@@ -739,6 +747,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         match reality. """
         self.maxDiff = None
         planned = _plan_partition_changes(
+            Table("table"),
             [
                 mkPPart("p_20210505", 9505010028),
                 mkPPart("p_20210604", 10152257517),
@@ -770,12 +779,18 @@ class TestPartitionAlgorithm(unittest.TestCase):
     def test_should_run_changes(self):
         self.assertFalse(
             _should_run_changes(
-                [ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position([300])]
+                Table("table"),
+                [
+                    ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
+                        [300]
+                    )
+                ],
             )
         )
 
         self.assertFalse(
             _should_run_changes(
+                Table("table"),
                 [
                     ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
                         [300]
@@ -783,12 +798,13 @@ class TestPartitionAlgorithm(unittest.TestCase):
                     ChangePlannedPartition(mkPPart("p_20210109", 1000)).set_position(
                         [1300]
                     ),
-                ]
+                ],
             )
         )
-        with self.assertLogs("should_run_changes", level="DEBUG") as logctx:
+        with self.assertLogs("should_run_changes:table", level="DEBUG") as logctx:
             self.assertTrue(
                 _should_run_changes(
+                    Table("table"),
                     [
                         ChangePlannedPartition(mkPPart("p_20210102", 200)).set_position(
                             [302]
@@ -802,17 +818,21 @@ class TestPartitionAlgorithm(unittest.TestCase):
                         NewPlannedPartition()
                         .set_position([662])
                         .set_timestamp(datetime(2021, 1, 23, tzinfo=timezone.utc)),
-                    ]
+                    ],
                 )
             )
         self.assertEqual(
             logctx.output,
-            ["DEBUG:should_run_changes:Add: [542] 2021-01-16 " "00:00:00+00:00 is new"],
+            [
+                "DEBUG:should_run_changes:table:Add: [542] 2021-01-16 "
+                "00:00:00+00:00 is new"
+            ],
         )
 
-        with self.assertLogs("should_run_changes", level="DEBUG") as logctx:
+        with self.assertLogs("should_run_changes:table", level="DEBUG") as logctx:
             self.assertTrue(
                 _should_run_changes(
+                    Table("table"),
                     [
                         ChangePlannedPartition(mkPPart("p_20210102", 200)),
                         NewPlannedPartition()
@@ -821,12 +841,15 @@ class TestPartitionAlgorithm(unittest.TestCase):
                         NewPlannedPartition()
                         .set_position([662])
                         .set_timestamp(datetime(2021, 1, 23, tzinfo=timezone.utc)),
-                    ]
+                    ],
                 )
             )
         self.assertEqual(
             logctx.output,
-            ["DEBUG:should_run_changes:Add: [542] 2021-01-16 " "00:00:00+00:00 is new"],
+            [
+                "DEBUG:should_run_changes:table:Add: [542] 2021-01-16 "
+                "00:00:00+00:00 is new"
+            ],
         )
 
     def testgenerate_sql_reorganize_partition_commands_no_change(self):
@@ -976,6 +999,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self
     ):
         planned = _plan_partition_changes(
+            Table("table"),
             [
                 mkPPart("p_20201231", 100),
                 mkPPart("p_20210104", 200),
@@ -999,7 +1023,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_get_pending_sql_reorganize_partition_commands_no_changes(self):
         with self.assertLogs(
-            "get_pending_sql_reorganize_partition_commands", level="INFO"
+            "get_pending_sql_reorganize_partition_commands:plushies", level="INFO"
         ) as logctx:
             cmds = get_pending_sql_reorganize_partition_commands(
                 table=Table("plushies"),
@@ -1017,7 +1041,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             logctx.output,
             [
-                "INFO:get_pending_sql_reorganize_partition_commands:"
+                "INFO:get_pending_sql_reorganize_partition_commands:plushies:"
                 "Table plushies does not need to be modified currently."
             ],
         )
@@ -1026,7 +1050,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_get_pending_sql_reorganize_partition_commands_with_changes(self):
         with self.assertLogs(
-            "get_pending_sql_reorganize_partition_commands", level="DEBUG"
+            "get_pending_sql_reorganize_partition_commands:plushies", level="DEBUG"
         ) as logctx:
             cmds = get_pending_sql_reorganize_partition_commands(
                 table=Table("plushies"),
@@ -1044,7 +1068,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             logctx.output,
             [
-                "DEBUG:get_pending_sql_reorganize_partition_commands:"
+                "DEBUG:get_pending_sql_reorganize_partition_commands:plushies:"
                 "Table plushies has changes waiting."
             ],
         )

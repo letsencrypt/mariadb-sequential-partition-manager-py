@@ -361,6 +361,7 @@ def _calculate_start_time(last_changed_time, evaluation_time, allowed_lifespan):
 
 
 def _plan_partition_changes(
+    table,
     partition_list,
     current_position,
     evaluation_time,
@@ -373,7 +374,7 @@ def _plan_partition_changes(
     requirements, using an estimate as to the rate of fill from the supplied
     partition_list, current_position, and evaluation_time.
     """
-    log = logging.getLogger("plan_partition_changes")
+    log = logging.getLogger(f"plan_partition_changes:{table.name}")
 
     filled_partitions, active_partition, empty_partitions = _split_partitions_around_position(
         partition_list, current_position
@@ -526,14 +527,14 @@ def _plan_partition_changes(
     return results
 
 
-def _should_run_changes(altered_partitions):
+def _should_run_changes(table, altered_partitions):
     """Returns True if the changeset should run, otherwise returns False.
 
     Evaluate the list from plan_partition_changes and determine if the set of
     changes should be performed - if all the changes are minor, they shouldn't
     be run.
     """
-    log = logging.getLogger("should_run_changes")
+    log = logging.getLogger(f"should_run_changes:{table.name}")
 
     for p in altered_partitions:
         if isinstance(p, partitionmanager.types.NewPlannedPartition):
@@ -650,9 +651,12 @@ def get_pending_sql_reorganize_partition_commands(
         algorithm is running.
     """
 
-    log = logging.getLogger("get_pending_sql_reorganize_partition_commands")
+    log = logging.getLogger(
+        f"get_pending_sql_reorganize_partition_commands:{table.name}"
+    )
 
     partition_changes = _plan_partition_changes(
+        table,
         partition_list,
         current_position,
         evaluation_time,
@@ -660,7 +664,7 @@ def get_pending_sql_reorganize_partition_commands(
         num_empty_partitions,
     )
 
-    if not _should_run_changes(partition_changes):
+    if not _should_run_changes(table, partition_changes):
         log.info(f"{table} does not need to be modified currently.")
         return list()
 
