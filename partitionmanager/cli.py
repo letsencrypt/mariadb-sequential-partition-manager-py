@@ -365,11 +365,16 @@ def do_partition(conf):
 
 def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
     """Populates a metrics object from the tables in the configuration."""
-    if not all_configured_tables_are_compatible(conf):
-        return dict()
+
+    log = logging.getLogger("do_stats")
 
     all_results = dict()
     for table in conf.tables:
+        table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
+        if table_problems:
+            log.error(f"Cannot proceed: {table} {table_problems}")
+            continue
+
         map_data = pm_tap.get_partition_map(conf.dbcmd, table)
         statistics = partitionmanager.stats.get_statistics(
             map_data["partitions"], conf.curtime, table
