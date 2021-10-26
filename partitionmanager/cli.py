@@ -392,13 +392,15 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
             "total", help_text="Total number of partitions", type_name="counter"
         )
         metrics.describe(
-            "time_since_newest_partition_seconds",
-            help_text="The age in seconds of the last partition for the table",
+            "time_remaining_until_partition_overrun",
+            help_text="The time in seconds until a table's partitions can no longer be "
+            "maintained. Negative times indicate faulted tables.",
             type_name="gauge",
         )
         metrics.describe(
-            "time_since_oldest_partition_seconds",
-            help_text="The age in seconds of the first partition for the table",
+            "age_of_retained_partitions",
+            help_text="The age in seconds of the first partition for the table, indicating the "
+            "retention of data in the table.",
             type_name="gauge",
         )
         metrics.describe(
@@ -417,13 +419,13 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
                 metrics.add("total", table, results["partitions"])
             if "time_since_newest_partition" in results:
                 metrics.add(
-                    "time_since_newest_partition_seconds",
+                    "time_remaining_until_partition_overrun",
                     table,
-                    results["time_since_newest_partition"].total_seconds(),
+                    -1 * results["time_since_newest_partition"].total_seconds(),
                 )
             if "time_since_oldest_partition" in results:
                 metrics.add(
-                    "time_since_oldest_partition_seconds",
+                    "age_of_retained_partitions",
                     table,
                     results["time_since_oldest_partition"].total_seconds(),
                 )
