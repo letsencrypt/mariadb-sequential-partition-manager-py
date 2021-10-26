@@ -19,6 +19,24 @@ EOF
   exit
 fi
 
+if echo $stdin | grep "SHOW TABLES" >/dev/null; then
+  cat <<EOF
+<?xml version="1.0"?>
+
+<resultset statement="SHOW TABLES;" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <row>
+  <field name="Tables_in_ifn-boulder">partitioned_last_week</field>
+  </row>
+  <row>
+  <field name="Tables_in_ifn-boulder">partitioned_yesterday</field>
+  </row>
+  <row>
+  <field name="Tables_in_ifn-boulder">other</field>
+  </row>
+</resultset>
+EOF
+  exit
+fi
 
 if echo $stdin | grep "INFORMATION_SCHEMA" >/dev/null; then
   if echo $stdin | grep "unpartitioned" >/dev/null; then

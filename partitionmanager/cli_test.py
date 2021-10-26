@@ -267,9 +267,7 @@ partitionmanager:
 
 class TestStatsCmd(unittest.TestCase):
     def test_stats(self):
-        args = PARSER.parse_args(
-            ["--mariadb", str(fake_exec), "stats", "--table", "partitioned_yesterday"]
-        )
+        args = PARSER.parse_args(["--mariadb", str(fake_exec), "stats"])
         r = stats_cmd(args)
         self.assertEqual(r["partitioned_yesterday"]["partitions"], 3)
         self.assertLess(
@@ -285,7 +283,13 @@ class TestStatsCmd(unittest.TestCase):
 class TestHelpers(unittest.TestCase):
     def test_all_configured_tables_are_compatible_one(self):
         args = PARSER.parse_args(
-            ["--mariadb", str(fake_exec), "stats", "--table", "partitioned_yesterday"]
+            [
+                "--mariadb",
+                str(fake_exec),
+                "maintain",
+                "--table",
+                "partitioned_yesterday",
+            ]
         )
         config = config_from_args(args)
         self.assertTrue(all_configured_tables_are_compatible(config))
@@ -295,7 +299,7 @@ class TestHelpers(unittest.TestCase):
             [
                 "--mariadb",
                 str(fake_exec),
-                "stats",
+                "maintain",
                 "--table",
                 "partitioned_last_week",
                 "partitioned_yesterday",
@@ -310,7 +314,7 @@ class TestHelpers(unittest.TestCase):
             [
                 "--mariadb",
                 str(fake_exec),
-                "stats",
+                "maintain",
                 "--table",
                 "partitioned_last_week",
                 "unpartitioned",
@@ -322,7 +326,7 @@ class TestHelpers(unittest.TestCase):
 
     def test_all_configured_tables_are_compatible_unpartitioned(self):
         args = PARSER.parse_args(
-            ["--mariadb", str(fake_exec), "stats", "--table", "unpartitioned"]
+            ["--mariadb", str(fake_exec), "maintain", "--table", "unpartitioned"]
         )
         config = config_from_args(args)
         self.assertFalse(all_configured_tables_are_compatible(config))
@@ -330,7 +334,16 @@ class TestHelpers(unittest.TestCase):
 
 class TestConfig(unittest.TestCase):
     def test_cli_tables_override_yaml(self):
-        args = PARSER.parse_args(["stats", "--table", "table_one", "table_two"])
+        args = PARSER.parse_args(
+            [
+                "--mariadb",
+                str(fake_exec),
+                "maintain",
+                "--table",
+                "table_one",
+                "table_two",
+            ]
+        )
         conf = get_config_from_args_and_yaml(
             args,
             """

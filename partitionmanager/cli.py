@@ -66,7 +66,7 @@ class Config:
 
         Overwrites only what is set by argparse.
         """
-        if args.table:
+        if "table" in args and args.table:
             for n in args.table:
                 self.tables.add(partitionmanager.types.Table(n))
         if args.dburl:
@@ -147,6 +147,8 @@ def config_from_args(args):
     conf.from_argparse(args)
     if args.config:
         conf.from_yaml_file(args.config)
+    if not conf.dbcmd:
+        raise ValueError("Either dburl or mariadb must be set in the configuration")
     return conf
 
 
@@ -173,6 +175,21 @@ def is_read_only(conf):
     if len(rows) != 1:
         raise ValueError("Couldn't determine READ_ONLY status")
     return rows.pop()["@@READ_ONLY"] == 1
+
+
+def _extract_single_column(row):
+    """Assert that there's only one column in this row, and get it."""
+    columns = list(row.keys())
+    assert len(columns) == 1, "Expecting a single column"
+    return row[columns[0]]
+
+
+def list_tables(conf):
+    """List all tables for the current database."""
+    rows = conf.dbcmd.run("SHOW TABLES;")
+    table_names = map(lambda row: _extract_single_column(row), rows)
+    table_objects = map(lambda name: partitionmanager.types.Table(name), table_names)
+    return list(table_objects)
 
 
 def partition_cmd(args):
@@ -218,13 +235,6 @@ STATS_PARSER = SUBPARSERS.add_parser("stats", help="get stats for partitions")
 STATS_GROUP = STATS_PARSER.add_mutually_exclusive_group()
 STATS_GROUP.add_argument(
     "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
-)
-STATS_GROUP.add_argument(
-    "--table",
-    "-t",
-    type=partitionmanager.types.SqlInput,
-    nargs="+",
-    help="table names, overwriting config",
 )
 STATS_PARSER.set_defaults(func=stats_cmd)
 
@@ -369,10 +379,10 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
     log = logging.getLogger("do_stats")
 
     all_results = dict()
-    for table in conf.tables:
+    for table in list_tables(conf):
         table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if table_problems:
-            log.error(f"Cannot proceed: {table} {table_problems}")
+            log.debug(f"Cannot gather statistics for {table}: {table_problems}")
             continue
 
         map_data = pm_tap.get_partition_map(conf.dbcmd, table)
