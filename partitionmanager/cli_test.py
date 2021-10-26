@@ -266,26 +266,51 @@ partitionmanager:
 
 
 class TestStatsCmd(unittest.TestCase):
-    def test_stats(self):
-        args = PARSER.parse_args(
-            ["--mariadb", str(fake_exec), "stats", "--table", "partitioned_yesterday"]
-        )
-        r = stats_cmd(args)
-        self.assertEqual(r["partitioned_yesterday"]["partitions"], 3)
+    def assert_stats_results(self, results):
+        self.assertEqual(results["partitioned_yesterday"]["partitions"], 3)
         self.assertLess(
-            r["partitioned_yesterday"]["time_since_newest_partition"].days, 2
+            results["partitioned_yesterday"]["time_since_newest_partition"].days, 2
         )
         self.assertLess(
-            r["partitioned_yesterday"]["time_since_oldest_partition"].days, 43
+            results["partitioned_yesterday"]["time_since_oldest_partition"].days, 43
         )
-        self.assertGreater(r["partitioned_yesterday"]["mean_partition_delta"].days, 2)
-        self.assertGreater(r["partitioned_yesterday"]["max_partition_delta"].days, 2)
+        self.assertGreater(
+            results["partitioned_yesterday"]["mean_partition_delta"].days, 2
+        )
+        self.assertGreater(
+            results["partitioned_yesterday"]["max_partition_delta"].days, 2
+        )
+
+    def test_stats_cli_flag(self):
+        args = PARSER.parse_args(["--mariadb", str(fake_exec), "stats"])
+        results = stats_cmd(args)
+        self.assert_stats_results(results)
+
+    def test_stats_yaml(self):
+        yaml = f"""
+partitionmanager:
+    mariadb: {str(fake_exec)}
+    tables:
+        unused:
+"""
+        with tempfile.NamedTemporaryFile() as tmpfile:
+            insert_into_file(tmpfile, yaml)
+            args = PARSER.parse_args(["--config", tmpfile.name, "stats"])
+
+        results = stats_cmd(args)
+        self.assert_stats_results(results)
 
 
 class TestHelpers(unittest.TestCase):
     def test_all_configured_tables_are_compatible_one(self):
         args = PARSER.parse_args(
-            ["--mariadb", str(fake_exec), "stats", "--table", "partitioned_yesterday"]
+            [
+                "--mariadb",
+                str(fake_exec),
+                "maintain",
+                "--table",
+                "partitioned_yesterday",
+            ]
         )
         config = config_from_args(args)
         self.assertTrue(all_configured_tables_are_compatible(config))
@@ -295,7 +320,7 @@ class TestHelpers(unittest.TestCase):
             [
                 "--mariadb",
                 str(fake_exec),
-                "stats",
+                "maintain",
                 "--table",
                 "partitioned_last_week",
                 "partitioned_yesterday",
@@ -310,7 +335,7 @@ class TestHelpers(unittest.TestCase):
             [
                 "--mariadb",
                 str(fake_exec),
-                "stats",
+                "maintain",
                 "--table",
                 "partitioned_last_week",
                 "unpartitioned",
@@ -322,7 +347,7 @@ class TestHelpers(unittest.TestCase):
 
     def test_all_configured_tables_are_compatible_unpartitioned(self):
         args = PARSER.parse_args(
-            ["--mariadb", str(fake_exec), "stats", "--table", "unpartitioned"]
+            ["--mariadb", str(fake_exec), "maintain", "--table", "unpartitioned"]
         )
         config = config_from_args(args)
         self.assertFalse(all_configured_tables_are_compatible(config))
@@ -330,7 +355,16 @@ class TestHelpers(unittest.TestCase):
 
 class TestConfig(unittest.TestCase):
     def test_cli_tables_override_yaml(self):
-        args = PARSER.parse_args(["stats", "--table", "table_one", "table_two"])
+        args = PARSER.parse_args(
+            [
+                "--mariadb",
+                str(fake_exec),
+                "maintain",
+                "--table",
+                "table_one",
+                "table_two",
+            ]
+        )
         conf = get_config_from_args_and_yaml(
             args,
             """
