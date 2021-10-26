@@ -266,18 +266,39 @@ partitionmanager:
 
 
 class TestStatsCmd(unittest.TestCase):
-    def test_stats(self):
+    def assert_stats_results(self, results):
+        self.assertEqual(results["partitioned_yesterday"]["partitions"], 3)
+        self.assertLess(
+            results["partitioned_yesterday"]["time_since_newest_partition"].days, 2
+        )
+        self.assertLess(
+            results["partitioned_yesterday"]["time_since_oldest_partition"].days, 43
+        )
+        self.assertGreater(
+            results["partitioned_yesterday"]["mean_partition_delta"].days, 2
+        )
+        self.assertGreater(
+            results["partitioned_yesterday"]["max_partition_delta"].days, 2
+        )
+
+    def test_stats_cli_flag(self):
         args = PARSER.parse_args(["--mariadb", str(fake_exec), "stats"])
-        r = stats_cmd(args)
-        self.assertEqual(r["partitioned_yesterday"]["partitions"], 3)
-        self.assertLess(
-            r["partitioned_yesterday"]["time_since_newest_partition"].days, 2
-        )
-        self.assertLess(
-            r["partitioned_yesterday"]["time_since_oldest_partition"].days, 43
-        )
-        self.assertGreater(r["partitioned_yesterday"]["mean_partition_delta"].days, 2)
-        self.assertGreater(r["partitioned_yesterday"]["max_partition_delta"].days, 2)
+        results = stats_cmd(args)
+        self.assert_stats_results(results)
+
+    def test_stats_yaml(self):
+        yaml = f"""
+partitionmanager:
+    mariadb: {str(fake_exec)}
+    tables:
+        unused:
+"""
+        with tempfile.NamedTemporaryFile() as tmpfile:
+            insert_into_file(tmpfile, yaml)
+            args = PARSER.parse_args(["--config", tmpfile.name, "stats"])
+
+        results = stats_cmd(args)
+        self.assert_stats_results(results)
 
 
 class TestHelpers(unittest.TestCase):

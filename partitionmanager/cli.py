@@ -232,10 +232,6 @@ def stats_cmd(args):
 
 
 STATS_PARSER = SUBPARSERS.add_parser("stats", help="get stats for partitions")
-STATS_GROUP = STATS_PARSER.add_mutually_exclusive_group()
-STATS_GROUP.add_argument(
-    "--config", "-c", type=argparse.FileType("r"), help="Configuration YAML"
-)
 STATS_PARSER.set_defaults(func=stats_cmd)
 
 
