@@ -6,14 +6,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from .cli import (
     all_configured_tables_are_compatible,
-    bootstrap_cmd,
+    migrate_cmd,
     config_from_args,
     do_partition,
     PARSER,
     partition_cmd,
     stats_cmd,
 )
-from .bootstrap import calculate_sql_alters_from_state_info
+from .migrate import calculate_sql_alters_from_state_info
 
 
 fake_exec = Path(__file__).absolute().parent.parent / "test_tools/fake_mariadb.sh"
@@ -410,13 +410,13 @@ partitionmanager:
                 datetime.now(),
             )
 
-    def test_bootstrap_cmd_out(self):
+    def test_migrate_cmd_out(self):
         with tempfile.NamedTemporaryFile() as outfile:
             args = PARSER.parse_args(
                 [
                     "--mariadb",
                     str(fake_exec),
-                    "bootstrap",
+                    "migrate",
                     "--out",
                     outfile.name,
                     "--table",
@@ -425,7 +425,7 @@ partitionmanager:
                 ]
             )
 
-            output = bootstrap_cmd(args)
+            output = migrate_cmd(args)
             self.assertEqual({}, output)
 
             out_yaml = yaml.safe_load(Path(outfile.name).read_text())
@@ -438,13 +438,13 @@ partitionmanager:
                 {"tables": {"partitioned_yesterday": {"id": 150}, "two": {"id": 150}}},
             )
 
-    def test_bootstrap_cmd_out_unpartitioned(self):
+    def test_migrate_cmd_out_unpartitioned(self):
         with tempfile.NamedTemporaryFile() as outfile:
             args = PARSER.parse_args(
                 [
                     "--mariadb",
                     str(fake_exec),
-                    "bootstrap",
+                    "migrate",
                     "--out",
                     outfile.name,
                     "--table",
@@ -456,15 +456,15 @@ partitionmanager:
             with self.assertRaisesRegex(
                 Exception, "Table unpartitioned is not partitioned"
             ):
-                bootstrap_cmd(args)
+                migrate_cmd(args)
 
-    def test_bootstrap_cmd_out_unpartitioned_with_override(self):
+    def test_migrate_cmd_out_unpartitioned_with_override(self):
         with tempfile.NamedTemporaryFile() as outfile:
             args = PARSER.parse_args(
                 [
                     "--mariadb",
                     str(fake_exec),
-                    "bootstrap",
+                    "migrate",
                     "--assume-partitioned-on",
                     "id",
                     "--out",
@@ -473,7 +473,7 @@ partitionmanager:
                     "unpartitioned",
                 ]
             )
-            output = bootstrap_cmd(args)
+            output = migrate_cmd(args)
             self.assertEqual({}, output)
 
             out_yaml = yaml.safe_load(Path(outfile.name).read_text())
@@ -483,7 +483,7 @@ partitionmanager:
 
             self.assertEqual(out_yaml, {"tables": {"unpartitioned": {"id": 150}}})
 
-    def test_bootstrap_cmd_in(self):
+    def test_migrate_cmd_in(self):
         with tempfile.NamedTemporaryFile(mode="w+") as infile:
             yaml.dump(
                 {
@@ -497,7 +497,7 @@ partitionmanager:
                 [
                     "--mariadb",
                     str(fake_exec),
-                    "bootstrap",
+                    "migrate",
                     "--in",
                     infile.name,
                     "--table",
@@ -571,7 +571,7 @@ partitionmanager:
                 },
             )
 
-    def test_bootstrap_cmd_in_unpartitioned_with_override(self):
+    def test_migrate_cmd_in_unpartitioned_with_override(self):
         with tempfile.NamedTemporaryFile(mode="w+") as infile:
             yaml.dump(
                 {
@@ -585,7 +585,7 @@ partitionmanager:
                 [
                     "--mariadb",
                     str(fake_exec),
-                    "bootstrap",
+                    "migrate",
                     "--assume-partitioned-on",
                     "id",
                     "--in",
@@ -633,7 +633,7 @@ partitionmanager:
                 },
             )
 
-    def test_bootstrap_cmd_in_out(self):
+    def test_migrate_cmd_in_out(self):
         with tempfile.NamedTemporaryFile() as outfile, tempfile.NamedTemporaryFile(
             mode="w+"
         ) as infile:
@@ -642,7 +642,7 @@ partitionmanager:
                     [
                         "--mariadb",
                         str(fake_exec),
-                        "bootstrap",
+                        "migrate",
                         "--out",
                         outfile.name,
                         "--in",

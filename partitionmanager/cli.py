@@ -9,11 +9,11 @@ import logging
 import traceback
 import yaml
 
-import partitionmanager.bootstrap
+import partitionmanager.migrate
+import partitionmanager.sql
+import partitionmanager.stats
 import partitionmanager.table_append_partition as pm_tap
 import partitionmanager.types
-import partitionmanager.stats
-import partitionmanager.sql
 
 PARSER = argparse.ArgumentParser(
     description="""
@@ -235,49 +235,48 @@ STATS_PARSER = SUBPARSERS.add_parser("stats", help="get stats for partitions")
 STATS_PARSER.set_defaults(func=stats_cmd)
 
 
-def bootstrap_cmd(args):
-    """Runs bootstrap actions on the config that results from the CLI arguments.
+def migrate_cmd(args):
+    """Runs migration actions on the config that results from the CLI arguments.
 
     Helper for argparse.
     """
     conf = config_from_args(args)
 
     if args.outfile:
-        partitionmanager.bootstrap.write_state_info(conf, args.outfile)
+        partitionmanager.migrate.write_state_info(conf, args.outfile)
 
     if args.infile:
-        return partitionmanager.bootstrap.calculate_sql_alters_from_state_info(
+        return partitionmanager.migrate.calculate_sql_alters_from_state_info(
             conf, args.infile
         )
     return {}
 
 
-BOOTSTRAP_PARSER = SUBPARSERS.add_parser(
-    "bootstrap",
-    help="bootstrap partitions that haven't been used with this tool before",
+MIGRATE_PARSER = SUBPARSERS.add_parser(
+    "migrate", help="migrate partitions that haven't been used with this tool before"
 )
-BOOTSTRAP_GROUP = BOOTSTRAP_PARSER.add_mutually_exclusive_group()
-BOOTSTRAP_GROUP.add_argument(
+MIGRATE_GROUP = MIGRATE_PARSER.add_mutually_exclusive_group()
+MIGRATE_GROUP.add_argument(
     "--in", "-i", dest="infile", type=argparse.FileType("r"), help="input YAML"
 )
-BOOTSTRAP_GROUP.add_argument(
+MIGRATE_GROUP.add_argument(
     "--out", "-o", dest="outfile", type=argparse.FileType("w"), help="output YAML"
 )
-BOOTSTRAP_PARSER.add_argument(
+MIGRATE_PARSER.add_argument(
     "--table",
     "-t",
     type=partitionmanager.types.SqlInput,
     nargs="+",
     help="table names, overwriting config",
 )
-BOOTSTRAP_PARSER.add_argument(
+MIGRATE_PARSER.add_argument(
     "--assume-partitioned-on",
     type=partitionmanager.types.SqlInput,
     action="append",
     help="Assume tables are partitioned by this column name, can be specified "
     "multiple times for multi-column partitions",
 )
-BOOTSTRAP_PARSER.set_defaults(func=bootstrap_cmd)
+MIGRATE_PARSER.set_defaults(func=migrate_cmd)
 
 
 def do_partition(conf):

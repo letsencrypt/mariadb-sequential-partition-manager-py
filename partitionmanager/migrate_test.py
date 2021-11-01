@@ -3,7 +3,7 @@ import unittest
 import yaml
 from datetime import datetime, timedelta
 
-from .bootstrap import (
+from .migrate import (
     _generate_sql_copy_commands,
     _get_time_offsets,
     _suffix,
