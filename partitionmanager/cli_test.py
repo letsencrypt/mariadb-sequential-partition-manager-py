@@ -533,13 +533,13 @@ partitionmanager:
                         + "`p_20210521` VALUES LESS THAN (300), PARTITION "
                         + "`p_20210620` VALUES LESS THAN MAXVALUE);",
                         "CREATE OR REPLACE TRIGGER copy_inserts_from_"
-                        + "partitioned_yesterday_to_partitioned_yesterday_new_20210421",
+                        + "partitioned_yesterday_to_partitioned_yesterday",
                         "\tAFTER INSERT ON partitioned_yesterday FOR EACH ROW",
                         "\t\tINSERT INTO partitioned_yesterday_new_20210421 SET",
                         "\t\t\t`id` = NEW.`id`,",
                         "\t\t\t`serial` = NEW.`serial`;",
                         "CREATE OR REPLACE TRIGGER copy_updates_from_"
-                        + "partitioned_yesterday_to_partitioned_yesterday_new_20210421",
+                        + "partitioned_yesterday_to_partitioned_yesterday",
                         "\tAFTER UPDATE ON partitioned_yesterday FOR EACH ROW",
                         "\t\tUPDATE partitioned_yesterday_new_20210421 SET",
                         "\t\t\t`serial` = NEW.`serial`",
