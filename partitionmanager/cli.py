@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import argparse
 import logging
+import time
 import traceback
 import yaml
 
@@ -412,6 +413,11 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
             help_text="Maximum seconds between partitions",
             type_name="gauge",
         )
+        metrics.describe(
+            "last_run_timestamp",
+            help_text="The timestamp of the last run",
+            type_name="gauge",
+        )
 
         for table, results in all_results.items():
             if "partitions" in results:
@@ -441,6 +447,7 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
                     results["max_partition_delta"].total_seconds(),
                 )
 
+        metrics.add("last_run_timestamp", None, time.time())
         with conf.prometheus_stats_path.open(mode="w", encoding="utf-8") as fp:
             metrics.render(fp)
     return all_results

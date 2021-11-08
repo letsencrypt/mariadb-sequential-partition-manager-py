@@ -50,7 +50,9 @@ class PrometheusMetrics:
             if n in self.types:
                 print(f"# TYPE {name} {self.types[n]}", file=fp)
             for m in metrics:
-                labels = [f'table="{m.table}"']
+                labels = list()
+                if m.table:
+                    labels = [f'table="{m.table}"']
                 print(f"{name}{{{','.join(labels)}}} {m.data}", file=fp)
 
 
