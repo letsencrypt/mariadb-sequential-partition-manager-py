@@ -281,24 +281,50 @@ class TestStatsCmd(unittest.TestCase):
             results["partitioned_yesterday"]["max_partition_delta"].days, 2
         )
 
+    def assert_stats_prometheus_outfile(self, prom_file):
+        lines = prom_file.split("\n")
+        metrics = dict()
+        for line in lines:
+            if not line.startswith("#") and len(line) > 0:
+                key, value = line.split(" ")
+                metrics[key] = value
+
+        for table in ["partitioned_last_week", "partitioned_yesterday", "other"]:
+            self.assertIn(f'partition_total{{table="{table}"}}', metrics)
+            self.assertIn(
+                f'partition_time_remaining_until_partition_overrun{{table="{table}"}}',
+                metrics,
+            )
+            self.assertIn(
+                f'partition_age_of_retained_partitions{{table="{table}"}}', metrics
+            )
+            self.assertIn(f'partition_mean_delta_seconds{{table="{table}"}}', metrics)
+            self.assertIn(f'partition_max_delta_seconds{{table="{table}"}}', metrics)
+        self.assertIn("partition_last_run_timestamp{}", metrics)
+
     def test_stats_cli_flag(self):
         args = PARSER.parse_args(["--mariadb", str(fake_exec), "stats"])
         results = stats_cmd(args)
         self.assert_stats_results(results)
 
     def test_stats_yaml(self):
-        yaml = f"""
-partitionmanager:
-    mariadb: {str(fake_exec)}
-    tables:
-        unused:
-"""
-        with tempfile.NamedTemporaryFile() as tmpfile:
+        with tempfile.NamedTemporaryFile(
+            mode="w+", encoding="UTF-8"
+        ) as stats_outfile, tempfile.NamedTemporaryFile() as tmpfile:
+            yaml = f"""
+    partitionmanager:
+        mariadb: {str(fake_exec)}
+        prometheus_stats: {stats_outfile.name}
+        tables:
+            unused:
+    """
             insert_into_file(tmpfile, yaml)
             args = PARSER.parse_args(["--config", tmpfile.name, "stats"])
 
-        results = stats_cmd(args)
-        self.assert_stats_results(results)
+            results = stats_cmd(args)
+
+            self.assert_stats_results(results)
+            self.assert_stats_prometheus_outfile(stats_outfile.read())
 
 
 class TestHelpers(unittest.TestCase):
