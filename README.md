@@ -89,15 +89,15 @@ partitionmanager:
     table4: {}
 ```
 
-For tables which are either partitioned but not yet using this tool's schema, or which have no empty partitions, the `bootstrap` command can be useful for proposing alterations to run manually. Note that `bootstrap` proposes commands that are likely to require partial copies of each table, so likely they will require a maintenance period.
+For tables which are either partitioned but not yet using this tool's schema, or which have no empty partitions, the `migrate` command can be useful for proposing alterations to run manually. Note that `migrate` proposes commands that are likely to require partial copies of each table, so likely they will require a maintenance period.
 
 ```sh
-partition-manager --mariadb ~/bin/rootsql-dev-primary bootstrap --out /tmp/bootstrap.yml --table orders
+partition-manager --mariadb ~/bin/rootsql-dev-primary migrate --out /tmp/migrate.yml --table orders
 INFO:write_state_info:Writing current state information
 INFO:write_state_info:(Table("orders"): {'id': 9236}),
 
 # wait some time
-partition-manager --mariadb ~/bin/rootsql-dev-primary bootstrap --in /tmp/bootstrap.yml --table orders
+partition-manager --mariadb ~/bin/rootsql-dev-primary migrate --in /tmp/migrate.yml --table orders
 INFO:calculate_sql_alters:Reading prior state information
 INFO:calculate_sql_alters:Table orders, 24.0 hours, [9236] - [29236], [20000] pos_change, [832.706363653845]/hour
 orders:
@@ -110,7 +110,7 @@ orders:
 
 - At start, if any configuration file specified as a CLI argument, read that configuration file to set all other values.
 - Then, process all remaining command line arguments, overriding values loaded from the configuration file in case of conflicts.
-- From those command-line arguments, determine whether to collect statistics `stats`, determine an initial partition layout `bootstrap`, or operate in the normal `maintain` mode.
+- From those command-line arguments, determine whether to collect statistics `stats`, determine an initial partition layout `migrate`, or operate in the normal `maintain` mode.
 - Use the configuration information as inputs to the required algorithm.
 
 ### How does `partman` determine when an additional partition is needed?
@@ -156,9 +156,9 @@ Procedure:
 
 The results of the algorithm are converted into `ALTER` statements; if the user configured `--noop` they're emitted to console and the logs for each table. If not set to `--noop`, the application will execute the ALTERs at the database server and emit the results, including execution time as prometheus statistics if so configured.
 
-#### "Bootstrap" algorithm
+#### "Migrate" algorithm
 
-The bootstrap mode is a limited form of the "Maintain" Algorithm, using a temporary state file to determine rates-of-change. The bootstrap mode also does not limit itself to only affecting empty partitions, it can and will request changes that will prompt row copies, in order to prepare a table for future use of the "Maintain" algorithm.
+The migrate mode is a limited form of the "Maintain" Algorithm, using a temporary state file to determine rates-of-change. The migrate mode also does not limit itself to only affecting empty partitions, it can and will request changes that will prompt row copies, in order to prepare a table for future use of the "Maintain" algorithm.
 
 ## TODOs
 
