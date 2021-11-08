@@ -137,6 +137,11 @@ def _trigger_column_copies(cols):
         yield f"`{c}` = NEW.`{c}`"
 
 
+def _make_trigger_name(name):
+    """ Helper that enforces the trigger must be <= 64 chars """
+    return name[:64]
+
+
 def _generate_sql_copy_commands(
     existing_table, map_data, columns, new_table, alter_commands_iter
 ):
@@ -175,7 +180,11 @@ def _generate_sql_copy_commands(
 
     cols = set(columns)
 
-    yield f"CREATE OR REPLACE TRIGGER copy_inserts_from_{existing_table.name}_to_{new_table.name}"
+    inserts_trigger_name = _make_trigger_name(
+        f"copy_inserts_from_{existing_table.name}_to_{new_table.name}"
+    )
+
+    yield f"CREATE OR REPLACE TRIGGER {inserts_trigger_name}"
     yield f"\tAFTER INSERT ON {existing_table.name} FOR EACH ROW"
     yield f"\t\tINSERT INTO {new_table.name} SET"
 
@@ -192,7 +201,11 @@ def _generate_sql_copy_commands(
         log.info("No columns to copy, so no UPDATE trigger being constructed.")
         return
 
-    yield f"CREATE OR REPLACE TRIGGER copy_updates_from_{existing_table.name}_to_{new_table.name}"
+    updates_trigger_name = _make_trigger_name(
+        f"copy_updates_from_{existing_table.name}_to_{new_table.name}"
+    )
+
+    yield f"CREATE OR REPLACE TRIGGER {updates_trigger_name}"
     yield f"\tAFTER UPDATE ON {existing_table.name} FOR EACH ROW"
     yield f"\t\tUPDATE {new_table.name} SET"
 
