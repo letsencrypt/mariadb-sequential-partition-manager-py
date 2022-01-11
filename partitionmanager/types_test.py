@@ -11,6 +11,7 @@ from .types import (
     PositionPartition,
     timedelta_from_dict,
     SqlInput,
+    SqlQuery,
     Table,
     to_sql_url,
     UnexpectedPartitionException,
@@ -29,6 +30,68 @@ def mkPPart(name, *pos):
 
 def mkTailPart(name, count=1):
     return MaxValuePartition(name, count)
+
+
+class TestSqlQuery(unittest.TestCase):
+    def test_multiple_statements(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=?; SELECT 1=1;")
+
+    def test_multiple_arguments(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=? OR 'what'=?;")
+
+    def test_forbidden_terms(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            SqlQuery("DELETE FROM 'place';")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            SqlQuery("UPDATE 'place';")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            SqlQuery("INSERT INTO 'place';")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            SqlQuery("ANALYZE 'place';")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            SqlQuery("SET 'place';")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            SqlQuery(";")
+
+    def test_get_statement_errors(self):
+        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=?;")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            q.get_statement_with_argument("must be a SqlInput type")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            q.get_statement_with_argument(5)
+        with self.assertRaises(argparse.ArgumentTypeError):
+            q.get_statement_with_argument(None)
+
+    def test_get_statement_string(self):
+        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'status'=?;")
+
+        with self.assertRaises(argparse.ArgumentTypeError):
+            q.get_statement_with_argument(SqlInput("strings aren't allowed"))
+
+    def test_get_statement_number(self):
+        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=?;")
+
+        self.assertEqual(
+            q.get_statement_with_argument(SqlInput(5)),
+            "SELECT 'id' FROM 'place' WHERE 'id'=5;",
+        )
+        self.assertEqual(
+            q.get_statement_with_argument(SqlInput(5555)),
+            "SELECT 'id' FROM 'place' WHERE 'id'=5555;",
+        )
+
+    def test_get_statement_number_with_newlines(self):
+        q = SqlQuery(
+            """
+                        SELECT 'multilines' FROM 'where it might be' WHERE 'id'=?;
+        """
+        )
+        self.assertEqual(
+            q.get_statement_with_argument(SqlInput(0xFF)),
+            "SELECT 'multilines' FROM 'where it might be' WHERE 'id'=255;",
+        )
 
 
 class TestTypes(unittest.TestCase):
@@ -104,6 +167,17 @@ class TestTypes(unittest.TestCase):
 
         r = timedelta_from_dict({"days": 30})
         self.assertEqual(timedelta(days=30), r)
+
+        with self.assertRaises(ValueError):
+            t.set_insertion_date_query("col")
+        with self.assertRaises(ValueError):
+            t.set_insertion_date_query(None)
+        self.assertFalse(t.has_date_query)
+
+        t.set_insertion_date_query(
+            SqlQuery("SELECT not_before FROM table WHERE id = ?;")
+        )
+        self.assertTrue(t.has_date_query)
 
     def test_changed_partition(self):
         with self.assertRaises(ValueError):
@@ -286,14 +360,22 @@ class TestPartition(unittest.TestCase):
     def test_instant_partition(self):
         now = datetime.utcnow()
 
-        ip = InstantPartition(now, [1, 2])
+        ip = InstantPartition("p_20380101", now, [1, 2])
         self.assertEqual(ip.position.as_list(), [1, 2])
-        self.assertEqual(ip.name, "Instant")
+        self.assertEqual(ip.name, "p_20380101")
         self.assertEqual(ip.timestamp(), now)
 
     def test_is_partition_type(self):
         self.assertTrue(is_partition_type(mkPPart("b", 1, 2)))
-        self.assertTrue(is_partition_type(InstantPartition(datetime.utcnow(), [1, 2])))
+        self.assertTrue(
+            is_partition_type(InstantPartition("p_19490520", datetime.utcnow(), [1, 2]))
+        )
         self.assertFalse(is_partition_type(None))
         self.assertFalse(is_partition_type(1))
         self.assertFalse(is_partition_type(NewPlannedPartition()))
+
+
+class TestPosition(unittest.TestCase):
+    def test_position_as_sql_input(self):
+        self.assertEqual([SqlInput(88)], mkPos(88).as_sql_input())
+        self.assertEqual([SqlInput(88), SqlInput(99)], mkPos(88, 99).as_sql_input())

@@ -12,7 +12,9 @@ from partitionmanager.types import (
     NewPlannedPartition,
     NoEmptyPartitionsAvailableException,
     PositionPartition,
+    InstantPartition,
     SqlInput,
+    SqlQuery,
     Table,
     TableInformationException,
     UnexpectedPartitionException,
@@ -20,6 +22,8 @@ from partitionmanager.types import (
 from partitionmanager.table_append_partition import (
     _generate_weights,
     _get_position_increase_per_day,
+    _get_rate_partitions_with_implicit_timestamps,
+    _get_rate_partitions_with_queried_timestamps,
     _get_table_information_schema_problems,
     _get_weighted_position_increase_per_day_for_partitions,
     _parse_columns,
@@ -42,12 +46,19 @@ from .types_test import mkPPart, mkTailPart, mkPos
 
 class MockDatabase(DatabaseCommand):
     def __init__(self):
-        self.response = []
-        self.num_queries = 0
+        self._response = []
+        self._num_queries = 0
 
     def run(self, cmd):
-        self.num_queries += 1
-        return self.response
+        self._num_queries += 1
+        return self._response.pop()
+
+    def push_response(self, r):
+        self._response.append(r)
+
+    @property
+    def num_queries(self):
+        return self._num_queries
 
     def db_name(self):
         return "the-database"
@@ -230,14 +241,14 @@ class TestSqlInput(unittest.TestCase):
 class TestGetPositions(unittest.TestCase):
     def test_get_position_single_column_wrong_type(self):
         db = MockDatabase()
-        db.response = [{"id": 0}]
+        db.push_response([{"id": 0}])
 
         with self.assertRaises(ValueError):
             get_current_positions(db, Table("table"), "id")
 
     def test_get_position_single_column(self):
         db = MockDatabase()
-        db.response = [{"id": 1}]
+        db.push_response([{"id": 1}])
 
         p = get_current_positions(db, Table("table"), ["id"])
         self.assertEqual(len(p), 1)
@@ -246,7 +257,8 @@ class TestGetPositions(unittest.TestCase):
 
     def test_get_position_two_columns(self):
         db = MockDatabase()
-        db.response = [{"id": 1, "id2": 2}]
+        db.push_response([{"id": 1, "id2": 2}])
+        db.push_response([{"id": 1, "id2": 2}])
 
         p = get_current_positions(db, Table("table"), ["id", "id2"])
         self.assertEqual(len(p), 2)
@@ -497,6 +509,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
     def test_plan_partition_changes_no_empty_partitions(self):
         with self.assertRaises(NoEmptyPartitionsAvailableException):
             _plan_partition_changes(
+                MockDatabase(),
                 Table("table"),
                 [mkPPart("p_20201231", 0), mkPPart("p_20210102", 200)],
                 mkPos(50),
@@ -508,6 +521,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
     def test_plan_partition_changes_imminent(self):
         with self.assertLogs("plan_partition_changes:table", level="INFO") as logctx:
             planned = _plan_partition_changes(
+                MockDatabase(),
                 Table("table"),
                 [
                     mkPPart("p_20201231", 100),
@@ -549,6 +563,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
     def test_plan_partition_changes_wildly_off_dates(self):
         with self.assertLogs("plan_partition_changes:table", level="INFO") as logctx:
             planned = _plan_partition_changes(
+                MockDatabase(),
                 Table("table"),
                 [
                     mkPPart("p_20201231", 100),
@@ -586,6 +601,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_plan_partition_changes_long_delay(self):
         planned = _plan_partition_changes(
+            MockDatabase(),
             Table("table"),
             [
                 mkPPart("p_20210101", 100),
@@ -614,6 +630,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
     def test_plan_partition_changes_short_names(self):
         self.maxDiff = None
         planned = _plan_partition_changes(
+            MockDatabase(),
             Table("table"),
             [
                 mkPPart("p_2019", 1912499867),
@@ -656,6 +673,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_plan_partition_changes_bespoke_names(self):
         planned = _plan_partition_changes(
+            MockDatabase(),
             Table("table"),
             [mkPPart("p_start", 100), mkTailPart("p_future")],
             mkPos(50),
@@ -692,6 +710,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
     def test_plan_partition_changes(self):
         self.maxDiff = None
         planned = _plan_partition_changes(
+            MockDatabase(),
             Table("table"),
             [
                 mkPPart("p_20201231", 100),
@@ -717,6 +736,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
         self.assertEqual(
             _plan_partition_changes(
+                MockDatabase(),
                 Table("table"),
                 [
                     mkPPart("p_20201231", 100),
@@ -747,6 +767,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         match reality. """
         self.maxDiff = None
         planned = _plan_partition_changes(
+            MockDatabase(),
             Table("table"),
             [
                 mkPPart("p_20210505", 9505010028),
@@ -773,6 +794,69 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 NewPlannedPartition()
                 .set_columns(1)
                 .set_timestamp(datetime(2021, 8, 27, tzinfo=timezone.utc)),
+            ],
+        )
+
+    def test_get_rate_partitions_with_implicit_timestamps(self):
+        eval_time = datetime(2021, 6, 8, tzinfo=timezone.utc)
+
+        partition_list = _get_rate_partitions_with_implicit_timestamps(
+            Table("table"),
+            [mkPPart("p_20210505", 9505010028), mkPPart("p_20210604", 10152257517)],
+            mkPos(10064818175),
+            eval_time,
+            mkPPart("p_20210704", 10799505006),
+        )
+        print(partition_list)
+        self.assertEqual(
+            partition_list,
+            [
+                mkPPart("p_20210505", 9505010028),
+                mkPPart("p_20210604", 10152257517),
+                InstantPartition("p_current_pos", eval_time, [10064818175]),
+            ],
+        )
+
+    def test_get_rate_partitions_with_queried_timestamps_no_query(self):
+        with self.assertRaises(ValueError):
+            _get_rate_partitions_with_queried_timestamps(
+                MockDatabase(),
+                Table("table"),
+                [mkPPart("p_20210505", 9505010028), mkPPart("p_20210604", 10152257517)],
+                mkPos(10064818175),
+                datetime(2021, 6, 8, tzinfo=timezone.utc),
+                mkPPart("p_20210704", 10799505006),
+            )
+
+    def test_get_rate_partitions_with_queried_timestamps(self):
+        times = [
+            datetime(2021, 3, 8, tzinfo=timezone.utc),
+            datetime(2021, 4, 8, tzinfo=timezone.utc),
+            datetime(2021, 5, 8, tzinfo=timezone.utc),
+        ]
+        tbl = Table("table")
+        tbl.set_insertion_date_query(
+            SqlQuery("SELECT insert_date FROM table WHERE id = ?;")
+        )
+        database = MockDatabase()
+        database.push_response([{"insert_date": times[0].timestamp()}])
+        database.push_response([{"insert_date": times[1].timestamp()}])
+
+        partition_list = _get_rate_partitions_with_queried_timestamps(
+            database,
+            tbl,
+            [mkPPart("p_20210505", 9505010028), mkPPart("p_20210604", 10152257517)],
+            mkPos(10064818175),
+            times[2],
+            mkPPart("p_20210704", 10799505006),
+        )
+
+        self.assertEqual(
+            partition_list,
+            [
+                InstantPartition("p_20210505", times[0], [9505010028]),
+                InstantPartition("p_20210604", times[1], [10152257517]),
+                InstantPartition("p_20210704", times[2], [10064818175]),
             ],
         )
 
@@ -999,6 +1083,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self
     ):
         planned = _plan_partition_changes(
+            MockDatabase(),
             Table("table"),
             [
                 mkPPart("p_20201231", 100),
@@ -1026,6 +1111,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             "get_pending_sql_reorganize_partition_commands:plushies", level="INFO"
         ) as logctx:
             cmds = get_pending_sql_reorganize_partition_commands(
+                database=MockDatabase(),
                 table=Table("plushies"),
                 partition_list=[
                     mkPPart("p_20201231", 100),
@@ -1053,6 +1139,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             "get_pending_sql_reorganize_partition_commands:plushies", level="DEBUG"
         ) as logctx:
             cmds = get_pending_sql_reorganize_partition_commands(
+                database=MockDatabase(),
                 table=Table("plushies"),
                 partition_list=[
                     mkPPart("p_20201231", 100),
@@ -1085,11 +1172,10 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_get_columns(self):
         db = MockDatabase()
-        db.response = [{"Field": "id", "Type": "int"}, {"Field": "day", "Type": "int"}]
+        expected = [{"Field": "id", "Type": "int"}, {"Field": "day", "Type": "int"}]
+        db.push_response(expected)
 
-        columns = get_columns(db, Table("table"))
-
-        self.assertEqual(columns, db.response)
+        self.assertEqual(expected, get_columns(db, Table("table")))
 
     def test_parse_columns(self):
         column_descriptions = [

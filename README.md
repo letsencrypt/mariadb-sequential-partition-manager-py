@@ -28,10 +28,14 @@ Similar tools:
       days: 90
   dburl: "sql://user:password@localhost3306:/test_db"
   tables:
-    cats: {}
+    cats:
+      insertion_date_query: >
+        SELECT UNIX_TIMESTAMP(created) FROM cats WHERE id > ? ORDER BY id ASC LIMIT 1;
     dogs:
       partition_period:
         days: 30
+      insertion_date_query: >
+        SELECT UNIX_TIMESTAMP(c.created) FROM dogs AS d JOIN cats AS c ON c.house_id = d.house_id WHERE d.id > ? ORDER BY d.id ASC LIMIT 1;
   prometheus_stats: "/tmp/prometheus-textcollect-partition-manager.prom"
 EOF
  → partition-manager --config /tmp/partman.conf.yml maintain --noop
@@ -80,12 +84,18 @@ partitionmanager:
     table1:
       retention:
         days: 60
+      insertion_date_query: >
+        SELECT UNIX_TIMESTAMP(created) FROM table1 WHERE id > ? ORDER BY id ASC LIMIT 1;
     table2:
       partition_period:
         days: 30
+      insertion_date_query: >
+        SELECT UNIX_TIMESTAMP(created) FROM table2 WHERE id > ? ORDER BY id ASC LIMIT 1;
     table3:
       retention:
         days: 14
+      insertion_date_query: >
+        SELECT UNIX_TIMESTAMP(created) FROM table3 WHERE id > ? ORDER BY id ASC LIMIT 1;
     table4: {}
 ```
 

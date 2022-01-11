@@ -133,6 +133,12 @@ class Config:
                             tabledata["partition_period"]
                         )
                     )
+                if isinstance(tabledata, dict) and "insertion_date_query" in tabledata:
+                    tab.set_insertion_date_query(
+                        partitionmanager.types.SqlQuery(
+                            tabledata["insertion_date_query"]
+                        )
+                    )
 
                 self.tables.add(tab)
         if "prometheus_stats" in data:
@@ -327,6 +333,7 @@ def do_partition(conf):
             cur_pos.set_position([positions[col] for col in map_data["range_cols"]])
 
             sql_cmds = pm_tap.get_pending_sql_reorganize_partition_commands(
+                database=conf.dbcmd,
                 table=table,
                 partition_list=map_data["partitions"],
                 current_position=cur_pos,
