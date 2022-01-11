@@ -30,12 +30,15 @@ Similar tools:
   tables:
     cats:
       earliest_utc_timestamp_query: >
-        SELECT UNIX_TIMESTAMP(created) FROM cats WHERE id > ? ORDER BY id ASC LIMIT 1;
+        SELECT UNIX_TIMESTAMP(`created`) FROM `cats` WHERE `id` > '?' ORDER BY `id` ASC LIMIT 1;
     dogs:
       partition_period:
         days: 30
       earliest_utc_timestamp_query: >
-        SELECT UNIX_TIMESTAMP(c.created) FROM dogs AS d JOIN cats AS c ON c.house_id = d.house_id WHERE d.id > ? ORDER BY d.id ASC LIMIT 1;
+        SELECT UNIX_TIMESTAMP(`c`.`created`) FROM `dogs` AS `d`
+          JOIN `cats` AS `c` ON `c`.`house_id` = `d`.`house_id`
+          WHERE `d`.`id` > '?'
+          ORDER BY `d`.`id` ASC LIMIT 1;
   prometheus_stats: "/tmp/prometheus-textcollect-partition-manager.prom"
 EOF
  → partition-manager --config /tmp/partman.conf.yml maintain --noop
