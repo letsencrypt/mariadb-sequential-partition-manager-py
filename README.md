@@ -29,12 +29,12 @@ Similar tools:
   dburl: "sql://user:password@localhost3306:/test_db"
   tables:
     cats:
-      insertion_date_query: >
+      earliest_utc_timestamp_query: >
         SELECT UNIX_TIMESTAMP(created) FROM cats WHERE id > ? ORDER BY id ASC LIMIT 1;
     dogs:
       partition_period:
         days: 30
-      insertion_date_query: >
+      earliest_utc_timestamp_query: >
         SELECT UNIX_TIMESTAMP(c.created) FROM dogs AS d JOIN cats AS c ON c.house_id = d.house_id WHERE d.id > ? ORDER BY d.id ASC LIMIT 1;
   prometheus_stats: "/tmp/prometheus-textcollect-partition-manager.prom"
 EOF
@@ -84,22 +84,22 @@ partitionmanager:
     table1:
       retention:
         days: 60
-      insertion_date_query: >
+      earliest_utc_timestamp_query: >
         SELECT UNIX_TIMESTAMP(created) FROM table1 WHERE id > ? ORDER BY id ASC LIMIT 1;
     table2:
       partition_period:
         days: 30
-      insertion_date_query: >
+      earliest_utc_timestamp_query: >
         SELECT UNIX_TIMESTAMP(created) FROM table2 WHERE id > ? ORDER BY id ASC LIMIT 1;
     table3:
       retention:
         days: 14
-      insertion_date_query: >
+      earliest_utc_timestamp_query: >
         SELECT UNIX_TIMESTAMP(created) FROM table3 WHERE id > ? ORDER BY id ASC LIMIT 1;
     table4: {}
 ```
 
-The `insertion_date_query` entries are optional SQL queries that are run during partition map analysis to determine the eact timestamp of the earliest entry in each partition. If you configure such a query for a table, it must return a single row and column, specifically the epoch timestamp in UTC of the earliest entry the partition. There is expcected a single `?` entry which will be replaced with the partition value of that partition.
+The `earliest_utc_timestamp_query` entries are optional SQL queries that are run during partition map analysis to determine the eact timestamp of the earliest entry in each partition. If you configure such a query for a table, it must return a single row and column, specifically the epoch timestamp in UTC of the earliest entry the partition. There is expcected a single `?` entry which will be replaced with the partition value of that partition.
 
 For tables which are either partitioned but not yet using this tool's schema, or which have no empty partitions, the `migrate` command can be useful for proposing alterations to run manually. Note that `migrate` proposes commands that are likely to require partial copies of each table, so likely they will require a maintenance period.
 

@@ -133,10 +133,13 @@ class Config:
                             tabledata["partition_period"]
                         )
                     )
-                if isinstance(tabledata, dict) and "insertion_date_query" in tabledata:
-                    tab.set_insertion_date_query(
+                if (
+                    isinstance(tabledata, dict)
+                    and "earliest_utc_timestamp_query" in tabledata
+                ):
+                    tab.set_earliest_utc_timestamp_query(
                         partitionmanager.types.SqlQuery(
-                            tabledata["insertion_date_query"]
+                            tabledata["earliest_utc_timestamp_query"]
                         )
                     )
 

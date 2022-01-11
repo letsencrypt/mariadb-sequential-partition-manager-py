@@ -169,12 +169,12 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(timedelta(days=30), r)
 
         with self.assertRaises(ValueError):
-            t.set_insertion_date_query("col")
+            t.set_earliest_utc_timestamp_query("col")
         with self.assertRaises(ValueError):
-            t.set_insertion_date_query(None)
+            t.set_earliest_utc_timestamp_query(None)
         self.assertFalse(t.has_date_query)
 
-        t.set_insertion_date_query(
+        t.set_earliest_utc_timestamp_query(
             SqlQuery("SELECT not_before FROM table WHERE id = ?;")
         )
         self.assertTrue(t.has_date_query)

@@ -32,7 +32,7 @@ class Table:
         self.name = SqlInput(name)
         self.retention = None
         self.partition_period = None
-        self.insertion_date_query = None
+        self.earliest_utc_timestamp_query = None
 
     def set_retention(self, ret):
         """
@@ -52,14 +52,14 @@ class Table:
         self.partition_period = dur
         return self
 
-    def set_insertion_date_query(self, query):
+    def set_earliest_utc_timestamp_query(self, query):
         if not isinstance(query, SqlQuery):
             raise ValueError("Must be a SqlQuery")
-        self.insertion_date_query = query
+        self.earliest_utc_timestamp_query = query
 
     @property
     def has_date_query(self):
-        return self.insertion_date_query is not None
+        return self.earliest_utc_timestamp_query is not None
 
     def __str__(self):
         return f"Table {self.name}"

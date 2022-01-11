@@ -433,7 +433,9 @@ def _get_rate_partitions_with_queried_timestamps(
             )
         arg = partition.position.as_sql_input()[0]
 
-        sql_select_cmd = table.insertion_date_query.get_statement_with_argument(arg)
+        sql_select_cmd = table.earliest_utc_timestamp_query.get_statement_with_argument(
+            arg
+        )
         log.debug(
             "Executing %s to derive partition %s at position %s",
             sql_select_cmd,

@@ -835,7 +835,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             datetime(2021, 5, 8, tzinfo=timezone.utc),
         ]
         tbl = Table("table")
-        tbl.set_insertion_date_query(
+        tbl.set_earliest_utc_timestamp_query(
             SqlQuery("SELECT insert_date FROM table WHERE id = ?;")
         )
         database = MockDatabase()
