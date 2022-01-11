@@ -99,6 +99,8 @@ partitionmanager:
     table4: {}
 ```
 
+The `insertion_date_query` entries are optional SQL queries that are run during partition map analysis to determine the eact timestamp of the earliest entry in each partition. If you configure such a query for a table, it must return a single row and column, specifically the epoch timestamp in UTC of the earliest entry the partition. There is expcected a single `?` entry which will be replaced with the partition value of that partition.
+
 For tables which are either partitioned but not yet using this tool's schema, or which have no empty partitions, the `migrate` command can be useful for proposing alterations to run manually. Note that `migrate` proposes commands that are likely to require partial copies of each table, so likely they will require a maintenance period.
 
 ```sh
