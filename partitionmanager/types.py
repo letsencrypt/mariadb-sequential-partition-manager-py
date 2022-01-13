@@ -106,11 +106,11 @@ class SqlQuery(str):
 
         if "?" not in query_string:
             raise argparse.ArgumentTypeError(
-                f"[{query_string}] has no substituion variable '?'"
+                f"[{query_string}] has no substitution variable '?'"
             )
         if query_string.count("?") > 1:
             raise argparse.ArgumentTypeError(
-                f"[{query_string}] has more than one substituion variable '?'"
+                f"[{query_string}] has more than one substitution variable '?'"
             )
 
         if not query_string.upper().startswith("SELECT "):
