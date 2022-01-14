@@ -32,6 +32,7 @@ class Table:
         self.name = SqlInput(name)
         self.retention = None
         self.partition_period = None
+        self.earliest_utc_timestamp_query = None
 
     def set_retention(self, ret):
         """
@@ -51,13 +52,22 @@ class Table:
         self.partition_period = dur
         return self
 
+    def set_earliest_utc_timestamp_query(self, query):
+        if not isinstance(query, SqlQuery):
+            raise ValueError("Must be a SqlQuery")
+        self.earliest_utc_timestamp_query = query
+
+    @property
+    def has_date_query(self):
+        return self.earliest_utc_timestamp_query is not None
+
     def __str__(self):
         return f"Table {self.name}"
 
 
 class SqlInput(str):
     """
-    Class which wraps a string only if the string is safe to use within a
+    Class which wraps a string or number only if it is safe to use within a
     single SQL statement.
     """
 
@@ -66,12 +76,62 @@ class SqlInput(str):
     def __new__(cls, *args):
         if len(args) != 1:
             raise argparse.ArgumentTypeError(f"{args} is not a single argument")
-        if not SqlInput.valid_form.match(args[0]):
+        if not isinstance(args[0], int) and not SqlInput.valid_form.match(args[0]):
             raise argparse.ArgumentTypeError(f"{args[0]} is not a valid SQL identifier")
         return super().__new__(cls, args[0])
 
     def __repr__(self):
         return str(self)
+
+
+class SqlQuery(str):
+    """
+    Class which loosely enforces that there's a single SQL SELECT statement to run.
+    """
+
+    forbidden_terms = ["UPDATE ", "INSERT ", "DELETE "]
+
+    def __new__(cls, *args):
+        if len(args) != 1:
+            raise argparse.ArgumentTypeError(f"{args} is not a single argument")
+        query_string = args[0].strip()
+        if not query_string.endswith(";"):
+            raise argparse.ArgumentTypeError(
+                f"[{query_string}] does not end with a ';'"
+            )
+        if query_string.count(";") > 1:
+            raise argparse.ArgumentTypeError(
+                f"[{query_string}] has more than one statement"
+            )
+
+        if "?" not in query_string:
+            raise argparse.ArgumentTypeError(
+                f"[{query_string}] has no substitution variable '?'"
+            )
+        if query_string.count("?") > 1:
+            raise argparse.ArgumentTypeError(
+                f"[{query_string}] has more than one substitution variable '?'"
+            )
+
+        if not query_string.upper().startswith("SELECT "):
+            raise argparse.ArgumentTypeError(
+                f"[{query_string}] is not a SELECT statement"
+            )
+        for term in SqlQuery.forbidden_terms:
+            if term in query_string.upper():
+                raise argparse.ArgumentTypeError(
+                    f"[{query_string}] has a forbidden term [{term}]"
+                )
+
+        return super().__new__(cls, query_string)
+
+    def __repr__(self):
+        return str(self)
+
+    def get_statement_with_argument(self, arg):
+        if not isinstance(arg, SqlInput):
+            raise argparse.ArgumentTypeError("Must be a SqlInput")
+        return str(self).replace("?", str(arg))
 
 
 def to_sql_url(urlstring):
@@ -208,6 +268,10 @@ class Position:
     def as_list(self):
         """Return a copy of the list of identifiers representing this position"""
         return self._position.copy()
+
+    def as_sql_input(self):
+        """Return the position as an array of SqlInput objects"""
+        return [SqlInput(p) for p in self._position]
 
     def __len__(self):
         return len(self._position)
@@ -348,8 +412,8 @@ class InstantPartition(PositionPartition):
     of the rate calculation itself.
     """
 
-    def __init__(self, now, position_in):
-        super().__init__("Instant")
+    def __init__(self, name, now, position_in):
+        super().__init__(name)
         self._instant = now
         self._position.set_position(position_in)
 

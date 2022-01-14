@@ -2,7 +2,7 @@
 Design and perform partition management.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import operator
 import re
@@ -360,7 +360,124 @@ def _calculate_start_time(last_changed_time, evaluation_time, allowed_lifespan):
     return partition_start_time.replace(minute=0, second=0, microsecond=0)
 
 
+def _get_rate_partitions_with_implicit_timestamps(
+    table, filled_partitions, current_position, evaluation_time, active_partition
+):
+    """ Return a list of PositionPartitions for use in rate calculations.
+
+    The partitions are set with implicit timestamps.
+    """
+    log = logging.getLogger(
+        f"_get_rate_partitions_with_implicit_timestamps:{table.name}"
+    )
+
+    rate_relevant_partitions = None
+
+    if active_partition.timestamp() < evaluation_time:
+        # This bit of weirdness is a fencepost issue: The partition list is strictly
+        # increasing until we get to "now" and the active partition. "Now" actually
+        # takes place _after_ active partition's start date (naturally), but
+        # contains a position that is before the top of active, by definition. For
+        # the rate processing to work, we need to swap the "now" and the active
+        # partition's dates and positions.
+        rate_relevant_partitions = filled_partitions + [
+            partitionmanager.types.InstantPartition(
+                "p_current_pos", active_partition.timestamp(), current_position
+            ),
+            partitionmanager.types.InstantPartition(
+                "p_prev_pos", evaluation_time, active_partition.position
+            ),
+        ]
+    else:
+        # If the active partition's start date is later than today, then we
+        # previously mispredicted the rate of change. There's nothing we can
+        # do about that at this point, except limit our rate-of-change calculation
+        # to exclude the future-dated, irrelevant partition.
+        log.debug(
+            f"Misprediction: Evaluation time ({evaluation_time}) is "
+            f"before the active partition {active_partition}. Excluding "
+            "mispredicted partitions from the rate calculations."
+        )
+        filled_partitions = filter(
+            lambda f: f.timestamp() < evaluation_time, filled_partitions
+        )
+        rate_relevant_partitions = list(filled_partitions) + [
+            partitionmanager.types.InstantPartition(
+                "p_current_pos", evaluation_time, current_position
+            )
+        ]
+
+    return rate_relevant_partitions
+
+
+def _get_rate_partitions_with_queried_timestamps(
+    database, table, partition_list, current_position, evaluation_time, active_partition
+):
+    """ Return a list of PositionPartitions for use in rate calculations.
+
+    The partitions' timestamps are explicitly queried.
+    """
+    log = logging.getLogger(
+        f"_get_rate_partitions_with_queried_timestamps:{table.name}"
+    )
+
+    if not table.has_date_query:
+        raise ValueError("Table has no defined date query")
+
+    instant_partitions = list()
+
+    for partition in partition_list:
+        if len(partition.position) != 1:
+            raise ValueError(
+                "This method is only valid for single-column partitions right now"
+            )
+        arg = partition.position.as_sql_input()[0]
+
+        sql_select_cmd = table.earliest_utc_timestamp_query.get_statement_with_argument(
+            arg
+        )
+        log.debug(
+            "Executing %s to derive partition %s at position %s",
+            sql_select_cmd,
+            partition.name,
+            partition.position,
+        )
+
+        start = datetime.now()
+        exact_time_result = database.run(sql_select_cmd)
+        end = datetime.now()
+
+        assert len(exact_time_result) == 1
+        assert len(exact_time_result[0]) == 1
+        for key, value in exact_time_result[0].items():
+            exact_time = datetime.fromtimestamp(value, tz=timezone.utc)
+            break
+
+        log.debug(
+            "Exact time of %s returned for %s at position %s, query took %s",
+            exact_time,
+            partition.name,
+            partition.position,
+            (end - start),
+        )
+
+        instant_partitions.append(
+            partitionmanager.types.InstantPartition(
+                partition.name, exact_time, partition.position
+            )
+        )
+
+    instant_partitions.append(
+        partitionmanager.types.InstantPartition(
+            active_partition.name, evaluation_time, current_position
+        )
+    )
+
+    return instant_partitions
+
+
 def _plan_partition_changes(
+    database,
     table,
     partition_list,
     current_position,
@@ -389,43 +506,28 @@ def _plan_partition_changes(
     if not active_partition:
         raise Exception("Active Partition can't be None")
 
-    rate_relevant_partitions = None
-
-    if active_partition.timestamp() < evaluation_time:
-        # This bit of weirdness is a fencepost issue: The partition list is strictly
-        # increasing until we get to "now" and the active partition. "Now" actually
-        # takes place _after_ active partition's start date (naturally), but
-        # contains a position that is before the top of active, by definition. For
-        # the rate processing to work, we need to swap the "now" and the active
-        # partition's dates and positions.
-        rate_relevant_partitions = filled_partitions + [
-            partitionmanager.types.InstantPartition(
-                active_partition.timestamp(), current_position
-            ),
-            partitionmanager.types.InstantPartition(
-                evaluation_time, active_partition.position
-            ),
-        ]
+    if table.has_date_query:
+        rate_relevant_partitions = _get_rate_partitions_with_queried_timestamps(
+            database,
+            table,
+            filled_partitions,
+            current_position,
+            evaluation_time,
+            active_partition,
+        )
     else:
-        # If the active partition's start date is later than today, then we
-        # previously mispredicted the rate of change. There's nothing we can
-        # do about that at this point, except limit our rate-of-change calculation
-        # to exclude the future-dated, irrelevant partition.
-        log.debug(
-            f"Misprediction: Evaluation time ({evaluation_time}) is "
-            f"before the active partition {active_partition}. Excluding "
-            "mispredicted partitions from the rate calculations."
+        rate_relevant_partitions = _get_rate_partitions_with_implicit_timestamps(
+            table,
+            filled_partitions,
+            current_position,
+            evaluation_time,
+            active_partition,
         )
-        filled_partitions = filter(
-            lambda f: f.timestamp() < evaluation_time, filled_partitions
-        )
-        rate_relevant_partitions = list(filled_partitions) + [
-            partitionmanager.types.InstantPartition(evaluation_time, current_position)
-        ]
 
     rates = _get_weighted_position_increase_per_day_for_partitions(
         rate_relevant_partitions
     )
+
     log.debug(
         f"Rates of change calculated as {rates} per day from "
         f"{len(rate_relevant_partitions)} partitions"
@@ -620,6 +722,7 @@ def generate_sql_reorganize_partition_commands(table, changes):
 
 def get_pending_sql_reorganize_partition_commands(
     *,
+    database,
     table,
     partition_list,
     current_position,
@@ -656,6 +759,7 @@ def get_pending_sql_reorganize_partition_commands(
     )
 
     partition_changes = _plan_partition_changes(
+        database,
         table,
         partition_list,
         current_position,
