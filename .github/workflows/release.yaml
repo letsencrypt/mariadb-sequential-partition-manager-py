@@ -40,7 +40,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: get version
+      - name: Get version from git tag
         id: get_version
         uses: battila7/get-version-action@v2
 
