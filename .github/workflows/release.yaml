@@ -53,6 +53,9 @@ jobs:
           mkdir install
           python setup.py install --root "install/"
       
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+
       - name: Build deb
         run: |
           SEMVER=${{ steps.get_version.outputs.version }}
