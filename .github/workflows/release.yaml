@@ -51,7 +51,7 @@ jobs:
       - name: Build partition-manager
         run: |
           mkdir install
-          pip install . --prefix=install/
+          python3 setup.py install --root "install/" --prefix "/usr/local" --install-lib "/usr/lib/python3/dist-packages"
       
       # - name: Setup tmate session
       #   uses: mxschmitt/action-tmate@v3
