@@ -1,0 +1,70 @@
+name: release
+
+permissions:
+  contents: write
+  packages: write
+  statuses: write
+  pull-requests: read
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+  
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.17
+      
+      - name: Setup python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+          architecture: 'x64'
+          cache: 'pip'
+      
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get upgrade -y
+          sudo apt-get install -y build-essential python-setuptools python3-pip
+          pip3 install setuptools
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: get version
+        id: get_version
+        uses: battila7/get-version-action@v2
+
+      - name: Install nFPM
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.11.3
+      
+      - name: Build partition-manager
+        run: |
+          mkdir install
+          python setup.py install --root "install/"
+      
+      - name: Build deb
+        run: |
+          SEMVER=${{ steps.get_version.outputs.version }}
+          mkdir nfpm-pkg
+          nfpm package -p deb --target "nfpm-pkg/"
+      
+      - name: "Publish release"
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          title: "partition-manager ${{ steps.get_version.outputs.version }}"
+          files: |
+            nfpm-pkg/*.deb
