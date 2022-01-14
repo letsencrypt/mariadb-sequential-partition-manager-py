@@ -63,7 +63,7 @@ jobs:
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
+          automatic_release_tag: "${{ steps.get_version.outputs.version }}"
           title: "partition-manager ${{ steps.get_version.outputs.version }}"
           files: |
             nfpm-pkg/*.deb
