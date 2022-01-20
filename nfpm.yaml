@@ -1,0 +1,16 @@
+name: "python3-mariadb-sequential-partition-manager"
+arch: amd64
+version: ${SEMVER}
+version_metadata: git
+
+maintainer: Let's Encrypt <opensource@letsencrypt.org>
+license: MPL
+depends:
+  - python3-yaml 
+disable_globbing: false
+
+contents:
+  - src: ./install/usr/**/*
+    dst: /usr/
+
+deb:
