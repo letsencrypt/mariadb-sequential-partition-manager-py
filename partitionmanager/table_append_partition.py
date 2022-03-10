@@ -528,7 +528,7 @@ def _plan_partition_changes(
         rate_relevant_partitions
     )
 
-    log.debug(
+    log.info(
         f"Rates of change calculated as {rates} per day from "
         f"{len(rate_relevant_partitions)} partitions"
     )
