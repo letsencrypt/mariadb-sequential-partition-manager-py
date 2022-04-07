@@ -15,19 +15,19 @@ jobs:
   release:
     name: release
     runs-on: ubuntu-latest
-  
+
     steps:
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
           go-version: 1.17
-      
+
       - name: Setup python
         uses: actions/setup-python@v2
         with:
           python-version: '3.x'
           architecture: 'x64'
-      
+
       - name: Install packages
         run: |
           sudo apt-get update
@@ -47,7 +47,7 @@ jobs:
       - name: Install nFPM
         run: |
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.11.3
-      
+
       - name: Build partition-manager
         run: |
           mkdir install
@@ -58,7 +58,7 @@ jobs:
           SEMVER=${{ steps.get_version.outputs.version }}
           mkdir nfpm-pkg
           nfpm package -p deb --target "nfpm-pkg/"
-      
+
       - name: "Publish release"
         uses: "marvinpinto/action-automatic-releases@latest"
         with:

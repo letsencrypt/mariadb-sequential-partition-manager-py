@@ -170,7 +170,7 @@ class DatabaseCommand(abc.ABC):
 
 
 def is_partition_type(obj):
-    """ True if the object inherits from a _Partition. """
+    """True if the object inherits from a _Partition."""
     return isinstance(obj, _Partition)
 
 
@@ -248,7 +248,7 @@ class _Partition(abc.ABC):
 
 
 class Position:
-    """ An internal class that represents a position as an ordered list of
+    """An internal class that represents a position as an ordered list of
     identifiers, matching the table's partition-by statement.
     """
 
@@ -462,7 +462,7 @@ class _PlannedPartition(abc.ABC):
         """Indicate this is an important partition. Used in the
         _plan_partition_changes as a marker that there's a significant
         change in this partition that should be committed even if the
-        overall map isn't changing much. """
+        overall map isn't changing much."""
         self._important = True
         return self
 
@@ -582,7 +582,7 @@ class NewPlannedPartition(_PlannedPartition):
 
 
 class MismatchedIdException(Exception):
-    """ Raised if the partition map doesn't use the primary key as its range id."""
+    """Raised if the partition map doesn't use the primary key as its range id."""
 
 
 class TruncatedDatabaseResultException(Exception):
