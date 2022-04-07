@@ -537,10 +537,12 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             logctx.output,
             [
+                "INFO:plan_partition_changes:table:Rates of change calculated as "
+                "[25.043478260869566] per day from 2 partitions",
                 "INFO:plan_partition_changes:table:Start-of-fill predicted at "
                 "2021-01-03 which is not 2021-01-02. This change will be marked "
                 "as important to ensure that p_20210102: (200) is moved to "
-                "2021-01-03"
+                "2021-01-03",
             ],
         )
 
@@ -579,10 +581,12 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             logctx.output,
             [
+                "INFO:plan_partition_changes:table:Rates of change calculated as [50.0] per "
+                "day from 2 partitions",
                 "INFO:plan_partition_changes:table:Start-of-fill predicted at "
                 "2021-01-02 which is not 2021-01-04. This change will be marked "
                 "as important to ensure that p_20210104: (200) is moved to "
-                "2021-01-02"
+                "2021-01-02",
             ],
         )
 
