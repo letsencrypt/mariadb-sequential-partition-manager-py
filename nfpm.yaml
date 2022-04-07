@@ -6,7 +6,7 @@ version_metadata: git
 maintainer: Let's Encrypt <opensource@letsencrypt.org>
 license: MPL
 depends:
-  - python3-yaml 
+  - python3-yaml
 disable_globbing: false
 
 contents:

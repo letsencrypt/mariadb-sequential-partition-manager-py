@@ -767,8 +767,8 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_plan_partition_changes_misprediction(self):
-        """ We have to handle the case where the partition list doesn't cleanly
-        match reality. """
+        """We have to handle the case where the partition list doesn't cleanly
+        match reality."""
         self.maxDiff = None
         planned = _plan_partition_changes(
             MockDatabase(),
@@ -1084,7 +1084,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             )
 
     def test_plan_andgenerate_sql_reorganize_partition_commands_with_future_partition(
-        self
+        self,
     ):
         planned = _plan_partition_changes(
             MockDatabase(),

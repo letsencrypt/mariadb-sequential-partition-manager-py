@@ -161,7 +161,7 @@ def _parse_partition_map(rows):
 
 
 def get_columns(database, table):
-    """ Gather the columns list via the database command tool. """
+    """Gather the columns list via the database command tool."""
     if not isinstance(table, partitionmanager.types.Table) or not isinstance(
         table.name, partitionmanager.types.SqlInput
     ):
@@ -171,8 +171,8 @@ def get_columns(database, table):
 
 
 def _parse_columns(table, rows):
-    """ Read the columns description and return a list of the columns, where
-    each entry is a dict containing Field and Type. """
+    """Read the columns description and return a list of the columns, where
+    each entry is a dict containing Field and Type."""
     log = logging.getLogger("parse_columns")
     if not rows:
         raise partitionmanager.types.TableInformationException("No column information")
@@ -363,7 +363,7 @@ def _calculate_start_time(last_changed_time, evaluation_time, allowed_lifespan):
 def _get_rate_partitions_with_implicit_timestamps(
     table, filled_partitions, current_position, evaluation_time, active_partition
 ):
-    """ Return a list of PositionPartitions for use in rate calculations.
+    """Return a list of PositionPartitions for use in rate calculations.
 
     The partitions are set with implicit timestamps.
     """
@@ -413,7 +413,7 @@ def _get_rate_partitions_with_implicit_timestamps(
 def _get_rate_partitions_with_queried_timestamps(
     database, table, partition_list, current_position, evaluation_time, active_partition
 ):
-    """ Return a list of PositionPartitions for use in rate calculations.
+    """Return a list of PositionPartitions for use in rate calculations.
 
     The partitions' timestamps are explicitly queried.
     """
@@ -493,9 +493,11 @@ def _plan_partition_changes(
     """
     log = logging.getLogger(f"plan_partition_changes:{table.name}")
 
-    filled_partitions, active_partition, empty_partitions = _split_partitions_around_position(
-        partition_list, current_position
-    )
+    (
+        filled_partitions,
+        active_partition,
+        empty_partitions,
+    ) = _split_partitions_around_position(partition_list, current_position)
     if not empty_partitions:
         log.error(
             f"Partition {active_partition.name} requires manual ALTER "

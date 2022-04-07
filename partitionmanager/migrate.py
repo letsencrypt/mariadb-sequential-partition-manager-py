@@ -29,8 +29,8 @@ def _override_config_to_map_data(conf):
 
 
 def _get_map_data_from_config(conf, table):
-    """ Helper to return a partition map for the table, either directly or
-        from a configuration override. """
+    """Helper to return a partition map for the table, either directly or
+    from a configuration override."""
     if not conf.assume_partitioned_on:
         problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if problems:
@@ -123,7 +123,7 @@ def _plan_partitions_for_time_offsets(
 
 
 def _suffix(lines, *, indent="", mid_suffix="", final_suffix=""):
-    """ Helper that suffixes each line with either mid- or final- suffix """
+    """Helper that suffixes each line with either mid- or final- suffix"""
     for line, is_final in partitionmanager.tools.iter_show_end(lines):
         if is_final:
             yield indent + line + final_suffix
@@ -132,22 +132,22 @@ def _suffix(lines, *, indent="", mid_suffix="", final_suffix=""):
 
 
 def _trigger_column_copies(cols):
-    """ Helper that returns lines copying each column for a trigger. """
+    """Helper that returns lines copying each column for a trigger."""
     for c in cols:
         yield f"`{c}` = NEW.`{c}`"
 
 
 def _make_trigger_name(name):
-    """ Helper that enforces the trigger must be <= 64 chars """
+    """Helper that enforces the trigger must be <= 64 chars"""
     return name[:64]
 
 
 def _generate_sql_copy_commands(
     existing_table, map_data, columns, new_table, alter_commands_iter
 ):
-    """ Generate a series of SQL commands to start a copy of the existing_table
+    """Generate a series of SQL commands to start a copy of the existing_table
     to a new_table, applying the supplied alterations before starting the
-    triggers. """
+    triggers."""
     log = logging.getLogger(
         f"_generate_sql_copy_commands:{existing_table.name} to {new_table.name}"
     )
