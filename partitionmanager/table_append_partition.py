@@ -447,6 +447,10 @@ def _get_rate_partitions_with_queried_timestamps(
         exact_time_result = database.run(sql_select_cmd)
         end = datetime.now()
 
+        if not exact_time_result:
+            log.debug("No result found for position %s", arg)
+            continue
+
         assert len(exact_time_result) == 1
         assert len(exact_time_result[0]) == 1
         for key, value in exact_time_result[0].items():
