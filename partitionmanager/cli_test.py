@@ -5,7 +5,6 @@ import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 from .cli import (
-    all_configured_tables_are_compatible,
     migrate_cmd,
     config_from_args,
     do_partition,
@@ -139,7 +138,7 @@ partitionmanager:
     mariadb: {str(fake_exec)}
 """
         )
-        self.assertSequenceEqual(list(o), [])
+        self.assertSequenceEqual(list(o), ["test"])
 
     def test_partition_cmd_invalid_yaml(self):
         with self.assertRaises(TypeError):
@@ -325,58 +324,6 @@ class TestStatsCmd(unittest.TestCase):
 
             self.assert_stats_results(results)
             self.assert_stats_prometheus_outfile(stats_outfile.read())
-
-
-class TestHelpers(unittest.TestCase):
-    def test_all_configured_tables_are_compatible_one(self):
-        args = PARSER.parse_args(
-            [
-                "--mariadb",
-                str(fake_exec),
-                "maintain",
-                "--table",
-                "partitioned_yesterday",
-            ]
-        )
-        config = config_from_args(args)
-        self.assertTrue(all_configured_tables_are_compatible(config))
-
-    def test_all_configured_tables_are_compatible_three(self):
-        args = PARSER.parse_args(
-            [
-                "--mariadb",
-                str(fake_exec),
-                "maintain",
-                "--table",
-                "partitioned_last_week",
-                "partitioned_yesterday",
-                "othertable",
-            ]
-        )
-        config = config_from_args(args)
-        self.assertTrue(all_configured_tables_are_compatible(config))
-
-    def test_all_configured_tables_are_compatible_three_one_unpartitioned(self):
-        args = PARSER.parse_args(
-            [
-                "--mariadb",
-                str(fake_exec),
-                "maintain",
-                "--table",
-                "partitioned_last_week",
-                "unpartitioned",
-                "othertable",
-            ]
-        )
-        config = config_from_args(args)
-        self.assertFalse(all_configured_tables_are_compatible(config))
-
-    def test_all_configured_tables_are_compatible_unpartitioned(self):
-        args = PARSER.parse_args(
-            ["--mariadb", str(fake_exec), "maintain", "--table", "unpartitioned"]
-        )
-        config = config_from_args(args)
-        self.assertFalse(all_configured_tables_are_compatible(config))
 
 
 class TestConfig(unittest.TestCase):
