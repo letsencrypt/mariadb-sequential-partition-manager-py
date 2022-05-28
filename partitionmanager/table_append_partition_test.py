@@ -801,6 +801,50 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ],
         )
 
+    def test_plan_partition_changes_misprediction_duplicate(self):
+        """We have to handle the case where a mispredicted rate of change
+        calculation produces results that themselves have duplicates"""
+        self.maxDiff = None
+        planned = _plan_partition_changes(
+            MockDatabase(),
+            Table("table"),
+            [
+                mkPPart("p_20220419", 81567449545, 99982222560),
+                mkPPart("p_20220519", 90007334722, 110234961540),
+                mkPPart("p_20220520", 94841841817, 116162938085),
+                mkPPart("p_20220521", 99676348912, 122090914630),
+                mkPPart("p_20220522", 102672012866, 127123677707),
+                mkTailPart("p_20220523", count=2),
+            ],
+            mkPos(90408556246, 110749398176),
+            datetime(2022, 5, 20, 18, 55, 16, 155, tzinfo=timezone.utc),
+            timedelta(days=30),
+            3,
+        )
+
+        # this configuration could prompt a duplicate p_20220524 partition, which
+        # should end up with the second being moved to 5-25
+
+        self.assertEqual(
+            planned,
+            [
+                ChangePlannedPartition(
+                    mkPPart("p_20220520", 94841841817, 116162938085)
+                ),
+                ChangePlannedPartition(mkPPart("p_20220521", 99676348912, 122090914630))
+                .set_timestamp(datetime(2022, 5, 24, tzinfo=timezone.utc))
+                .set_important(),
+                ChangePlannedPartition(
+                    mkPPart("p_20220522", 102672012866, 127123677707)
+                )
+                .set_timestamp(datetime(2022, 5, 25, tzinfo=timezone.utc))
+                .set_important(),
+                ChangePlannedPartition(mkTailPart("p_20220523", count=2)).set_timestamp(
+                    datetime(2022, 5, 26, tzinfo=timezone.utc)
+                ),
+            ],
+        )
+
     def test_get_rate_partitions_with_implicit_timestamps(self):
         eval_time = datetime(2021, 6, 8, tzinfo=timezone.utc)
 

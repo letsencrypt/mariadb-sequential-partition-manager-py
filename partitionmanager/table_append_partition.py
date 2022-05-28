@@ -608,10 +608,12 @@ def _plan_partition_changes(
         )
 
     # Confirm we won't make timestamp conflicts
-    existing_timestamps = list(map(lambda p: p.timestamp(), partition_list))
     conflict_found = True
     while conflict_found:
         conflict_found = False
+
+        existing_timestamps = set(map(lambda p: p.timestamp(), partition_list))
+
         for partition in results:
             if partition.timestamp() in existing_timestamps:
                 if (
@@ -627,6 +629,8 @@ def _plan_partition_changes(
                 partition.set_timestamp(partition.timestamp() + timedelta(days=1))
                 conflict_found = True
                 break
+
+            existing_timestamps.add(partition.timestamp())
 
     # Final result is always MAXVALUE
     results[-1].set_as_max_value()
