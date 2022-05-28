@@ -162,23 +162,6 @@ def config_from_args(args):
     return conf
 
 
-def all_configured_tables_are_compatible(conf):
-    """Pre-flight test that all tables are compatible; returns True/False.
-
-    Returns True only if all are compatible, otherwise logs errors and returns
-    False.
-    """
-    log = logging.getLogger("all_configured_tables_are_compatible")
-
-    problems = dict()
-    for table in conf.tables:
-        table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
-        if table_problems:
-            problems[table.name] = table_problems
-            log.error(f"Cannot proceed: {table} {table_problems}")
-    return len(problems) == 0
-
-
 def is_read_only(conf):
     """Pre-flight test whether the database is read-only; returns True/False."""
     rows = conf.dbcmd.run("SELECT @@READ_ONLY;")
@@ -304,9 +287,6 @@ def do_partition(conf):
             do_stats(conf)
         return dict()
 
-    if not all_configured_tables_are_compatible(conf):
-        return dict()
-
     if conf.noop:
         log.info("Running in noop mode, no changes will be made")
 
@@ -320,6 +300,11 @@ def do_partition(conf):
     all_results = dict()
     for table in conf.tables:
         try:
+            table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
+            if table_problems:
+                log.error(f"Cannot proceed: {table} {table_problems}")
+                continue
+
             map_data = pm_tap.get_partition_map(conf.dbcmd, table)
 
             duration = conf.partition_period
