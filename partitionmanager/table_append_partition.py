@@ -270,6 +270,8 @@ def _get_weighted_position_increase_per_day_for_partitions(partitions):
     more, and returns a final list of weighted partition-position-increase-per-
     day, with one entry per column.
     """
+    log = logging.getLogger("get_weighted_position_increase_per_day_for_partitions")
+
     if not partitions:
         raise ValueError("Partition list must not be empty")
 
@@ -278,6 +280,12 @@ def _get_weighted_position_increase_per_day_for_partitions(partitions):
         for p1, p2 in partitionmanager.tools.pairwise(partitions)
     ]
     weights = _generate_weights(len(pos_rates))
+
+    if not pos_rates or not weights:
+        log.error(
+            "No rates of change were valid for the partition list: %s", partitions
+        )
+        raise ValueError("No valid rates of change")
 
     # Initialize a list with a zero for each position
     weighted_sums = [0] * partitions[0].num_columns
