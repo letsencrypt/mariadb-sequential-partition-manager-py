@@ -358,6 +358,8 @@ def do_partition(conf):
                 f"Unable to automatically handle {table}: No empty "
                 "partition is available."
             )
+        except (ValueError, Exception) as e:
+            log.warning("Failed to handle %s: %s", table, e)
 
     if conf.prometheus_stats_path:
         do_stats(conf, metrics=metrics)
