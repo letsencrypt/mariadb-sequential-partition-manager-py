@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name="mariadb-sequential-partition-manager",
-    version="0.3.2",
+    version="0.3.3",
     description="Manage DB partitions based on sequential IDs",
     long_description="Manage MariaDB Partitions based on sequential IDs",
     classifiers=[
