@@ -23,5 +23,5 @@ setup(
     extras_require={"pymysql": ["PyMySQL >= 1.0.2"]},
     packages=["partitionmanager"],
     entry_points={"console_scripts": ["partition-manager=partitionmanager.cli:main"]},
-    options={"build_scripts": {"executable": "/usr/bin/env python"}},
+    options={"build_scripts": {"executable": "/usr/bin/env python3"}},
 )
