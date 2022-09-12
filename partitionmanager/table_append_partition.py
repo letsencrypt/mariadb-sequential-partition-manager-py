@@ -729,7 +729,7 @@ def generate_sql_reorganize_partition_commands(table, changes):
         partition_update = ", ".join(partition_strings)
 
         alter_cmd = (
-            f"ALTER TABLE `{table.name}` "
+            f"ALTER TABLE `{table.name}` WAIT 2 "
             f"REORGANIZE PARTITION `{modified_partition.old.name}` INTO ({partition_update});"
         )
 

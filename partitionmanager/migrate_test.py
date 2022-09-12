@@ -131,7 +131,7 @@ class TestBootstrapTool(unittest.TestCase):
                     "ALTER TABLE test_new_20210303 PARTITION BY RANGE (id) (",
                     "\tPARTITION p_start VALUES LESS THAN MAXVALUE",
                     ");",
-                    "ALTER TABLE `test_new_20210303` REORGANIZE PARTITION `p_start` "
+                    "ALTER TABLE `test_new_20210303` WAIT 2 REORGANIZE PARTITION `p_start` "
                     + "INTO (PARTITION `p_20210303` VALUES LESS THAN (156), "
                     + "PARTITION `p_20210402` VALUES LESS THAN (2406), PARTITION "
                     + "`p_20210502` VALUES LESS THAN MAXVALUE);",
@@ -187,7 +187,7 @@ class TestBootstrapTool(unittest.TestCase):
                     + "COLUMNS (orderID, authzID) (",
                     "\tPARTITION p_assumed VALUES LESS THAN (MAXVALUE, MAXVALUE)",
                     ");",
-                    "ALTER TABLE `map_table_new_20210303` REORGANIZE PARTITION "
+                    "ALTER TABLE `map_table_new_20210303` WAIT 2 REORGANIZE PARTITION "
                     + "`p_assumed` INTO (PARTITION `p_20210303` VALUES LESS THAN "
                     + "(11, 22), PARTITION `p_20210402` VALUES LESS THAN "
                     + "(41, 82), PARTITION `p_20210502` VALUES LESS THAN "
