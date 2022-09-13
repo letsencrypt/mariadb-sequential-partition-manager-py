@@ -223,10 +223,12 @@ partitionmanager:
             set(
                 [
                     "INFO:partition:Evaluating Table partitioned_last_week "
-                    "(duration=7 days, 0:00:00) (pos={'id': 150})",
+                    "(duration=7 days, 0:00:00)",
+                    "INFO:partition:Table partitioned_last_week (pos={'id': 150})",
                     "DEBUG:partition:Table partitioned_last_week has no pending SQL updates.",
                     "INFO:partition:Evaluating Table partitioned_yesterday "
-                    "(duration=7 days, 0:00:00) (pos={'id': 150})",
+                    "(duration=7 days, 0:00:00)",
+                    "INFO:partition:Table partitioned_yesterday (pos={'id': 150})",
                     "DEBUG:partition:Table partitioned_yesterday has no pending SQL updates.",
                 ]
             ),

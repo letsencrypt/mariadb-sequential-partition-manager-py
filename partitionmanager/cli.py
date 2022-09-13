@@ -296,6 +296,11 @@ def do_partition(conf):
         help_text="Time in seconds to complete the ALTER command",
         type_name="gauge",
     )
+    metrics.describe(
+        "alter_errors",
+        help_text="Number of errors observed during ALTER commands",
+        type_name="counter",
+    )
 
     all_results = dict()
     for table in conf.tables:
@@ -312,11 +317,13 @@ def do_partition(conf):
             if table.partition_period:
                 duration = table.partition_period
 
+            log.info(f"Evaluating {table} (duration={duration})")
+
             positions = pm_tap.get_current_positions(
                 conf.dbcmd, table, map_data["range_cols"]
             )
 
-            log.info(f"Evaluating {table} (duration={duration}) (pos={positions})")
+            log.info(f"{table} (pos={positions})")
 
             cur_pos = partitionmanager.types.Position()
             cur_pos.set_position([positions[col] for col in map_data["range_cols"]])
@@ -356,13 +363,18 @@ def do_partition(conf):
             )
         except partitionmanager.types.DatabaseCommandException as e:
             log.warning("Failed to automatically handle %s: %s", table, e)
+            metrics.add("alter_errors", table.name, 1)
         except (ValueError, Exception) as e:
             log.warning("Failed to handle %s: %s", table, e)
+            metrics.add("alter_errors", table.name, 1)
 
         time_end = datetime.utcnow()
-        metrics.add(
-            "alter_time_seconds", table.name, (time_end - time_start).total_seconds()
-        )
+        if time_start:
+            metrics.add(
+                "alter_time_seconds",
+                table.name,
+                (time_end - time_start).total_seconds(),
+            )
 
     if conf.prometheus_stats_path:
         do_stats(conf, metrics=metrics)
