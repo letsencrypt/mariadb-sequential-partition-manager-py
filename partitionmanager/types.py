@@ -603,3 +603,7 @@ class TableInformationException(Exception):
 
 class NoEmptyPartitionsAvailableException(Exception):
     """Raised if no empty partitions are available to safely modify."""
+
+
+class DatabaseCommandException(Exception):
+    """Raised if the database command failed."""

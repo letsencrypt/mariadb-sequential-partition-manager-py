@@ -299,6 +299,7 @@ def do_partition(conf):
 
     all_results = dict()
     for table in conf.tables:
+        time_start = None
         try:
             table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
             if table_problems:
@@ -344,22 +345,24 @@ def do_partition(conf):
             log.info(f"{table} running SQL: {composite_sql_command}")
             time_start = datetime.utcnow()
             output = conf.dbcmd.run(composite_sql_command)
-            time_end = datetime.utcnow()
 
             all_results[table.name] = {"sql": composite_sql_command, "output": output}
             log.info(f"{table} results: {output}")
-            metrics.add(
-                "alter_time_seconds",
-                table.name,
-                (time_end - time_start).total_seconds(),
-            )
+
         except partitionmanager.types.NoEmptyPartitionsAvailableException:
             log.warning(
                 f"Unable to automatically handle {table}: No empty "
                 "partition is available."
             )
+        except partitionmanager.types.DatabaseCommandException as e:
+            log.warning("Failed to automatically handle %s: %s", table, e)
         except (ValueError, Exception) as e:
             log.warning("Failed to handle %s: %s", table, e)
+
+        time_end = datetime.utcnow()
+        metrics.add(
+            "alter_time_seconds", table.name, (time_end - time_start).total_seconds()
+        )
 
     if conf.prometheus_stats_path:
         do_stats(conf, metrics=metrics)
