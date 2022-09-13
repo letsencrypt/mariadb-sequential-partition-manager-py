@@ -139,7 +139,7 @@ class SubprocessDatabaseCommand(partitionmanager.types.DatabaseCommand):
             )
             logging.error("stdout: %s", cpe.stdout)
             logging.error("stderr: %s", cpe.stderr)
-            raise partitionmanager.types.DatabaseCommandException(cpe.stderr)
+            raise partitionmanager.types.DatabaseCommandException(sql_cmd)
 
     def db_name(self):
         rows = self.run("SELECT DATABASE();")
