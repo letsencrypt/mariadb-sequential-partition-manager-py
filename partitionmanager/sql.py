@@ -123,15 +123,23 @@ class SubprocessDatabaseCommand(partitionmanager.types.DatabaseCommand):
 
     def run(self, sql_cmd):
         logging.debug(f"SubprocessDatabaseCommand executing {sql_cmd}")
-        result = subprocess.run(
-            [self.exe, "-X"],
-            input=sql_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            encoding="UTF-8",
-            check=True,
-        )
-        return XmlResult().parse(result.stdout)
+        try:
+            result = subprocess.run(
+                [self.exe, "-X"],
+                input=sql_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                encoding="UTF-8",
+                check=True,
+            )
+            return XmlResult().parse(result.stdout)
+        except subprocess.CalledProcessError as cpe:
+            logging.error(
+                "SubprocessDatabaseCommand failed, error code %d", cpe.returncode
+            )
+            logging.error("stdout: %s", cpe.stdout)
+            logging.error("stderr: %s", cpe.stderr)
+            raise partitionmanager.types.DatabaseCommandException(cpe.stderr)
 
     def db_name(self):
         rows = self.run("SELECT DATABASE();")

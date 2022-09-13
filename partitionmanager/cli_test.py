@@ -80,7 +80,7 @@ class TestPartitionCmd(unittest.TestCase):
             {
                 "testtable_noop": {
                     "sql": (
-                        "ALTER TABLE `testtable_noop` REORGANIZE PARTITION "
+                        "ALTER TABLE `testtable_noop` WAIT 2 REORGANIZE PARTITION "
                         "`p_20201204` INTO "
                         "(PARTITION `p_20201112` VALUES LESS THAN (548), "
                         "PARTITION `p_20201212` VALUES LESS THAN MAXVALUE);"
@@ -102,7 +102,7 @@ class TestPartitionCmd(unittest.TestCase):
                 "testtable_commit": {
                     "output": [],
                     "sql": (
-                        "ALTER TABLE `testtable_commit` REORGANIZE PARTITION "
+                        "ALTER TABLE `testtable_commit` WAIT 2 REORGANIZE PARTITION "
                         "`p_20201204` INTO "
                         "(PARTITION `p_20201112` VALUES LESS THAN (548), "
                         "PARTITION `p_20201212` VALUES LESS THAN MAXVALUE);"
@@ -223,10 +223,12 @@ partitionmanager:
             set(
                 [
                     "INFO:partition:Evaluating Table partitioned_last_week "
-                    "(duration=7 days, 0:00:00) (pos={'id': 150})",
+                    "(duration=7 days, 0:00:00)",
+                    "INFO:partition:Table partitioned_last_week (pos={'id': 150})",
                     "DEBUG:partition:Table partitioned_last_week has no pending SQL updates.",
                     "INFO:partition:Evaluating Table partitioned_yesterday "
-                    "(duration=7 days, 0:00:00) (pos={'id': 150})",
+                    "(duration=7 days, 0:00:00)",
+                    "INFO:partition:Table partitioned_yesterday (pos={'id': 150})",
                     "DEBUG:partition:Table partitioned_yesterday has no pending SQL updates.",
                 ]
             ),
@@ -500,7 +502,7 @@ partitionmanager:
                         + "PARTITION BY RANGE (id) (",
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
-                        "ALTER TABLE `partitioned_yesterday_new_20210421` "
+                        "ALTER TABLE `partitioned_yesterday_new_20210421` WAIT 2 "
                         + "REORGANIZE PARTITION `p_assumed` INTO (PARTITION "
                         + "`p_20210421` VALUES LESS THAN (150), PARTITION "
                         + "`p_20210521` VALUES LESS THAN (300), PARTITION "
@@ -525,7 +527,7 @@ partitionmanager:
                         "ALTER TABLE two_new_20210421 PARTITION BY RANGE (id) (",
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
-                        "ALTER TABLE `two_new_20210421` REORGANIZE PARTITION "
+                        "ALTER TABLE `two_new_20210421` WAIT 2 REORGANIZE PARTITION "
                         + "`p_assumed` INTO (PARTITION `p_20210421` VALUES "
                         + "LESS THAN (150), PARTITION `p_20210521` VALUES LESS "
                         + "THAN (375), PARTITION `p_20210620` VALUES LESS THAN "
@@ -585,7 +587,7 @@ partitionmanager:
                         "ALTER TABLE unpartitioned_new_20210421 PARTITION BY RANGE (id) (",
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
-                        "ALTER TABLE `unpartitioned_new_20210421` REORGANIZE "
+                        "ALTER TABLE `unpartitioned_new_20210421` WAIT 2 REORGANIZE "
                         + "PARTITION `p_assumed` INTO (PARTITION `p_20210421` "
                         + "VALUES LESS THAN (150), PARTITION `p_20210521` VALUES "
                         + "LESS THAN (300), PARTITION `p_20210620` VALUES LESS "

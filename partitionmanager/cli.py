@@ -296,9 +296,15 @@ def do_partition(conf):
         help_text="Time in seconds to complete the ALTER command",
         type_name="gauge",
     )
+    metrics.describe(
+        "alter_errors",
+        help_text="Number of errors observed during ALTER commands",
+        type_name="counter",
+    )
 
     all_results = dict()
     for table in conf.tables:
+        time_start = None
         try:
             table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
             if table_problems:
@@ -311,11 +317,13 @@ def do_partition(conf):
             if table.partition_period:
                 duration = table.partition_period
 
+            log.info(f"Evaluating {table} (duration={duration})")
+
             positions = pm_tap.get_current_positions(
                 conf.dbcmd, table, map_data["range_cols"]
             )
 
-            log.info(f"Evaluating {table} (duration={duration}) (pos={positions})")
+            log.info(f"{table} (pos={positions})")
 
             cur_pos = partitionmanager.types.Position()
             cur_pos.set_position([positions[col] for col in map_data["range_cols"]])
@@ -344,22 +352,29 @@ def do_partition(conf):
             log.info(f"{table} running SQL: {composite_sql_command}")
             time_start = datetime.utcnow()
             output = conf.dbcmd.run(composite_sql_command)
-            time_end = datetime.utcnow()
 
             all_results[table.name] = {"sql": composite_sql_command, "output": output}
             log.info(f"{table} results: {output}")
-            metrics.add(
-                "alter_time_seconds",
-                table.name,
-                (time_end - time_start).total_seconds(),
-            )
+
         except partitionmanager.types.NoEmptyPartitionsAvailableException:
             log.warning(
                 f"Unable to automatically handle {table}: No empty "
                 "partition is available."
             )
+        except partitionmanager.types.DatabaseCommandException as e:
+            log.warning("Failed to automatically handle %s: %s", table, e)
+            metrics.add("alter_errors", table.name, 1)
         except (ValueError, Exception) as e:
             log.warning("Failed to handle %s: %s", table, e)
+            metrics.add("alter_errors", table.name, 1)
+
+        time_end = datetime.utcnow()
+        if time_start:
+            metrics.add(
+                "alter_time_seconds",
+                table.name,
+                (time_end - time_start).total_seconds(),
+            )
 
     if conf.prometheus_stats_path:
         do_stats(conf, metrics=metrics)
