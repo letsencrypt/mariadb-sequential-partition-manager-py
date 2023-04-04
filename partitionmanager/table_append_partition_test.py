@@ -669,7 +669,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             output,
             [
-                "ALTER TABLE `table` WAIT 2 REORGANIZE PARTITION `p_future` INTO "
+                "ALTER TABLE `table` WAIT 6 REORGANIZE PARTITION `p_future` INTO "
                 "(PARTITION `p_20210201` VALUES LESS THAN (12960433003), "
                 "PARTITION `p_20210208` VALUES LESS THAN MAXVALUE);"
             ],
@@ -705,7 +705,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             output,
             [
-                "ALTER TABLE `table` WAIT 2 REORGANIZE PARTITION `p_future` INTO "
+                "ALTER TABLE `table` WAIT 6 REORGANIZE PARTITION `p_future` INTO "
                 "(PARTITION `p_20210108` VALUES LESS THAN (170), "
                 "PARTITION `p_20210115` VALUES LESS THAN MAXVALUE);"
             ],
@@ -1007,7 +1007,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 )
             ),
             [
-                "ALTER TABLE `table` WAIT 2 REORGANIZE PARTITION `p_20210102` INTO "
+                "ALTER TABLE `table` WAIT 6 REORGANIZE PARTITION `p_20210102` INTO "
                 "(PARTITION `p_20210116` VALUES LESS THAN (542, 190));"
             ],
         )
@@ -1028,9 +1028,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 )
             ),
             [
-                "ALTER TABLE `table` WAIT 2 REORGANIZE PARTITION `p_20210120` INTO "
+                "ALTER TABLE `table` WAIT 6 REORGANIZE PARTITION `p_20210120` INTO "
                 "(PARTITION `p_20210214` VALUES LESS THAN (2000));",
-                "ALTER TABLE `table` WAIT 2 REORGANIZE PARTITION `p_20210102` INTO "
+                "ALTER TABLE `table` WAIT 6 REORGANIZE PARTITION `p_20210102` INTO "
                 "(PARTITION `p_20210116` VALUES LESS THAN (500));",
             ],
         )
@@ -1052,7 +1052,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 )
             ),
             [
-                "ALTER TABLE `table` WAIT 2 REORGANIZE PARTITION `p_20210102` INTO "
+                "ALTER TABLE `table` WAIT 6 REORGANIZE PARTITION `p_20210102` INTO "
                 "(PARTITION `p_20210102` VALUES LESS THAN (200), "
                 "PARTITION `p_20210116` VALUES LESS THAN (542), "
                 "PARTITION `p_20210123` VALUES LESS THAN (662));"
@@ -1081,7 +1081,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 )
             ),
             [
-                "ALTER TABLE `table` WAIT 2 REORGANIZE PARTITION `future` INTO "
+                "ALTER TABLE `table` WAIT 6 REORGANIZE PARTITION `future` INTO "
                 "(PARTITION `p_20210114` VALUES LESS THAN (800), "
                 "PARTITION `p_20210116` VALUES LESS THAN (1000), "
                 "PARTITION `p_20210123` VALUES LESS THAN (1200), "
@@ -1147,9 +1147,9 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             list(generate_sql_reorganize_partition_commands(Table("water"), planned)),
             [
-                "ALTER TABLE `water` WAIT 2 REORGANIZE PARTITION `future` INTO "
+                "ALTER TABLE `water` WAIT 6 REORGANIZE PARTITION `future` INTO "
                 "(PARTITION `p_20210105` VALUES LESS THAN MAXVALUE);",
-                "ALTER TABLE `water` WAIT 2 REORGANIZE PARTITION `p_20210104` INTO "
+                "ALTER TABLE `water` WAIT 6 REORGANIZE PARTITION `p_20210104` INTO "
                 "(PARTITION `p_20210102` VALUES LESS THAN (200));",
             ],
         )
@@ -1211,7 +1211,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         self.assertEqual(
             list(cmds),
             [
-                "ALTER TABLE `plushies` WAIT 2 REORGANIZE PARTITION `future` INTO "
+                "ALTER TABLE `plushies` WAIT 6 REORGANIZE PARTITION `future` INTO "
                 "(PARTITION `p_20210104` VALUES LESS THAN (550), "
                 "PARTITION `p_20210111` VALUES LESS THAN (900), "
                 "PARTITION `p_20210118` VALUES LESS THAN MAXVALUE);"
