@@ -186,6 +186,32 @@ def _parse_columns(table, rows):
     return rows
 
 
+def _is_partition_empty(database, table, partition):
+    """Return True if a partition is empty of data right now."""
+    log = logging.getLogger(f"_assert_partition_is_empty:{table.name}:{partition.name}")
+
+    partition.name
+
+    sql_select_cmd = f"SELECT * FROM {table.name} PARTITION({partition.name}) LIMIT 1;"
+    log.debug(
+        "Executing %s to determine emptiness of %s", sql_select_cmd, partition.name
+    )
+
+    start = datetime.now()
+    emptiness_result = database.run(sql_select_cmd)
+    end = datetime.now()
+
+    is_empty = not emptiness_result
+
+    log.debug(
+        "Determined %s is_empty=%s. Query took %s.",
+        partition.name,
+        is_empty,
+        (end - start),
+    )
+    return is_empty
+
+
 def _split_partitions_around_position(partition_list, current_position):
     """Divide up a partition list to three parts: filled, current, and empty.
 
@@ -519,6 +545,16 @@ def _plan_partition_changes(
         raise partitionmanager.types.NoEmptyPartitionsAvailableException()
     if not active_partition:
         raise Exception("Active Partition can't be None")
+
+    for empty in empty_partitions:
+        if not _is_partition_empty(database, table, empty):
+            log.error(
+                f"Partition {empty.name} was assumped to be empty, but "
+                "isn't, and apparently contains data. Something has gone wrong "
+                "internally for Partition Manager and should be reported as a"
+                "bug."
+            )
+            raise partitionmanager.types.PartitionNotEmptyException()
 
     if table.has_date_query:
         rate_relevant_partitions = _get_rate_partitions_with_queried_timestamps(

@@ -1,7 +1,8 @@
 # flake8: noqa: E501
 
-import unittest
 import argparse
+import re
+import unittest
 from datetime import datetime, timedelta, timezone
 from partitionmanager.types import (
     ChangePlannedPartition,
@@ -26,6 +27,7 @@ from partitionmanager.table_append_partition import (
     _get_rate_partitions_with_queried_timestamps,
     _get_table_information_schema_problems,
     _get_weighted_position_increase_per_day_for_partitions,
+    _is_partition_empty,
     _parse_columns,
     _parse_partition_map,
     _plan_partition_changes,
@@ -53,8 +55,8 @@ class MockDatabase(DatabaseCommand):
         self._num_queries += 1
         return self._response.pop()
 
-    def push_response(self, r):
-        self._response.append(r)
+    def push_response(self, rsp):
+        self._response.append(rsp)
 
     @property
     def num_queries(self):
@@ -364,6 +366,14 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 [],
             ),
         )
+
+    def test_is_empty(self):
+        db = MockDatabase()
+        db.push_response([])
+        self.assertTrue(_is_partition_empty(db, Table("table"), mkPPart("p_20210101")))
+
+        db.push_response([42])
+        self.assertFalse(_is_partition_empty(db, Table("table"), mkPPart("p_20210101")))
 
     def test_get_position_increase_per_day(self):
         with self.assertRaises(ValueError):

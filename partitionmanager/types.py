@@ -599,6 +599,10 @@ class UnexpectedPartitionException(Exception):
     """Raised when the partition map is unexpected."""
 
 
+class PartitionNotEmptyException(Exception):
+    """Raised when the partition map implies a partition should be empty, but it is not."""
+
+
 class TableInformationException(Exception):
     """Raised when the table's status doesn't include the information we need."""
 
