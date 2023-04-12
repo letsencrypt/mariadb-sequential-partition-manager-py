@@ -517,6 +517,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 Table("table"),
                 [mkPPart("p_20201231", 0), mkPPart("p_20210102", 200)],
                 mkPos(50),
+                ["id"],
                 datetime(2021, 1, 1, tzinfo=timezone.utc),
                 timedelta(days=7),
                 2,
@@ -533,6 +534,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                     mkTailPart("future"),
                 ],
                 mkPos(50),
+                ["id"],
                 datetime(2021, 1, 1, hour=23, minute=55, tzinfo=timezone.utc),
                 timedelta(days=2),
                 3,
@@ -577,6 +579,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                     mkTailPart("future"),
                 ],
                 mkPos(50),
+                ["id"],
                 datetime(2021, 1, 1, tzinfo=timezone.utc),
                 timedelta(days=7),
                 2,
@@ -617,6 +620,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 mkTailPart("future"),
             ],
             mkPos(50),
+            ["id"],
             datetime(2021, 3, 31, tzinfo=timezone.utc),
             timedelta(days=7),
             2,
@@ -647,6 +651,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 mkTailPart("p_future"),
             ],
             mkPos(10810339136),
+            ["id"],
             datetime(2021, 1, 30, tzinfo=timezone.utc),
             timedelta(days=7),
             2,
@@ -685,6 +690,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             Table("table"),
             [mkPPart("p_start", 100), mkTailPart("p_future")],
             mkPos(50),
+            ["id"],
             datetime(2021, 1, 6, tzinfo=timezone.utc),
             timedelta(days=7),
             2,
@@ -726,6 +732,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 mkTailPart("future"),
             ],
             mkPos(50),
+            ["id"],
             datetime(2021, 1, 1, tzinfo=timezone.utc),
             timedelta(days=7),
             2,
@@ -752,6 +759,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                     mkTailPart("future"),
                 ],
                 mkPos(199),
+                ["id"],
                 datetime(2021, 1, 3, tzinfo=timezone.utc),
                 timedelta(days=7),
                 3,
@@ -784,6 +792,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 mkTailPart("p_20210803"),
             ],
             mkPos(10264818175),
+            ["id"],
             datetime(2021, 6, 8, tzinfo=timezone.utc),
             timedelta(days=30),
             3,
@@ -821,6 +830,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 mkTailPart("p_20220523", count=2),
             ],
             mkPos(90408556246, 110749398176),
+            ["id"],
             datetime(2022, 5, 20, 18, 55, 16, 155, tzinfo=timezone.utc),
             timedelta(days=30),
             3,
@@ -876,6 +886,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 Table("table"),
                 [mkPPart("p_20210505", 9505010028), mkPPart("p_20210604", 10152257517)],
                 mkPos(10064818175),
+                ["id"],
                 datetime(2021, 6, 8, tzinfo=timezone.utc),
                 mkPPart("p_20210704", 10799505006),
             )
@@ -899,6 +910,40 @@ class TestPartitionAlgorithm(unittest.TestCase):
             tbl,
             [mkPPart("p_20210505", 9505010028), mkPPart("p_20210604", 10152257517)],
             mkPos(10064818175),
+            ["id"],
+            times[2],
+            mkPPart("p_20210704", 10799505006),
+        )
+
+        self.assertEqual(
+            partition_list,
+            [
+                InstantPartition("p_20210505", times[0], [9505010028]),
+                InstantPartition("p_20210604", times[1], [10152257517]),
+                InstantPartition("p_20210704", times[2], [10064818175]),
+            ],
+        )
+
+    def test_multi_column_get_rate_partitions_with_queried_timestamps(self):
+        times = [
+            datetime(2021, 3, 8, tzinfo=timezone.utc),
+            datetime(2021, 4, 8, tzinfo=timezone.utc),
+            datetime(2021, 5, 8, tzinfo=timezone.utc),
+        ]
+        tbl = Table("table")
+        tbl.set_earliest_utc_timestamp_query(
+            SqlQuery("SELECT insert_date FROM table WHERE id = ?;")
+        )
+        database = MockDatabase()
+        database.push_response([{"insert_date": times[0].timestamp()}])
+        database.push_response([{"insert_date": times[1].timestamp()}])
+
+        partition_list = _get_rate_partitions_with_queried_timestamps(
+            database,
+            tbl,
+            [mkPPart("p_20210505", 9505010028), mkPPart("p_20210604", 10152257517)],
+            mkPos(10064818175),
+            ["id"],
             times[2],
             mkPPart("p_20210704", 10799505006),
         )
@@ -1143,6 +1188,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 mkTailPart("future"),
             ],
             mkPos(50),
+            ["id"],
             datetime(2021, 1, 1, tzinfo=timezone.utc),
             timedelta(days=7),
             2,
@@ -1170,6 +1216,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                     mkPPart("p_20210102", 200),
                     mkTailPart("future"),
                 ],
+                range_columns=["id"],
                 current_position=mkPos(50),
                 allowed_lifespan=timedelta(days=7),
                 num_empty_partitions=2,
@@ -1198,6 +1245,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
                     mkPPart("p_20210102", 200),
                     mkTailPart("future"),
                 ],
+                range_columns=["id"],
                 current_position=mkPos(50),
                 allowed_lifespan=timedelta(days=7),
                 num_empty_partitions=4,

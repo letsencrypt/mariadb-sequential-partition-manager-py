@@ -58,27 +58,27 @@ class TestSqlQuery(unittest.TestCase):
     def test_get_statement_errors(self):
         q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=?;")
         with self.assertRaises(argparse.ArgumentTypeError):
-            q.get_statement_with_argument("must be a SqlInput type")
+            q.get_statement_with_arguments("must be a SqlInput type")
         with self.assertRaises(argparse.ArgumentTypeError):
-            q.get_statement_with_argument(5)
+            q.get_statement_with_arguments(5)
         with self.assertRaises(argparse.ArgumentTypeError):
-            q.get_statement_with_argument(None)
+            q.get_statement_with_arguments(None)
 
     def test_get_statement_string(self):
         q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'status'=?;")
 
         with self.assertRaises(argparse.ArgumentTypeError):
-            q.get_statement_with_argument(SqlInput("strings aren't allowed"))
+            q.get_statement_with_arguments(SqlInput("strings aren't allowed"))
 
     def test_get_statement_number(self):
         q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=?;")
 
         self.assertEqual(
-            q.get_statement_with_argument(SqlInput(5)),
+            q.get_statement_with_arguments(SqlInput(5)),
             "SELECT 'id' FROM 'place' WHERE 'id'=5;",
         )
         self.assertEqual(
-            q.get_statement_with_argument(SqlInput(5555)),
+            q.get_statement_with_arguments(SqlInput(5555)),
             "SELECT 'id' FROM 'place' WHERE 'id'=5555;",
         )
 
@@ -89,7 +89,7 @@ class TestSqlQuery(unittest.TestCase):
         """
         )
         self.assertEqual(
-            q.get_statement_with_argument(SqlInput(0xFF)),
+            q.get_statement_with_arguments(SqlInput(0xFF)),
             "SELECT 'multilines' FROM 'where it might be' WHERE 'id'=255;",
         )
 

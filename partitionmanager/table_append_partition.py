@@ -419,7 +419,7 @@ def _get_rate_partitions_with_implicit_timestamps(
 
 
 def _get_rate_partitions_with_queried_timestamps(
-    database, table, partition_list, current_position, evaluation_time, active_partition
+    database, table, partition_list, current_position, range_columns, evaluation_time, active_partition
 ):
     """Return a list of PositionPartitions for use in rate calculations.
 
@@ -435,14 +435,17 @@ def _get_rate_partitions_with_queried_timestamps(
     instant_partitions = list()
 
     for partition in partition_list:
-        if len(partition.position) != 1:
+        if len(partition.position) != len(range_columns):
             raise ValueError(
-                "This method is only valid for single-column partitions right now"
+                f"The position has {len(partition.position)} columns but expecting {len(range_columns)}"
             )
-        arg = partition.position.as_sql_input()[0]
 
-        sql_select_cmd = table.earliest_utc_timestamp_query.get_statement_with_argument(
-            arg
+        query_args = dict()
+        for column_name, position in zip(range_columns, partition.position):
+            query_args[column_name] = position
+
+        sql_select_cmd = table.earliest_utc_timestamp_query.get_statement_with_arguments(
+            query_args
         )
         log.debug(
             "Executing %s to derive partition %s at position %s",
@@ -493,6 +496,7 @@ def _plan_partition_changes(
     table,
     partition_list,
     current_position,
+    range_columns,
     evaluation_time,
     allowed_lifespan,
     num_empty_partitions,
@@ -526,6 +530,7 @@ def _plan_partition_changes(
             table,
             filled_partitions,
             current_position,
+            range_columns,
             evaluation_time,
             active_partition,
         )
@@ -743,6 +748,7 @@ def get_pending_sql_reorganize_partition_commands(
     database,
     table,
     partition_list,
+    range_columns,
     current_position,
     allowed_lifespan,
     num_empty_partitions,
@@ -758,6 +764,8 @@ def get_pending_sql_reorganize_partition_commands(
 
     partition_list: the currently-existing partition objects, each with
         a name and either a starting position or are the tail MAXVALUE.
+
+    range_columns: the ordered list of columns used in the RANGE statement.
 
     current_position: a Position representing the position IDs for
         this table at the evaluation_time.
@@ -781,6 +789,7 @@ def get_pending_sql_reorganize_partition_commands(
         table,
         partition_list,
         current_position,
+        range_columns,
         evaluation_time,
         allowed_lifespan,
         num_empty_partitions,

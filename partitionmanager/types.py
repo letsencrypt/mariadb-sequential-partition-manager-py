@@ -128,9 +128,12 @@ class SqlQuery(str):
     def __repr__(self):
         return str(self)
 
-    def get_statement_with_argument(self, arg):
-        if not isinstance(arg, SqlInput):
-            raise argparse.ArgumentTypeError("Must be a SqlInput")
+    def get_statement_with_arguments(self, arg_dict):
+        if not isinstance(arg_dict, dict):
+            raise argparse.ArgumentTypeError("Must be provided a dict of SqlInputs")
+        for value in arg_dict.values():
+            if not isinstance(value, SqlInput):
+                raise argparse.ArgumentTypeError("Values must be SqlInput")
         return str(self).replace("?", str(arg))
 
 

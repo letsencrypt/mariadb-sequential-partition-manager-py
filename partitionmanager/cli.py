@@ -332,6 +332,7 @@ def do_partition(conf):
                 database=conf.dbcmd,
                 table=table,
                 partition_list=map_data["partitions"],
+                range_columns=map_data["range_cols"],
                 current_position=cur_pos,
                 allowed_lifespan=duration,
                 num_empty_partitions=conf.num_empty,
