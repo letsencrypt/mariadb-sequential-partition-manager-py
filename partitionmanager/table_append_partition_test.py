@@ -358,7 +358,11 @@ class TestPartitionAlgorithm(unittest.TestCase):
                 [mkPPart("a", 10, 10), mkPPart("b", 20, 20), mkTailPart("z", count=2)],
                 mkPos(19, 500),
             ),
-            ([mkPPart("a", 10, 10)], mkPPart("b", 20, 20), [mkTailPart("z", count=2)]),
+            (
+                [mkPPart("a", 10, 10), mkPPart("b", 20, 20)],
+                mkTailPart("z", count=2),
+                [],
+            ),
         )
 
     def test_get_position_increase_per_day(self):

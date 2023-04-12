@@ -343,10 +343,12 @@ class PositionPartition(_Partition):
                 f"Expected {len(self._position)} columns but partition has {other_position_list}."
             )
 
+        # If ALL of v_mine >= v_other, then self is greater than other
+        # If ANY of v_mine < v_other, then self is less than other
         for v_mine, v_other in zip(self._position.as_list(), other_position_list):
-            if v_mine >= v_other:
-                return False
-        return True
+            if v_mine < v_other:
+                return True
+        return False
 
     def __eq__(self, other):
         if isinstance(other, PositionPartition):
