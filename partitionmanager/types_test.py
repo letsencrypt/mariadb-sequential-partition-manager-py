@@ -345,17 +345,29 @@ class TestPartition(unittest.TestCase):
         with self.assertRaises(UnexpectedPartitionException):
             mkPPart("a", 10, 10) < mkTailPart("b", count=1)
 
-        self.assertFalse(mkPPart("a", 10, 10) < mkPPart("b", 11, 10))
-        self.assertFalse(mkPPart("a", 10, 10) < mkPPart("b", 10, 11))
+        self.assertTrue(mkPPart("a", 10, 10) < mkPPart("b", 11, 10))
+        self.assertTrue(mkPPart("a", 10, 10) < mkPPart("b", 10, 11))
         self.assertLess(mkPPart("a", 10, 10), mkPPart("b", 11, 11))
-        self.assertFalse(mkPPart("a", 10, 10) < [10, 11])
-        self.assertFalse(mkPPart("a", 10, 10) < [11, 10])
+        self.assertTrue(mkPPart("a", 10, 10) < [10, 11])
+        self.assertTrue(mkPPart("a", 10, 10) < [11, 10])
         self.assertLess(mkPPart("a", 10, 10), [11, 11])
 
         with self.assertRaises(UnexpectedPartitionException):
             mkPPart("a", 10, 10) < mkPPart("b", 11, 11, 11)
         with self.assertRaises(UnexpectedPartitionException):
             mkPPart("a", 10, 10, 10) < mkPPart("b", 11, 11)
+
+    def test_partition_tuple_ordering(self):
+        cur_pos = mkPPart("current_pos", 8236476764, 6096376984)
+        p_20220525 = mkPPart("p_20220525", 2805308158, 2682458996)
+        p_20220611 = mkPPart("p_20220611", 7882495694, 7856340600)
+        p_20230519 = mkPPart("p_20230519", 10790547177, 11048018089)
+        p_20230724 = mkPPart("p_20230724", 95233456870, 97348306298)
+
+        self.assertGreater(cur_pos, p_20220525)
+        self.assertGreater(cur_pos, p_20220611)
+        self.assertLess(cur_pos, p_20230519)
+        self.assertLess(cur_pos, p_20230724)
 
     def test_instant_partition(self):
         now = datetime.utcnow()
