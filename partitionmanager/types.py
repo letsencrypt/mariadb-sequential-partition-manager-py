@@ -83,6 +83,19 @@ class SqlInput(str):
     def __repr__(self):
         return str(self)
 
+    def as_literal(self):
+        """This class only allows names which are safe unquoted, but for cleanliness
+        we attempt to quote names when asked to."""
+        try:
+            int(self)  # If we can cast ourselves to an int, don't quote
+            return self
+        except ValueError:
+            pass
+
+        if isinstance(self, str):
+            return f'"{str(self)}"'
+        raise ValueError(f"Unexpected value to quote: {self}")
+
 
 class SqlQuery(str):
     """
@@ -90,6 +103,10 @@ class SqlQuery(str):
     """
 
     forbidden_terms = ["UPDATE ", "INSERT ", "DELETE "]
+
+    re_sub_var = re.compile(r":\w+")
+
+    re_select_stmt = re.compile(r"SELECT\s[\s\S]*;")
 
     def __new__(cls, *args):
         if len(args) != 1:
@@ -104,16 +121,15 @@ class SqlQuery(str):
                 f"[{query_string}] has more than one statement"
             )
 
-        if "?" not in query_string:
+        if (
+            ":" not in query_string
+            or len(SqlQuery.re_sub_var.findall(query_string)) < 1
+        ):
             raise argparse.ArgumentTypeError(
-                f"[{query_string}] has no substitution variable '?'"
-            )
-        if query_string.count("?") > 1:
-            raise argparse.ArgumentTypeError(
-                f"[{query_string}] has more than one substitution variable '?'"
+                f"[{query_string}] has no substitution variables (e.g., ':column_name')"
             )
 
-        if not query_string.upper().startswith("SELECT "):
+        if not SqlQuery.re_select_stmt.search(query_string):
             raise argparse.ArgumentTypeError(
                 f"[{query_string}] is not a SELECT statement"
             )
@@ -131,10 +147,24 @@ class SqlQuery(str):
     def get_statement_with_arguments(self, arg_dict):
         if not isinstance(arg_dict, dict):
             raise argparse.ArgumentTypeError("Must be provided a dict of SqlInputs")
-        for value in arg_dict.values():
+
+        result_statement = str(self)
+
+        expected_keys = set()
+        for k in arg_dict.keys():
+            expected_keys.add(f":{k}")
+        found_keys = set(SqlQuery.re_sub_var.findall(result_statement))
+
+        if expected_keys != found_keys:
+            raise argparse.ArgumentTypeError(
+                f"Keys provided ({expected_keys}) do not match keys found ({found_keys})"
+            )
+
+        for key, value in arg_dict.items():
             if not isinstance(value, SqlInput):
                 raise argparse.ArgumentTypeError("Values must be SqlInput")
-        return str(self).replace("?", str(arg))
+            result_statement = result_statement.replace(f":{key}", value.as_literal())
+        return result_statement
 
 
 def to_sql_url(urlstring):

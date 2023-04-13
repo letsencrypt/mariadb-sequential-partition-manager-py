@@ -419,7 +419,13 @@ def _get_rate_partitions_with_implicit_timestamps(
 
 
 def _get_rate_partitions_with_queried_timestamps(
-    database, table, partition_list, current_position, range_columns, evaluation_time, active_partition
+    database,
+    table,
+    partition_list,
+    current_position,
+    range_columns,
+    evaluation_time,
+    active_partition,
 ):
     """Return a list of PositionPartitions for use in rate calculations.
 
@@ -437,15 +443,18 @@ def _get_rate_partitions_with_queried_timestamps(
     for partition in partition_list:
         if len(partition.position) != len(range_columns):
             raise ValueError(
-                f"The position has {len(partition.position)} columns but expecting {len(range_columns)}"
+                f"The position has {len(partition.position)} columns but "
+                f"expecting {len(range_columns)}"
             )
 
         query_args = dict()
-        for column_name, position in zip(range_columns, partition.position):
+        for column_name, position in zip(
+            range_columns, partition.position.as_sql_input()
+        ):
             query_args[column_name] = position
 
-        sql_select_cmd = table.earliest_utc_timestamp_query.get_statement_with_arguments(
-            query_args
+        sql_select_cmd = (
+            table.earliest_utc_timestamp_query.get_statement_with_arguments(query_args)
         )
         log.debug(
             "Executing %s to derive partition %s at position %s",
@@ -459,7 +468,7 @@ def _get_rate_partitions_with_queried_timestamps(
         end = datetime.now()
 
         if not exact_time_result:
-            log.debug("No result found for position %s", arg)
+            log.debug("No result found for position %s", query_args)
             continue
 
         assert len(exact_time_result) == 1

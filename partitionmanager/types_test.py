@@ -32,14 +32,38 @@ def mkTailPart(name, count=1):
     return MaxValuePartition(name, count)
 
 
+class TestSqlInput(unittest.TestCase):
+    def test_str(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            SqlInput("a space delimited string")
+        self.assertEqual(str(SqlInput("a_string")), "a_string")
+        self.assertEqual(SqlInput("a_quoted_string").as_literal(), '"a_quoted_string"')
+
+    def test_int(self):
+        self.assertEqual(str(SqlInput(45)), "45")
+        self.assertEqual(SqlInput(45).as_literal(), "45")
+
+
 class TestSqlQuery(unittest.TestCase):
     def test_multiple_statements(self):
         with self.assertRaises(argparse.ArgumentTypeError):
-            SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=?; SELECT 1=1;")
+            SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=:id; SELECT 1=1;")
 
     def test_multiple_arguments(self):
+        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=:id OR 'what'=:what;")
+        r = q.get_statement_with_arguments(
+            {"id": SqlInput(123), "what": SqlInput("bird")}
+        )
+        self.assertEqual(
+            r, """SELECT 'id' FROM 'place' WHERE 'id'=123 OR 'what'="bird";"""
+        )
+
+    def test_multiple_arguments_mismatch(self):
+        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=:id OR 'what'=:what;")
         with self.assertRaises(argparse.ArgumentTypeError):
-            SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=? OR 'what'=?;")
+            q.get_statement_with_arguments(
+                {"id": SqlInput(123), "how": SqlInput("nope")}
+            )
 
     def test_forbidden_terms(self):
         with self.assertRaises(argparse.ArgumentTypeError):
@@ -56,40 +80,42 @@ class TestSqlQuery(unittest.TestCase):
             SqlQuery(";")
 
     def test_get_statement_errors(self):
-        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=?;")
+        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=:id;")
         with self.assertRaises(argparse.ArgumentTypeError):
-            q.get_statement_with_arguments("must be a SqlInput type")
+            q.get_statement_with_arguments("must be a dict of SqlInput type")
         with self.assertRaises(argparse.ArgumentTypeError):
             q.get_statement_with_arguments(5)
         with self.assertRaises(argparse.ArgumentTypeError):
             q.get_statement_with_arguments(None)
 
+        q.get_statement_with_arguments({"id": SqlInput(123)})
+
     def test_get_statement_string(self):
-        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'status'=?;")
+        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'status'=:status;")
 
         with self.assertRaises(argparse.ArgumentTypeError):
             q.get_statement_with_arguments(SqlInput("strings aren't allowed"))
 
     def test_get_statement_number(self):
-        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=?;")
+        q = SqlQuery("SELECT 'id' FROM 'place' WHERE 'id'=:id;")
 
         self.assertEqual(
-            q.get_statement_with_arguments(SqlInput(5)),
+            q.get_statement_with_arguments({"id": SqlInput(5)}),
             "SELECT 'id' FROM 'place' WHERE 'id'=5;",
         )
         self.assertEqual(
-            q.get_statement_with_arguments(SqlInput(5555)),
+            q.get_statement_with_arguments({"id": SqlInput(5555)}),
             "SELECT 'id' FROM 'place' WHERE 'id'=5555;",
         )
 
     def test_get_statement_number_with_newlines(self):
         q = SqlQuery(
             """
-                        SELECT 'multilines' FROM 'where it might be' WHERE 'id'=?;
+                        SELECT 'multilines' FROM 'where it might be' WHERE 'id'=:id;
         """
         )
         self.assertEqual(
-            q.get_statement_with_arguments(SqlInput(0xFF)),
+            q.get_statement_with_arguments({"id": SqlInput(0xFF)}),
             "SELECT 'multilines' FROM 'where it might be' WHERE 'id'=255;",
         )
 
@@ -175,7 +201,7 @@ class TestTypes(unittest.TestCase):
         self.assertFalse(t.has_date_query)
 
         t.set_earliest_utc_timestamp_query(
-            SqlQuery("SELECT not_before FROM table WHERE id = ?;")
+            SqlQuery("SELECT not_before FROM table WHERE id = :id;")
         )
         self.assertTrue(t.has_date_query)
 

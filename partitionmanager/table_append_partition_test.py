@@ -899,7 +899,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         ]
         tbl = Table("table")
         tbl.set_earliest_utc_timestamp_query(
-            SqlQuery("SELECT insert_date FROM table WHERE id = ?;")
+            SqlQuery("SELECT insert_date FROM table WHERE id = :id;")
         )
         database = MockDatabase()
         database.push_response([{"insert_date": times[0].timestamp()}])
@@ -911,7 +911,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [mkPPart("p_20210505", 9505010028), mkPPart("p_20210604", 10152257517)],
             mkPos(10064818175),
             ["id"],
-            times[2],
+            [times[2], times[2]],
             mkPPart("p_20210704", 10799505006),
         )
 
@@ -932,7 +932,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         ]
         tbl = Table("table")
         tbl.set_earliest_utc_timestamp_query(
-            SqlQuery("SELECT insert_date FROM table WHERE id = ?;")
+            SqlQuery("SELECT insert_date FROM table WHERE id = :id;")
         )
         database = MockDatabase()
         database.push_response([{"insert_date": times[0].timestamp()}])
@@ -944,7 +944,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [mkPPart("p_20210505", 9505010028), mkPPart("p_20210604", 10152257517)],
             mkPos(10064818175),
             ["id"],
-            times[2],
+            [times[2], times[2]],
             mkPPart("p_20210704", 10799505006),
         )
 
