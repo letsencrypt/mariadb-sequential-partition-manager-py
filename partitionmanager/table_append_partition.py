@@ -471,18 +471,29 @@ def _get_rate_partitions_with_queried_timestamps(
             log.debug("No result found for position %s", query_args)
             continue
 
-        assert len(exact_time_result) == 1
-        assert len(exact_time_result[0]) == 1
+        if len(exact_time_result) != 1:
+            log.error(
+                "Exact time result returned more than 1 row: %s", exact_time_result
+            )
+            continue
+
+        exact_time = None
+        # Choose the earliest exact time returned by the query
         for key, value in exact_time_result[0].items():
-            exact_time = datetime.fromtimestamp(value, tz=timezone.utc)
-            break
+            if not value:
+                continue
+            t = datetime.fromtimestamp(value, tz=timezone.utc)
+            if exact_time is None or t < exact_time:
+                exact_time = t
 
         log.debug(
-            "Exact time of %s returned for %s at position %s, query took %s",
+            "Exact time of %s returned for %s at position %s. Query took %s."
+            "Raw result was %s.",
             exact_time,
             partition.name,
             partition.position,
             (end - start),
+            exact_time_result,
         )
 
         instant_partitions.append(
