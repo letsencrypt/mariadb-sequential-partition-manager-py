@@ -448,6 +448,25 @@ class TestPartitionAlgorithm(unittest.TestCase):
             [548.3636363636364],
         )
 
+    def test_get_position_increase_with_multi_column_tables(self):
+        # This test checks the very real possibility that, when you have
+        # RANGE COLUMNS partitions, they can end up in different orders
+        # if you sort on different fields.
+
+        partitions = [
+            InstantPartition("p_20220413", datetime(2022, 4, 14, tzinfo=timezone.utc), (2300107903, 2178845982)),
+            InstantPartition("p_20220513", datetime(2022, 5, 8, tzinfo=timezone.utc), (2517982016, 2390412410)),
+            InstantPartition("p_20220508", datetime(2022, 5, 24, tzinfo=timezone.utc), (2661645087, 2536435703)),
+            InstantPartition("p_20220525", datetime(2022, 6, 9, tzinfo=timezone.utc), (2805308158, 2682458996)),
+            InstantPartition("p_20220611", datetime(2023, 3, 22, tzinfo=timezone.utc), (7882495694, 7856340600)),
+            InstantPartition("p_20230519", datetime(2023, 4, 13, tzinfo=timezone.utc), (8251798984, 6107988884)),
+        ]
+
+        self.assertEqual(
+            _get_weighted_position_increase_per_day_for_partitions(partitions),
+            [67269399.51412623, 68516773.58969514],
+        )
+
     def test_predict_forward_position(self):
         with self.assertRaises(ValueError):
             _predict_forward_position([0], [1, 2], timedelta(days=1))
