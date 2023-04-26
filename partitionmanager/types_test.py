@@ -146,7 +146,7 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(type(Table("name").name), SqlInput)
 
         t = Table("t")
-        self.assertEqual(None, t.retention)
+        self.assertEqual(None, t.retention_period)
 
         self.assertEqual(
             Table("a").set_partition_period(timedelta(days=9)).partition_period,

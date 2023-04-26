@@ -10,6 +10,8 @@ import time
 import traceback
 import yaml
 
+import partitionmanager.database_helpers
+import partitionmanager.dropper
 import partitionmanager.migrate
 import partitionmanager.sql
 import partitionmanager.stats
@@ -121,10 +123,10 @@ class Config:
             for key in data["tables"]:
                 tab = partitionmanager.types.Table(key)
                 tabledata = data["tables"][key]
-                if isinstance(tabledata, dict) and "retention" in tabledata:
-                    tab.set_retention(
+                if isinstance(tabledata, dict) and "retention_period" in tabledata:
+                    tab.set_retention_period(
                         partitionmanager.types.timedelta_from_dict(
-                            tabledata["retention"]
+                            tabledata["retention_period"]
                         )
                     )
                 if isinstance(tabledata, dict) and "partition_period" in tabledata:
@@ -462,6 +464,57 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
         metrics.add("last_run_timestamp", None, time.time())
         with conf.prometheus_stats_path.open(mode="w", encoding="utf-8") as fp:
             metrics.render(fp)
+    return all_results
+
+
+def drop_cmd(args):
+    """Calculates drop.
+    Helper for argparse.
+    """
+    conf = config_from_args(args)
+    return do_find_drops_for_tables(conf)
+
+
+DROP_PARSER = SUBPARSERS.add_parser("drop", help="drop old partitions")
+DROP_PARSER.set_defaults(func=drop_cmd)
+
+
+def do_find_drops_for_tables(conf):
+    all_results = dict()
+    for table in conf.tables:
+        log = logging.getLogger(f"do_find_drops_for_tables:{table.name}")
+
+        if not table.has_date_query:
+            log.debug(f"Cannot process {table}: no date query specified")
+            continue
+
+        if not table.retention_period:
+            log.debug(f"Cannot process {table}: no retention specified")
+            continue
+
+        try:
+            table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
+            if table_problems:
+                log.debug(f"Cannot process {table}: {table_problems}")
+                continue
+
+            map_data = pm_tap.get_partition_map(conf.dbcmd, table)
+            current_position = partitionmanager.database_helpers.get_position_of_table(
+                conf.dbcmd, table, map_data
+            )
+
+            droppable = partitionmanager.dropper.get_droppable_partitions(
+                conf.dbcmd,
+                map_data["partitions"],
+                current_position,
+                conf.curtime,
+                table,
+            )
+
+            all_results[table.name] = droppable
+        except Exception as e:
+            log.warning(f"Error processing table {table.name}")
+            raise e
     return all_results
 
 
