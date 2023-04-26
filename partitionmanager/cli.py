@@ -320,15 +320,9 @@ def do_partition(conf):
                 duration = table.partition_period
 
             log.info(f"Evaluating {table} (duration={duration})")
-
-            positions = pm_tap.get_current_positions(
-                conf.dbcmd, table, map_data["range_cols"]
+            cur_pos = partitionmanager.database_helpers.get_position_of_table(
+                conf.dbcmd, table, map_data
             )
-
-            log.info(f"{table} (pos={positions})")
-
-            cur_pos = partitionmanager.types.Position()
-            cur_pos.set_position([positions[col] for col in map_data["range_cols"]])
 
             sql_cmds = pm_tap.get_pending_sql_reorganize_partition_commands(
                 database=conf.dbcmd,
