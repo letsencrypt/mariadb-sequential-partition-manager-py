@@ -8,6 +8,7 @@ from .cli import (
     migrate_cmd,
     config_from_args,
     do_partition,
+    drop_cmd,
     PARSER,
     partition_cmd,
     stats_cmd,
@@ -624,3 +625,60 @@ partitionmanager:
                         "flip",
                     ]
                 )
+
+
+class TestDropCmd(unittest.TestCase):
+    def _run_drop_cmd_yaml(self, yaml):
+        with tempfile.NamedTemporaryFile() as tmpfile:
+            insert_into_file(tmpfile, yaml)
+            args = PARSER.parse_args(["--config", tmpfile.name, "drop"])
+            return drop_cmd(args)
+
+    def test_drop_invalid_config(self):
+        with self.assertLogs(
+            "do_find_drops_for_tables:unused", level="WARNING"
+        ) as logctx:
+            self._run_drop_cmd_yaml(
+                f"""
+partitionmanager:
+  mariadb: {str(fake_exec)}
+  tables:
+    unused:
+      earliest_utc_timestamp_query: >
+        SELECT UNIX_TIMESTAMP(`issued`) FROM `unused`
+            WHERE `id` > '?' ORDER BY `id` ASC LIMIT 1;
+"""
+            )
+        self.assertEqual(
+            set(logctx.output),
+            set(
+                [
+                    "WARNING:do_find_drops_for_tables:unused:"
+                    "Cannot process Table unused: no retention specified"
+                ]
+            ),
+        )
+
+    def test_drop_no_sql(self):
+        with self.assertLogs(
+            "do_find_drops_for_tables:unused", level="WARNING"
+        ) as logctx:
+            self._run_drop_cmd_yaml(
+                f"""
+partitionmanager:
+  mariadb: {str(fake_exec)}
+  tables:
+    unused:
+      retention_period:
+        days: 180
+            """
+            )
+        self.assertEqual(
+            set(logctx.output),
+            set(
+                [
+                    "WARNING:do_find_drops_for_tables:unused:"
+                    "Cannot process Table unused: no date query specified"
+                ]
+            ),
+        )

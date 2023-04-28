@@ -12,6 +12,12 @@ from .types import (
 from .types_test import mkPPart, mkTailPart, mkPos
 
 
+def _timestamp_rsp(year, mo, day):
+    return [
+        {"UNIX_TIMESTAMP": datetime(year, mo, day, tzinfo=timezone.utc).timestamp()}
+    ]
+
+
 class MockDatabase(DatabaseCommand):
     def __init__(self):
         self._responses = list()
@@ -64,14 +70,14 @@ class TestDropper(unittest.TestCase):
 
     def test_get_droppable_partitions(self):
         database = MockDatabase()
-        database.add_response("WHERE `id` > '100'", [{"UNIX_TIMESTAMP": 1621468800}])
-        database.add_response("WHERE `id` > '200'", [{"UNIX_TIMESTAMP": 1622073600}])
-        database.add_response("WHERE `id` > '200'", [{"UNIX_TIMESTAMP": 1622073600}])
-        database.add_response("WHERE `id` > '300'", [{"UNIX_TIMESTAMP": 1622678400}])
-        database.add_response("WHERE `id` > '300'", [{"UNIX_TIMESTAMP": 1622678400}])
-        database.add_response("WHERE `id` > '400'", [{"UNIX_TIMESTAMP": 1623283200}])
-        database.add_response("WHERE `id` > '400'", [{"UNIX_TIMESTAMP": 1623283200}])
-        database.add_response("WHERE `id` > '500'", [{"UNIX_TIMESTAMP": 1623888000}])
+        database.add_response("WHERE `id` > '100'", _timestamp_rsp(2021, 5, 20))
+        database.add_response("WHERE `id` > '200'", _timestamp_rsp(2021, 5, 27))
+        database.add_response("WHERE `id` > '200'", _timestamp_rsp(2021, 5, 27))
+        database.add_response("WHERE `id` > '300'", _timestamp_rsp(2021, 6, 3))
+        database.add_response("WHERE `id` > '300'", _timestamp_rsp(2021, 6, 3))
+        database.add_response("WHERE `id` > '400'", _timestamp_rsp(2021, 6, 10))
+        database.add_response("WHERE `id` > '400'", _timestamp_rsp(2021, 6, 10))
+        database.add_response("WHERE `id` > '500'", _timestamp_rsp(2021, 6, 17))
 
         table = Table("burgers")
         table.set_earliest_utc_timestamp_query(
@@ -116,3 +122,38 @@ class TestDropper(unittest.TestCase):
         self.assertEqual(results["2"]["oldest_age"], "35 days, 0:00:00")
         self.assertEqual(results["2"]["youngest_age"], "28 days, 0:00:00")
         self.assertEqual(results["2"]["approx_size"], 100)
+
+    def test_drop_nothing_to_do(self):
+        database = MockDatabase()
+        database.add_response("WHERE `id` > '100'", _timestamp_rsp(2021, 5, 1))
+        database.add_response("WHERE `id` > '200'", _timestamp_rsp(2021, 5, 8))
+        database.add_response("WHERE `id` > '200'", _timestamp_rsp(2021, 5, 8))
+        database.add_response("WHERE `id` > '300'", _timestamp_rsp(2021, 5, 19))
+        database.add_response("WHERE `id` > '300'", _timestamp_rsp(2021, 5, 19))
+        database.add_response("WHERE `id` > '400'", _timestamp_rsp(2021, 5, 24))
+
+        table = Table("burgers")
+        table.set_earliest_utc_timestamp_query(
+            SqlQuery(
+                "SELECT UNIX_TIMESTAMP(`cooked`) FROM `orders` "
+                "WHERE `id` > '?' ORDER BY `id` ASC LIMIT 1;"
+            )
+        )
+        current_timestamp = datetime(2021, 6, 1, tzinfo=timezone.utc)
+
+        partitions = [
+            mkPPart("1", 100),
+            mkPPart("2", 200),
+            mkPPart("3", 300),
+            mkPPart("4", 400),
+            mkPPart("5", 500),
+            mkPPart("6", 600),
+            mkTailPart("z"),
+        ]
+        current_position = mkPos(340)
+
+        table.set_retention_period(timedelta(days=30))
+        results = get_droppable_partitions(
+            database, partitions, current_position, current_timestamp, table
+        )
+        self.assertNotIn("drop_query", results)

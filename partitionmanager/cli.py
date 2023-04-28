@@ -479,11 +479,11 @@ def do_find_drops_for_tables(conf):
         log = logging.getLogger(f"do_find_drops_for_tables:{table.name}")
 
         if not table.has_date_query:
-            log.debug(f"Cannot process {table}: no date query specified")
+            log.warning(f"Cannot process {table}: no date query specified")
             continue
 
         if not table.retention_period:
-            log.debug(f"Cannot process {table}: no retention specified")
+            log.warning(f"Cannot process {table}: no retention specified")
             continue
 
         try:
