@@ -13,11 +13,12 @@ def _drop_statement(table, partition_list):
 
     log = logging.getLogger("get_droppable_partitions")
 
+    if not partition_list:
+        raise ValueError("Partition list may not be empty")
+
     partitions = ",".join(map(lambda x: f"`{x.name}`", partition_list))
 
-    alter_cmd = (
-        f"ALTER TABLE `{table.name}` " f"DROP PARTITION IF EXISTS {partitions} ;"
-    )
+    alter_cmd = f"ALTER TABLE `{table.name}` " f"DROP PARTITION IF EXISTS {partitions};"
 
     log.debug("Yielding %s", alter_cmd)
 

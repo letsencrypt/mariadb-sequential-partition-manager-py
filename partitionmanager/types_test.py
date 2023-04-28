@@ -153,6 +153,11 @@ class TestTypes(unittest.TestCase):
             timedelta(days=9),
         )
 
+        self.assertEqual(
+            Table("a").set_retention_period(timedelta(days=9)).retention_period,
+            timedelta(days=9),
+        )
+
         with self.assertRaises(argparse.ArgumentTypeError):
             timedelta_from_dict({"something": 1})
 

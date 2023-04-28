@@ -17,7 +17,7 @@ class MockDatabase(DatabaseCommand):
         self.num_queries = 0
 
     def add_response(self, expected, response):
-        self._responses.append({"expected": expected, "response": response})
+        self._responses.insert(0, {"expected": expected, "response": response})
 
     def run(self, cmd):
         self.num_queries += 1
