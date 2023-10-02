@@ -17,7 +17,7 @@ repos:
   hooks:
     - id: flake8
 - repo: https://github.com/PyCQA/pylint
-  rev: pylint-2.6.0
+  rev: v2.17.7
   hooks:
   -   id: pylint
       args:
