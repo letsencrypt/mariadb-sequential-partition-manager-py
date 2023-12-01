@@ -56,7 +56,7 @@ def calculate_exact_timestamp_via_query(database, table, position_partition):
         raise partitionmanager.types.NoExactTimeException("No exact timestamp result")
     if not len(exact_time_result[0]) == 1:
         raise partitionmanager.types.NoExactTimeException(
-            "Unexpected row count for the timestamp result"
+            "Unexpected column count for the timestamp result"
         )
     for key, value in exact_time_result[0].items():
         exact_time = datetime.fromtimestamp(value, tz=timezone.utc)

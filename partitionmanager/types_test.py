@@ -1,5 +1,6 @@
 import argparse
 import unittest
+import pytest
 from datetime import datetime, timedelta, timezone
 from .types import (
     ChangePlannedPartition,
@@ -183,6 +184,10 @@ class TestTypes(unittest.TestCase):
             SqlQuery("SELECT not_before FROM table WHERE id = ?;")
         )
         self.assertTrue(t.has_date_query)
+
+    def test_invalid_timedelta_string(self):
+        with pytest.raises(AttributeError):
+            assert timedelta_from_dict("30s")
 
     def test_changed_partition(self):
         with self.assertRaises(ValueError):

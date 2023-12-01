@@ -4,10 +4,10 @@ from datetime import datetime, timedelta, timezone
 from .dropper import _drop_statement, get_droppable_partitions
 from .types import (
     DatabaseCommand,
-    Table,
+    PositionPartition,
     SqlInput,
     SqlQuery,
-    PositionPartition,
+    Table,
 )
 from .types_test import mkPPart, mkTailPart, mkPos
 
@@ -67,6 +67,22 @@ class TestDropper(unittest.TestCase):
             get_droppable_partitions(
                 database, partitions, current_position, current_timestamp, table
             )
+
+    def test_no_droppable_partitions(self):
+        database = MockDatabase()
+        table = Table("burgers")
+        table.set_earliest_utc_timestamp_query(
+            SqlQuery(
+                "SELECT UNIX_TIMESTAMP(`cooked`) FROM `orders` "
+                "WHERE `id` > '?' ORDER BY `id` ASC LIMIT 1;"
+            )
+        )
+        table.set_retention_period(timedelta(days=2))
+        current_timestamp = datetime(2021, 1, 1, tzinfo=timezone.utc)
+        current_position = PositionPartition("p_20210102").set_position([10])
+        assert {} == get_droppable_partitions(
+            database, [], current_position, current_timestamp, table
+        )
 
     def test_get_droppable_partitions(self):
         database = MockDatabase()
@@ -157,3 +173,37 @@ class TestDropper(unittest.TestCase):
             database, partitions, current_position, current_timestamp, table
         )
         self.assertNotIn("drop_query", results)
+
+
+def test_get_droppable_partitions_no_exact_times(caplog):
+    database = MockDatabase()
+    resp = _timestamp_rsp(2021, 5, 20)
+    resp.extend(_timestamp_rsp(2021, 5, 21))
+    database.add_response("WHERE `id` > '100'", resp)
+    database.add_response("WHERE `id` > '200'", _timestamp_rsp(2021, 5, 27))
+
+    table = Table("burgers")
+    table.set_earliest_utc_timestamp_query(
+        SqlQuery(
+            "SELECT UNIX_TIMESTAMP(`cooked`) FROM `orders` "
+            "WHERE `id` > '?' ORDER BY `id` ASC LIMIT 1;"
+        )
+    )
+    current_timestamp = datetime(2021, 7, 1, tzinfo=timezone.utc)
+
+    partitions = [
+        mkPPart("1", 100),
+        mkPPart("2", 200),
+        mkTailPart("z"),
+    ]
+    current_position = mkPos(340)
+
+    table.set_retention_period(timedelta(days=2))
+
+    get_droppable_partitions(
+        database, partitions, current_position, current_timestamp, table
+    )
+    assert (
+        "Couldn't determine exact times for Table burgers.1: (100), it is probably droppable too."
+        in caplog.messages
+    )
