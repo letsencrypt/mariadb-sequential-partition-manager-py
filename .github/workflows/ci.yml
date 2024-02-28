@@ -21,6 +21,7 @@ jobs:
         pip install --user black~=23.9.1
         pip install --user flake8~=6.1.0
         pip install --user pytest
+        pip install --user validate-pyproject[all]
 
     - name: Install Partition Manager
       run: |
@@ -37,6 +38,10 @@ jobs:
     - name: Checking format with Flake8
       run: |
         python -m flake8
+
+    - name: Checking pyproject
+      run: |
+        python -m validate-pyproject pyproject.toml
 
   test:
     runs-on: ubuntu-latest
