@@ -25,6 +25,7 @@ repos:
       additional_dependencies:
       - PyMySQL
       - pyyaml
+      - pytest
 - repo: local
   hooks:
     - id: pytest
