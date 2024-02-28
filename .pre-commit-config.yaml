@@ -27,7 +27,7 @@ repos:
       - pyyaml
       - pytest
 - repo: https://github.com/abravalheri/validate-pyproject
-  rev: main
+  rev: v0.16
   hooks:
     - id: validate-pyproject
 - repo: local

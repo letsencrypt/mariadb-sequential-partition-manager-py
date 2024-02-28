@@ -16,8 +16,8 @@ classifiers = [
   "Programming Language :: Python :: 3",
 ]
 keywords = ["database", "mariadb"]
-install_requires = [
-  "pyyaml",
+dependencies = [
+  "pyyaml"
 ]
 requires-python = ">=3.8"
 readme = "README.md"
