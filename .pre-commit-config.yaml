@@ -26,6 +26,10 @@ repos:
       - PyMySQL
       - pyyaml
       - pytest
+- repo: https://github.com/abravalheri/validate-pyproject
+  rev: main
+  hooks:
+    - id: validate-pyproject
 - repo: local
   hooks:
     - id: pytest
