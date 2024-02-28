@@ -289,7 +289,7 @@ class Position:
 
 
 class PositionPartition(_Partition):
-    """A partition that has a position assocated with it.
+    """A partition that has a position associated with it.
 
     Partitions are independent table segments, and each has a name and a current
     position. The positions-list is an ordered list of identifiers, matching
