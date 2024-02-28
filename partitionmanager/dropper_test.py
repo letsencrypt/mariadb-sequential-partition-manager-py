@@ -139,6 +139,32 @@ class TestDropper(unittest.TestCase):
         self.assertEqual(results["2"]["youngest_age"], "28 days, 0:00:00")
         self.assertEqual(results["2"]["approx_size"], 100)
 
+    def test_get_droppable_partitions_out_of_order(self):
+        database = MockDatabase()
+
+        table = Table("burgers")
+        table.set_earliest_utc_timestamp_query(
+            SqlQuery(
+                "SELECT UNIX_TIMESTAMP(`cooked`) FROM `orders` "
+                "WHERE `id` > '?' ORDER BY `id` ASC LIMIT 1;"
+            )
+        )
+        current_timestamp = datetime(2021, 7, 1, tzinfo=timezone.utc)
+
+        partitions = [
+            mkPPart("2", 200),
+            mkPPart("1", 100),
+            mkPPart("3", 300),
+            mkTailPart("z"),
+        ]
+        current_position = mkPos(140)
+        table.set_retention_period(timedelta(days=2))
+
+        with self.assertRaises(ValueError):
+            get_droppable_partitions(
+                database, partitions, current_position, current_timestamp, table
+            )
+
     def test_drop_nothing_to_do(self):
         database = MockDatabase()
         database.add_response("WHERE `id` > '100'", _timestamp_rsp(2021, 5, 1))

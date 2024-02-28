@@ -39,6 +39,9 @@ def get_droppable_partitions(
     if not partitions:
         return results
 
+    if sorted(partitions) != partitions:
+        raise ValueError(f"Supplied partitions are not correctly sorted: {partitions}")
+
     for partition, next_partition in partitionmanager.tools.pairwise(partitions):
         if next_partition >= current_position:
             log.debug(
