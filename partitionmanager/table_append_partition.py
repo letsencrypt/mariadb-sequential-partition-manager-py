@@ -640,7 +640,7 @@ def generate_sql_reorganize_partition_commands(table, changes):
 
     table: a types.Table object
 
-    changes: a list of objects implenting types.PlannedPartition
+    changes: a list of objects implementing types.PlannedPartition
     """
     log = logging.getLogger(f"generate_sql_reorganize_partition_commands:{table.name}")
 
