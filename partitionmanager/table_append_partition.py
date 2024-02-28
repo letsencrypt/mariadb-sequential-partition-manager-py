@@ -2,7 +2,7 @@
 Design and perform partition management.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 import logging
 import operator
 import re
@@ -425,9 +425,6 @@ def _get_rate_partitions_with_queried_timestamps(
 
     The partitions' timestamps are explicitly queried.
     """
-    log = logging.getLogger(
-        f"_get_rate_partitions_with_queried_timestamps:{table.name}"
-    )
 
     if not table.has_date_query:
         raise ValueError("Table has no defined date query")
@@ -435,42 +432,10 @@ def _get_rate_partitions_with_queried_timestamps(
     instant_partitions = list()
 
     for partition in partition_list:
-        if len(partition.position) != 1:
-            raise ValueError(
-                "This method is only valid for single-column partitions right now"
+        exact_time = (
+            partitionmanager.database_helpers.calculate_exact_timestamp_via_query(
+                database, table, partition
             )
-        arg = partition.position.as_sql_input()[0]
-
-        sql_select_cmd = table.earliest_utc_timestamp_query.get_statement_with_argument(
-            arg
-        )
-        log.debug(
-            "Executing %s to derive partition %s at position %s",
-            sql_select_cmd,
-            partition.name,
-            partition.position,
-        )
-
-        start = datetime.now()
-        exact_time_result = database.run(sql_select_cmd)
-        end = datetime.now()
-
-        if not exact_time_result:
-            log.debug("No result found for position %s", arg)
-            continue
-
-        assert len(exact_time_result) == 1
-        assert len(exact_time_result[0]) == 1
-        for key, value in exact_time_result[0].items():
-            exact_time = datetime.fromtimestamp(value, tz=timezone.utc)
-            break
-
-        log.debug(
-            "Exact time of %s returned for %s at position %s, query took %s",
-            exact_time,
-            partition.name,
-            partition.position,
-            (end - start),
         )
 
         instant_partitions.append(

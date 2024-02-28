@@ -30,17 +30,17 @@ class Table:
 
     def __init__(self, name):
         self.name = SqlInput(name)
-        self.retention = None
+        self.retention_period = None
         self.partition_period = None
         self.earliest_utc_timestamp_query = None
 
-    def set_retention(self, ret):
+    def set_retention_period(self, ret):
         """
         Sets the retention period as a timedelta for this table
         """
         if not isinstance(ret, timedelta):
             raise ValueError("Must be a timedelta")
-        self.retention = ret
+        self.retention_period = ret
         return self
 
     def set_partition_period(self, dur):
@@ -350,6 +350,9 @@ class PositionPartition(_Partition):
                 return True
         return False
 
+    def __ge__(self, other):
+        return not self < other
+
     def __eq__(self, other):
         if isinstance(other, PositionPartition):
             return self.name == other.name and self._position == other.position
@@ -398,6 +401,9 @@ class MaxValuePartition(_Partition):
                 )
             return False
         return ValueError()
+
+    def __ge__(self, other):
+        return not self < other
 
     def __eq__(self, other):
         if isinstance(other, MaxValuePartition):
@@ -609,3 +615,7 @@ class NoEmptyPartitionsAvailableException(Exception):
 
 class DatabaseCommandException(Exception):
     """Raised if the database command failed."""
+
+
+class NoExactTimeException(Exception):
+    """Raised if there's no exact time available for this partition."""

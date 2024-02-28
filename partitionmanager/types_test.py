@@ -1,5 +1,6 @@
 import argparse
 import unittest
+import pytest
 from datetime import datetime, timedelta, timezone
 from .types import (
     ChangePlannedPartition,
@@ -146,10 +147,15 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(type(Table("name").name), SqlInput)
 
         t = Table("t")
-        self.assertEqual(None, t.retention)
+        self.assertEqual(None, t.retention_period)
 
         self.assertEqual(
             Table("a").set_partition_period(timedelta(days=9)).partition_period,
+            timedelta(days=9),
+        )
+
+        self.assertEqual(
+            Table("a").set_retention_period(timedelta(days=9)).retention_period,
             timedelta(days=9),
         )
 
@@ -178,6 +184,10 @@ class TestTypes(unittest.TestCase):
             SqlQuery("SELECT not_before FROM table WHERE id = ?;")
         )
         self.assertTrue(t.has_date_query)
+
+    def test_invalid_timedelta_string(self):
+        with pytest.raises(AttributeError):
+            assert timedelta_from_dict("30s")
 
     def test_changed_partition(self):
         with self.assertRaises(ValueError):
