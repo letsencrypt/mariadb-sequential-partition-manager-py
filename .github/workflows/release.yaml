@@ -27,9 +27,8 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential apt-file dpkg-dev fakeroot build-essential devscripts debhelper
-          sudo apt-get install -y --reinstall python3-pip python3-apt
-          pip3 install build wheel2deb
+          sudo apt-get install -y build-essential python3-pip
+
 
       - name: Checkout
         uses: actions/checkout@v2
@@ -44,11 +43,6 @@ jobs:
         run: |
           python3 -m build
 
-      - name: Build deb
-        run: |
-          wheel2deb -x ./dist --depends python3-yaml
-          wheel2deb build
-
       - name: "Publish release"
         uses: "marvinpinto/action-automatic-releases@919008cf3f741b179569b7a6fb4d8860689ab7f0"
         with:
@@ -58,4 +52,3 @@ jobs:
           files: |
             dist/*.whl
             dist/*.tar.gz
-            output/*.deb
