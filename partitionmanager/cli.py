@@ -119,7 +119,7 @@ class Config:
                 self.dbcmd = partitionmanager.sql.SubprocessDatabaseCommand(
                     data["mariadb"]
                 )
-        if not self.tables:  # Only load tables froml YAML if not supplied via args
+        if not self.tables:  # Only load tables from YAML if not supplied via args
             for key in data["tables"]:
                 tab = partitionmanager.types.Table(key)
                 tabledata = data["tables"][key]
@@ -177,14 +177,6 @@ def _extract_single_column(row):
     columns = list(row.keys())
     assert len(columns) == 1, "Expecting a single column"
     return row[columns[0]]
-
-
-def list_tables(conf):
-    """List all tables for the current database."""
-    rows = conf.dbcmd.run("SHOW TABLES;")
-    table_names = map(lambda row: _extract_single_column(row), rows)
-    table_objects = map(lambda name: partitionmanager.types.Table(name), table_names)
-    return list(table_objects)
 
 
 def partition_cmd(args):
@@ -377,13 +369,16 @@ def do_partition(conf):
     return all_results
 
 
-def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
+def do_stats(conf, metrics=None):
     """Populates a metrics object from the tables in the configuration."""
 
     log = logging.getLogger("do_stats")
 
+    if not metrics:
+        metrics = partitionmanager.stats.PrometheusMetrics()
+
     all_results = dict()
-    for table in list_tables(conf):
+    for table in conf.tables:
         table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if table_problems:
             log.debug(f"Cannot gather statistics for {table}: {table_problems}")
