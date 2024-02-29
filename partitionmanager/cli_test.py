@@ -494,26 +494,26 @@ partitionmanager:
                     "partitioned_yesterday": [
                         "DROP TABLE IF EXISTS partitioned_yesterday_new_20210421;",
                         "CREATE TABLE partitioned_yesterday_new_20210421 "
-                        + "LIKE partitioned_yesterday;",
+                        "LIKE partitioned_yesterday;",
                         "ALTER TABLE partitioned_yesterday_new_20210421 "
-                        + "REMOVE PARTITIONING;",
+                        "REMOVE PARTITIONING;",
                         "ALTER TABLE partitioned_yesterday_new_20210421 "
-                        + "PARTITION BY RANGE (id) (",
+                        "PARTITION BY RANGE (id) (",
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
                         "ALTER TABLE `partitioned_yesterday_new_20210421` WAIT 6 "
-                        + "REORGANIZE PARTITION `p_assumed` INTO (PARTITION "
-                        + "`p_20210421` VALUES LESS THAN (150), PARTITION "
-                        + "`p_20210521` VALUES LESS THAN (300), PARTITION "
-                        + "`p_20210620` VALUES LESS THAN MAXVALUE);",
+                        "REORGANIZE PARTITION `p_assumed` INTO (PARTITION "
+                        "`p_20210421` VALUES LESS THAN (150), PARTITION "
+                        "`p_20210521` VALUES LESS THAN (300), PARTITION "
+                        "`p_20210620` VALUES LESS THAN MAXVALUE);",
                         "CREATE OR REPLACE TRIGGER copy_inserts_from_"
-                        + "partitioned_yesterday_to_partitioned_yesterday",
+                        "partitioned_yesterday_to_partitioned_yesterday",
                         "\tAFTER INSERT ON partitioned_yesterday FOR EACH ROW",
                         "\t\tINSERT INTO partitioned_yesterday_new_20210421 SET",
                         "\t\t\t`id` = NEW.`id`,",
                         "\t\t\t`serial` = NEW.`serial`;",
                         "CREATE OR REPLACE TRIGGER copy_updates_from_"
-                        + "partitioned_yesterday_to_partitioned_yesterday",
+                        "partitioned_yesterday_to_partitioned_yesterday",
                         "\tAFTER UPDATE ON partitioned_yesterday FOR EACH ROW",
                         "\t\tUPDATE partitioned_yesterday_new_20210421 SET",
                         "\t\t\t`serial` = NEW.`serial`",
@@ -527,10 +527,10 @@ partitionmanager:
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
                         "ALTER TABLE `two_new_20210421` WAIT 6 REORGANIZE PARTITION "
-                        + "`p_assumed` INTO (PARTITION `p_20210421` VALUES "
-                        + "LESS THAN (150), PARTITION `p_20210521` VALUES LESS "
-                        + "THAN (375), PARTITION `p_20210620` VALUES LESS THAN "
-                        + "MAXVALUE);",
+                        "`p_assumed` INTO (PARTITION `p_20210421` VALUES "
+                        "LESS THAN (150), PARTITION `p_20210521` VALUES LESS "
+                        "THAN (375), PARTITION `p_20210620` VALUES LESS THAN "
+                        "MAXVALUE);",
                         "CREATE OR REPLACE TRIGGER copy_inserts_from_two_to_two_new_20210421",  # noqa: E501
                         "\tAFTER INSERT ON two FOR EACH ROW",
                         "\t\tINSERT INTO two_new_20210421 SET",
@@ -587,18 +587,18 @@ partitionmanager:
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
                         "ALTER TABLE `unpartitioned_new_20210421` WAIT 6 REORGANIZE "
-                        + "PARTITION `p_assumed` INTO (PARTITION `p_20210421` "
-                        + "VALUES LESS THAN (150), PARTITION `p_20210521` VALUES "
-                        + "LESS THAN (300), PARTITION `p_20210620` VALUES LESS "
-                        + "THAN MAXVALUE);",
+                        "PARTITION `p_assumed` INTO (PARTITION `p_20210421` "
+                        "VALUES LESS THAN (150), PARTITION `p_20210521` VALUES "
+                        "LESS THAN (300), PARTITION `p_20210620` VALUES LESS "
+                        "THAN MAXVALUE);",
                         "CREATE OR REPLACE TRIGGER copy_inserts_from_"
-                        + "unpartitioned_to_unpartitioned_new_20210421",
+                        "unpartitioned_to_unpartitioned_new_20210421",
                         "\tAFTER INSERT ON unpartitioned FOR EACH ROW",
                         "\t\tINSERT INTO unpartitioned_new_20210421 SET",
                         "\t\t\t`id` = NEW.`id`,",
                         "\t\t\t`serial` = NEW.`serial`;",
                         "CREATE OR REPLACE TRIGGER copy_updates_from_"
-                        + "unpartitioned_to_unpartitioned_new_20210421",
+                        "unpartitioned_to_unpartitioned_new_20210421",
                         "\tAFTER UPDATE ON unpartitioned FOR EACH ROW",
                         "\t\tUPDATE unpartitioned_new_20210421 SET",
                         "\t\t\t`serial` = NEW.`serial`",

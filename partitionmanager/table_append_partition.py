@@ -24,7 +24,7 @@ def get_table_compatibility_problems(database, table):
 
     sql_cmd = (
         "SELECT CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES "
-        + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
+        f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
     ).strip()
     return _get_table_information_schema_problems(database.run(sql_cmd), table.name)
 

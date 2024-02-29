@@ -132,9 +132,9 @@ class TestBootstrapTool(unittest.TestCase):
                     "\tPARTITION p_start VALUES LESS THAN MAXVALUE",
                     ");",
                     "ALTER TABLE `test_new_20210303` WAIT 6 REORGANIZE PARTITION `p_start` "  # noqa: E501
-                    + "INTO (PARTITION `p_20210303` VALUES LESS THAN (156), "
-                    + "PARTITION `p_20210402` VALUES LESS THAN (2406), PARTITION "
-                    + "`p_20210502` VALUES LESS THAN MAXVALUE);",
+                    "INTO (PARTITION `p_20210303` VALUES LESS THAN (156), "
+                    "PARTITION `p_20210402` VALUES LESS THAN (2406), PARTITION "
+                    "`p_20210502` VALUES LESS THAN MAXVALUE);",
                     "CREATE OR REPLACE TRIGGER copy_inserts_from_test_to_test_new_20210303",  # noqa: E501
                     "\tAFTER INSERT ON test FOR EACH ROW",
                     "\t\tINSERT INTO test_new_20210303 SET",
@@ -184,16 +184,16 @@ class TestBootstrapTool(unittest.TestCase):
                     "CREATE TABLE map_table_new_20210303 LIKE map_table;",
                     "ALTER TABLE map_table_new_20210303 REMOVE PARTITIONING;",
                     "ALTER TABLE map_table_new_20210303 PARTITION BY RANGE "
-                    + "COLUMNS (orderID, authzID) (",
+                    "COLUMNS (orderID, authzID) (",
                     "\tPARTITION p_assumed VALUES LESS THAN (MAXVALUE, MAXVALUE)",
                     ");",
                     "ALTER TABLE `map_table_new_20210303` WAIT 6 REORGANIZE PARTITION "
-                    + "`p_assumed` INTO (PARTITION `p_20210303` VALUES LESS THAN "
-                    + "(11, 22), PARTITION `p_20210402` VALUES LESS THAN "
-                    + "(41, 82), PARTITION `p_20210502` VALUES LESS THAN "
-                    + "(MAXVALUE, MAXVALUE));",
+                    "`p_assumed` INTO (PARTITION `p_20210303` VALUES LESS THAN "
+                    "(11, 22), PARTITION `p_20210402` VALUES LESS THAN "
+                    "(41, 82), PARTITION `p_20210502` VALUES LESS THAN "
+                    "(MAXVALUE, MAXVALUE));",
                     "CREATE OR REPLACE TRIGGER copy_inserts_from_map_table_"
-                    + "to_map_table_new_20210303",
+                    "to_map_table_new_20210303",
                     "\tAFTER INSERT ON map_table FOR EACH ROW",
                     "\t\tINSERT INTO map_table_new_20210303 SET",
                     "\t\t\t`authzID` = NEW.`authzID`,",

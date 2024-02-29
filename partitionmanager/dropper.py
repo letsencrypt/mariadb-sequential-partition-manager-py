@@ -18,7 +18,7 @@ def _drop_statement(table, partition_list):
 
     partitions = ",".join(map(lambda x: f"`{x.name}`", partition_list))
 
-    alter_cmd = f"ALTER TABLE `{table.name}` " f"DROP PARTITION IF EXISTS {partitions};"
+    alter_cmd = f"ALTER TABLE `{table.name}` DROP PARTITION IF EXISTS {partitions};"
 
     log.debug("Yielding %s", alter_cmd)
 
