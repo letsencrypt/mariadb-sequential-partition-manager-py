@@ -225,10 +225,10 @@ partitionmanager:
                 [
                     "INFO:partition:Evaluating Table partitioned_last_week "
                     "(duration=7 days, 0:00:00)",
-                    "DEBUG:partition:Table partitioned_last_week has no pending SQL updates.",
+                    "DEBUG:partition:Table partitioned_last_week has no pending SQL updates.",  # noqa: E501
                     "INFO:partition:Evaluating Table partitioned_yesterday "
                     "(duration=7 days, 0:00:00)",
-                    "DEBUG:partition:Table partitioned_yesterday has no pending SQL updates.",
+                    "DEBUG:partition:Table partitioned_yesterday has no pending SQL updates.",  # noqa: E501
                 ]
             ),
         )
@@ -531,12 +531,12 @@ partitionmanager:
                         + "LESS THAN (150), PARTITION `p_20210521` VALUES LESS "
                         + "THAN (375), PARTITION `p_20210620` VALUES LESS THAN "
                         + "MAXVALUE);",
-                        "CREATE OR REPLACE TRIGGER copy_inserts_from_two_to_two_new_20210421",
+                        "CREATE OR REPLACE TRIGGER copy_inserts_from_two_to_two_new_20210421",  # noqa: E501
                         "\tAFTER INSERT ON two FOR EACH ROW",
                         "\t\tINSERT INTO two_new_20210421 SET",
                         "\t\t\t`id` = NEW.`id`,",
                         "\t\t\t`serial` = NEW.`serial`;",
-                        "CREATE OR REPLACE TRIGGER copy_updates_from_two_to_two_new_20210421",
+                        "CREATE OR REPLACE TRIGGER copy_updates_from_two_to_two_new_20210421",  # noqa: E501
                         "\tAFTER UPDATE ON two FOR EACH ROW",
                         "\t\tUPDATE two_new_20210421 SET",
                         "\t\t\t`serial` = NEW.`serial`",
@@ -583,7 +583,7 @@ partitionmanager:
                         "DROP TABLE IF EXISTS unpartitioned_new_20210421;",
                         "CREATE TABLE unpartitioned_new_20210421 LIKE unpartitioned;",
                         "ALTER TABLE unpartitioned_new_20210421 REMOVE PARTITIONING;",
-                        "ALTER TABLE unpartitioned_new_20210421 PARTITION BY RANGE (id) (",
+                        "ALTER TABLE unpartitioned_new_20210421 PARTITION BY RANGE (id) (",  # noqa: E501
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
                         "ALTER TABLE `unpartitioned_new_20210421` WAIT 6 REORGANIZE "

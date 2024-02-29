@@ -9,11 +9,18 @@ repos:
     - id: requirements-txt-fixer
     - id: trailing-whitespace
 
+- repo: https://github.com/codespell-project/codespell
+  rev: v2.2.6
+  hooks:
+  - id: codespell
+    additional_dependencies:
+      - tomli
+
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.2.2
+  rev: v0.3.0
   hooks:
     - id: ruff
-    # - id: ruff-format
+    - id: ruff-format
 
 - repo: https://github.com/PyCQA/pylint
   rev: v3.1.0

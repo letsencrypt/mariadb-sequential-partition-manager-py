@@ -35,7 +35,7 @@ Repository = "http://github.com/letsencrypt/mariadb-sequential-partition-manager
 partition-manager = "partitionmanager.cli:main"
 
 [tool.ruff]
-line-length = 99  # default is 88
+line-length = 88  # default is 88
 target-version = "py38"
 
 [tool.ruff.lint]

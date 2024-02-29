@@ -92,7 +92,8 @@ def get_droppable_partitions(
                 droppable.append(partition)
         except partitionmanager.types.NoExactTimeException:
             log.warning(
-                "Couldn't determine exact times for %s.%s, it is probably droppable too.",
+                "Couldn't determine exact times for %s.%s, it is probably droppable "
+                "too.",
                 table,
                 partition,
             )

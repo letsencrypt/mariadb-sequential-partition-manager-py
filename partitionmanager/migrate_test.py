@@ -131,16 +131,16 @@ class TestBootstrapTool(unittest.TestCase):
                     "ALTER TABLE test_new_20210303 PARTITION BY RANGE (id) (",
                     "\tPARTITION p_start VALUES LESS THAN MAXVALUE",
                     ");",
-                    "ALTER TABLE `test_new_20210303` WAIT 6 REORGANIZE PARTITION `p_start` "
+                    "ALTER TABLE `test_new_20210303` WAIT 6 REORGANIZE PARTITION `p_start` "  # noqa: E501
                     + "INTO (PARTITION `p_20210303` VALUES LESS THAN (156), "
                     + "PARTITION `p_20210402` VALUES LESS THAN (2406), PARTITION "
                     + "`p_20210502` VALUES LESS THAN MAXVALUE);",
-                    "CREATE OR REPLACE TRIGGER copy_inserts_from_test_to_test_new_20210303",
+                    "CREATE OR REPLACE TRIGGER copy_inserts_from_test_to_test_new_20210303",  # noqa: E501
                     "\tAFTER INSERT ON test FOR EACH ROW",
                     "\t\tINSERT INTO test_new_20210303 SET",
                     "\t\t\t`id` = NEW.`id`,",
                     "\t\t\t`serial` = NEW.`serial`;",
-                    "CREATE OR REPLACE TRIGGER copy_updates_from_test_to_test_new_20210303",
+                    "CREATE OR REPLACE TRIGGER copy_updates_from_test_to_test_new_20210303",  # noqa: E501
                     "\tAFTER UPDATE ON test FOR EACH ROW",
                     "\t\tUPDATE test_new_20210303 SET",
                     "\t\t\t`serial` = NEW.`serial`",
