@@ -61,7 +61,7 @@ def get_current_positions(database, table, columns):
                 f"Expected one result from {table.name}"
             )
         if not rows:
-            raise partitionmanager.types.TableInformationException(
+            raise partitionmanager.types.TableEmptyException(
                 f"Table {table.name} appears to be empty. (No results)"
             )
         positions[column] = rows[0][column]

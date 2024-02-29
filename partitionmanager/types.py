@@ -596,6 +596,10 @@ class TableInformationException(Exception):
     """Raised when the table's status doesn't include the information we need."""
 
 
+class TableEmptyException(Exception):
+    """Raised when the table is empty."""
+
+
 class NoEmptyPartitionsAvailableException(Exception):
     """Raised if no empty partitions are available to safely modify."""
 
