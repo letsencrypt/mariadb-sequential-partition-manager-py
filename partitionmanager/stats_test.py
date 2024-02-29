@@ -46,7 +46,7 @@ class TestStatistics(unittest.TestCase):
     def test_statistics_weekly_partitions_year(self):
         parts = list()
         base = datetime(2020, 5, 20, tzinfo=timezone.utc)
-        for w in range(0, 52):
+        for w in range(52):
             partName = f"p_{base + timedelta(weeks=w):%Y%m%d}"
             parts.append(mkPPart(partName, w * 1024))
         parts.append(MaxValuePartition(f"p_{base + timedelta(weeks=52):%Y%m%d}", 1))
