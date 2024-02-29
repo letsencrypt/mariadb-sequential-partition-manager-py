@@ -175,8 +175,7 @@ def _generate_sql_copy_commands(
     yield f"\tPARTITION {max_val_part.name} VALUES LESS THAN {max_val_string}"
     yield ");"
 
-    for command in alter_commands_iter:
-        yield command
+    yield from alter_commands_iter
 
     cols = set(columns)
 
@@ -214,9 +213,11 @@ def _generate_sql_copy_commands(
     ):
         yield line
 
-    yield "\t\tWHERE " + " AND ".join(
-        _trigger_column_copies(map_data["range_cols"])
-    ) + ";"
+    yield (
+        "\t\tWHERE "
+        + " AND ".join(_trigger_column_copies(map_data["range_cols"]))
+        + ";"
+    )
 
     return
 

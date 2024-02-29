@@ -33,3 +33,87 @@ Repository = "http://github.com/letsencrypt/mariadb-sequential-partition-manager
 
 [project.scripts]
 partition-manager = "partitionmanager.cli:main"
+
+[tool.ruff]
+line-length = 99  # default is 88
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+  "A",      # flake8-builtins
+  "AIR",    # Airflow
+  "ARG",    # flake8-unused-arguments
+  "ASYNC",  # flake8-async
+  "B",      # flake8-bugbear
+  "BLE",    # flake8-blind-except
+  "C90",    # McCabe cyclomatic complexity
+  "DJ",     # flake8-django
+  "E",      # pycodestyle
+  "EXE",    # flake8-executable
+  "F",      # Pyflakes
+  "FA",     # flake8-future-annotations
+  "FBT",    # flake8-boolean-trap
+  "FIX",    # flake8-fixme
+  "FLY",    # flynt
+  "ICN",    # flake8-import-conventions
+  "INP",    # flake8-no-pep420
+  "INT",    # flake8-gettext
+  "LOG",    # flake8-logging
+  "NPY",    # NumPy-specific rules
+  "PD",     # pandas-vet
+  "PERF",   # Perflint
+  "PGH",    # pygrep-hooks
+  "PIE",    # flake8-pie
+  "PL",     # Pylint
+  "PTH",    # flake8-use-pathlib
+  "PYI",    # flake8-pyi
+  "RET",    # flake8-return
+  "RSE",    # flake8-raise
+  "S",      # flake8-bandit
+  "SIM",    # flake8-simplify
+  "SLOT",   # flake8-slots
+  "T10",    # flake8-debugger
+  "TCH",    # flake8-type-checking
+  "TD",     # flake8-todos
+  "TID",    # flake8-tidy-imports
+  "TRIO",   # flake8-trio
+  "UP",     # pyupgrade
+  "W",      # pycodestyle
+  "YTT",    # flake8-2020
+  # "ANN",  # flake8-annotations
+  # "C4",   # flake8-comprehensions
+  # "COM",  # flake8-commas
+  # "CPY",  # flake8-copyright
+  # "D",    # pydocstyle
+  # "DTZ",  # flake8-datetimez
+  # "EM",   # flake8-errmsg
+  # "ERA",  # eradicate
+  # "FURB", # refurb
+  # "G",    # flake8-logging-format
+  # "I",    # isort
+  # "ISC",  # flake8-implicit-str-concat
+  # "N",    # pep8-naming
+  # "PT",   # flake8-pytest-style
+  # "Q",    # flake8-quotes
+  # "RUF",  # Ruff-specific rules
+  # "SLF",  # flake8-self
+  # "T20",  # flake8-print
+  # "TRY",  # tryceratops
+]
+ignore = ["S101"]  # Allow assert statements
+
+[tool.ruff.lint.mccabe]
+max-complexity = 16  # default is 10
+
+[tool.ruff.lint.per-file-ignores]
+"partitionmanager/cli.py" = ["B008"]  # TODO: Fix me
+"partitionmanager/cli_test.py" = ["S608", "SIM115", "SIM117"]  # TODO: Fix SIMs
+"partitionmanager/sql.py" = ["B904", "S603"]  # TODO: Fix S603
+"partitionmanager/table_append_partition.py" = ["S608", "SIM102"]  # TODO: Fix S608
+"partitionmanager/types.py" = ["B904", "RET505", "SLOT000"]  # TODO: Fix B904 and SLOT000
+"partitionmanager/types_test.py" = ["B015"]  # TODO: Fix me
+
+[tool.ruff.lint.pylint]
+max-args = 7  # default is 5
+max-branches = 15  # default is 12
+max-statements = 52  # default is 50

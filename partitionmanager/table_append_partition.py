@@ -107,13 +107,13 @@ def _parse_partition_map(rows):
 
     options = rows[0]
 
-    for l in options["Create Table"].split("\n"):
-        range_match = partition_range.match(l)
+    for line in options["Create Table"].split("\n"):
+        range_match = partition_range.match(line)
         if range_match:
             range_cols = [x.strip("` ") for x in range_match.group("cols").split(",")]
             log.debug(f"Partition range columns: {range_cols}")
 
-        member_match = partition_member.match(l)
+        member_match = partition_member.match(line)
         if member_match:
             part_name = member_match.group("name")
             part_vals_str = member_match.group("cols")
@@ -139,7 +139,7 @@ def _parse_partition_map(rows):
             )
             partitions.append(pos_part)
 
-        member_tail = partition_tail.match(l)
+        member_tail = partition_tail.match(line)
         if member_tail:
             if range_cols is None:
                 raise partitionmanager.types.TableInformationException(
@@ -200,7 +200,7 @@ def _split_partitions_around_position(partition_list, current_position):
         if not partitionmanager.types.is_partition_type(p):
             raise partitionmanager.types.UnexpectedPartitionException(p)
     if not isinstance(current_position, partitionmanager.types.Position):
-        raise ValueError()
+        raise ValueError
 
     less_than_partitions = list()
     greater_or_equal_partitions = list()
@@ -481,7 +481,7 @@ def _plan_partition_changes(
             "as without an empty partition to manipulate, you'll need to "
             "perform an expensive copy operation. See the bootstrap mode."
         )
-        raise partitionmanager.types.NoEmptyPartitionsAvailableException()
+        raise partitionmanager.types.NoEmptyPartitionsAvailableException
     if not active_partition:
         raise Exception("Active Partition can't be None")
 
@@ -626,8 +626,7 @@ def _should_run_changes(table, altered_partitions):
             log.debug(f"{p} is new")
             return True
 
-        if isinstance(p, partitionmanager.types.ChangePlannedPartition):
-            if p.important():
+        if isinstance(p, partitionmanager.types.ChangePlannedPartition) and p.important():
                 log.debug(f"{p} is marked important")
                 return True
     return False

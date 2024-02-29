@@ -18,9 +18,8 @@ def timedelta_from_dict(r):
     for k, v in r.items():
         if k == "days":
             return timedelta(days=v)
-        raise argparse.ArgumentTypeError(
-            f"Unknown retention period definition: {k}={v}"
-        )
+        raise argparse.ArgumentTypeError(f"Unknown retention period definition: {k}={v}")
+    return None
 
 
 class Table:
@@ -96,32 +95,22 @@ class SqlQuery(str):
             raise argparse.ArgumentTypeError(f"{args} is not a single argument")
         query_string = args[0].strip()
         if not query_string.endswith(";"):
-            raise argparse.ArgumentTypeError(
-                f"[{query_string}] does not end with a ';'"
-            )
+            raise argparse.ArgumentTypeError(f"[{query_string}] does not end with a ';'")
         if query_string.count(";") > 1:
-            raise argparse.ArgumentTypeError(
-                f"[{query_string}] has more than one statement"
-            )
+            raise argparse.ArgumentTypeError(f"[{query_string}] has more than one statement")
 
         if "?" not in query_string:
-            raise argparse.ArgumentTypeError(
-                f"[{query_string}] has no substitution variable '?'"
-            )
+            raise argparse.ArgumentTypeError(f"[{query_string}] has no substitution variable '?'")
         if query_string.count("?") > 1:
             raise argparse.ArgumentTypeError(
                 f"[{query_string}] has more than one substitution variable '?'"
             )
 
         if not query_string.upper().startswith("SELECT "):
-            raise argparse.ArgumentTypeError(
-                f"[{query_string}] is not a SELECT statement"
-            )
+            raise argparse.ArgumentTypeError(f"[{query_string}] is not a SELECT statement")
         for term in SqlQuery.forbidden_terms:
             if term in query_string.upper():
-                raise argparse.ArgumentTypeError(
-                    f"[{query_string}] has a forbidden term [{term}]"
-                )
+                raise argparse.ArgumentTypeError(f"[{query_string}] has a forbidden term [{term}]")
 
         return super().__new__(cls, query_string)
 
@@ -142,7 +131,7 @@ def to_sql_url(urlstring):
         urltuple = urlparse(urlstring)
         if urltuple.scheme.lower() != "sql":
             raise argparse.ArgumentTypeError(f"{urlstring} is not a valid sql://")
-        if urltuple.path == "/" or urltuple.path == "":
+        if urltuple.path in {"/", ""}:
             raise argparse.ArgumentTypeError(f"{urlstring} should include a db path")
         return urltuple
     except ValueError as ve:
@@ -259,7 +248,7 @@ class Position:
         """Set the list of identifiers for this position."""
         if isinstance(position_in, Position):
             self._position = position_in.as_list()
-        elif isinstance(position_in, list) or isinstance(position_in, tuple):
+        elif isinstance(position_in, (list, tuple)):
             self._position = [int(p) for p in position_in]
         else:
             raise ValueError(f"Unexpected position input: {position_in}")
@@ -345,10 +334,10 @@ class PositionPartition(_Partition):
 
         # If ALL of v_mine >= v_other, then self is greater than other
         # If ANY of v_mine < v_other, then self is less than other
-        for v_mine, v_other in zip(self._position.as_list(), other_position_list):
-            if v_mine < v_other:
-                return True
-        return False
+        return any(
+            v_mine < v_other
+            for v_mine, v_other in zip(self._position.as_list(), other_position_list)
+        )
 
     def __ge__(self, other):
         return not self < other
@@ -388,7 +377,7 @@ class MaxValuePartition(_Partition):
 
     def __lt__(self, other):
         """MaxValuePartitions are always greater than every other partition."""
-        if isinstance(other, list) or isinstance(other, Position):
+        if isinstance(other, (Position, list)):
             if self._count != len(other):
                 raise UnexpectedPartitionException(
                     f"Expected {self._count} columns but list has {len(other)}."
@@ -506,11 +495,9 @@ class _PlannedPartition(abc.ABC):
     def as_partition(self):
         """Return a concrete Partition that can be rendered into a SQL ALTER."""
         if not self._timestamp:
-            raise ValueError()
+            raise ValueError
         if self._position:
-            return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(
-                self._position
-            )
+            return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(self._position)
         return MaxValuePartition(f"p_{self._timestamp:%Y%m%d}", count=self._num_columns)
 
     def __repr__(self):
@@ -535,7 +522,7 @@ class ChangePlannedPartition(_PlannedPartition):
 
     def __init__(self, old_part):
         if not is_partition_type(old_part):
-            raise ValueError()
+            raise ValueError
         super().__init__()
         self._old = old_part
         self._num_columns = self._old.num_columns

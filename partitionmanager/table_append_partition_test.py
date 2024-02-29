@@ -1,4 +1,4 @@
-# flake8: noqa: E501
+# ruff: noqa: E501
 
 import unittest
 import argparse
@@ -7,11 +7,8 @@ from partitionmanager.types import (
     ChangePlannedPartition,
     DatabaseCommand,
     DuplicatePartitionException,
-    MaxValuePartition,
-    MismatchedIdException,
     NewPlannedPartition,
     NoEmptyPartitionsAvailableException,
-    PositionPartition,
     InstantPartition,
     SqlInput,
     SqlQuery,
@@ -49,7 +46,7 @@ class MockDatabase(DatabaseCommand):
         self._response = []
         self._num_queries = 0
 
-    def run(self, cmd):
+    def run(self, cmd):  # noqa: ARG002
         self._num_queries += 1
         return self._response.pop()
 
