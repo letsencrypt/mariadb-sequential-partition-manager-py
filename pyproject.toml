@@ -35,7 +35,7 @@ Repository = "http://github.com/letsencrypt/mariadb-sequential-partition-manager
 partition-manager = "partitionmanager.cli:main"
 
 [tool.ruff]
-line-length = 99  # default is 88
+line-length = 88  # default is 88
 target-version = "py38"
 
 [tool.ruff.lint]
@@ -59,6 +59,7 @@ select = [
   "ICN",    # flake8-import-conventions
   "INP",    # flake8-no-pep420
   "INT",    # flake8-gettext
+  "ISC",    # flake8-implicit-str-concat
   "LOG",    # flake8-logging
   "NPY",    # NumPy-specific rules
   "PD",     # pandas-vet
@@ -91,7 +92,6 @@ select = [
   # "FURB", # refurb
   # "G",    # flake8-logging-format
   # "I",    # isort
-  # "ISC",  # flake8-implicit-str-concat
   # "N",    # pep8-naming
   # "PT",   # flake8-pytest-style
   # "Q",    # flake8-quotes

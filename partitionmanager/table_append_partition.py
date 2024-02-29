@@ -24,7 +24,7 @@ def get_table_compatibility_problems(database, table):
 
     sql_cmd = (
         "SELECT CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES "
-        + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
+        f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
     ).strip()
     return _get_table_information_schema_problems(database.run(sql_cmd), table.name)
 
@@ -84,8 +84,8 @@ def _parse_partition_map(rows):
     The "range_cols" is the ordered list of what columns are used as the
     range identifiers for the partitions.
 
-    The "partitions" is a list of the Partition objects representing each
-    defined partition. There will be at least one partitionmanager.types.MaxValuePartition.
+    The "partitions" is a list of the Partition objects representing each defined
+    partition. There will be at least one partitionmanager.types.MaxValuePartition.
     """
     log = logging.getLogger("parse_partition_map")
 
@@ -128,7 +128,8 @@ def _parse_partition_map(rows):
 
             if len(part_vals) != len(range_cols):
                 log.error(
-                    f"Partition columns {part_vals} don't match the partition range {range_cols}"
+                    f"Partition columns {part_vals} don't match the partition range "
+                    f"{range_cols}"
                 )
                 raise partitionmanager.types.MismatchedIdException(
                     "Partition columns mismatch"
@@ -241,7 +242,8 @@ def _get_position_increase_per_day(p1, p2):
         return list()
     if p1.timestamp() >= p2.timestamp():
         log.warning(
-            f"Skipping rate of change between p1 {p1} and p2 {p2} as they are out-of-order"
+            f"Skipping rate of change between p1 {p1} and p2 {p2} as they are "
+            "out-of-order"
         )
         return list()
 
@@ -597,7 +599,7 @@ def _plan_partition_changes(
                     continue
 
                 log.debug(
-                    f"{partition} has a conflict for its timestamp, increasing by 1 day."
+                    f"{partition} has a conflict for its timestamp, increasing by 1 day"
                 )
                 partition.set_timestamp(partition.timestamp() + timedelta(days=1))
                 conflict_found = True
@@ -626,9 +628,12 @@ def _should_run_changes(table, altered_partitions):
             log.debug(f"{p} is new")
             return True
 
-        if isinstance(p, partitionmanager.types.ChangePlannedPartition) and p.important():
-                log.debug(f"{p} is marked important")
-                return True
+        if (
+            isinstance(p, partitionmanager.types.ChangePlannedPartition)
+            and p.important()
+        ):
+            log.debug(f"{p} is marked important")
+            return True
     return False
 
 
@@ -693,8 +698,8 @@ def generate_sql_reorganize_partition_commands(table, changes):
         partition_update = ", ".join(partition_strings)
 
         alter_cmd = (
-            f"ALTER TABLE `{table.name}` WAIT 6 "
-            f"REORGANIZE PARTITION `{modified_partition.old.name}` INTO ({partition_update});"
+            f"ALTER TABLE `{table.name}` WAIT 6 REORGANIZE "
+            f"PARTITION `{modified_partition.old.name}` INTO ({partition_update});"
         )
 
         log.debug(f"Yielding {alter_cmd}")

@@ -171,7 +171,10 @@ def _generate_sql_copy_commands(
     yield f"DROP TABLE IF EXISTS {new_table.name};"
     yield f"CREATE TABLE {new_table.name} LIKE {existing_table.name};"
     yield f"ALTER TABLE {new_table.name} REMOVE PARTITIONING;"
-    yield f"ALTER TABLE {new_table.name} PARTITION BY {range_cols_string} ({range_id_string}) ("
+    yield (
+        f"ALTER TABLE {new_table.name} PARTITION BY {range_cols_string} "
+        f"({range_id_string}) ("
+    )
     yield f"\tPARTITION {max_val_part.name} VALUES LESS THAN {max_val_string}"
     yield ");"
 
@@ -275,8 +278,9 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
             raise Exception("Unexpected part?")
 
         log.info(
-            f"{table}, {time_delta:0.1f} hours, {ordered_prior_pos} - {ordered_current_pos}, "
-            f"{delta_positions} pos_change, {rate_of_change}/hour"
+            f"{table}, {time_delta:0.1f} hours, {ordered_prior_pos} - "
+            f"{ordered_current_pos}, {delta_positions} pos_change, "
+            f"{rate_of_change}/hour"
         )
 
         part_duration = conf.partition_period
