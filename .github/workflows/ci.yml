@@ -17,7 +17,7 @@ jobs:
     - name: Install Linting Tools
       run: |
         python -m pip install --upgrade pip
-        pip install --user pylint==3.1.0 pytest ruff
+        pip install --user pylint==3.1.0 pytest ruff validate-pyproject[all]
 
     - name: Install Partition Manager
       run: |
@@ -34,6 +34,10 @@ jobs:
     - name: Lint Python code with Ruff
       run: |
         python -m ruff --output-format=github
+
+    - name: Checking pyproject
+      run: |
+        validate-pyproject pyproject.toml
 
   test:
     runs-on: ubuntu-latest

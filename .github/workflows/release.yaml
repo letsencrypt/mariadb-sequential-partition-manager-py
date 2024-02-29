@@ -18,11 +18,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.17
-
       - name: Setup python
         uses: actions/setup-python@v5
         with:
@@ -32,9 +27,8 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get upgrade -y
-          sudo apt-get install -y build-essential python-setuptools python3-pip
-          pip3 install setuptools
+          sudo apt-get install -y build-essential python3-pip
+          pip3 install build
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,26 +39,16 @@ jobs:
         id: get_version
         uses: battila7/get-version-action@v2
 
-      - name: Install nFPM
-        run: |
-          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.11.3
-
       - name: Build partition-manager
         run: |
-          mkdir install
-          python3 setup.py install --root "install/" --prefix "/usr/local" --install-lib "/usr/lib/python3/dist-packages"
-
-      - name: Build deb
-        run: |
-          SEMVER=${{ steps.get_version.outputs.version }}
-          mkdir nfpm-pkg
-          nfpm package -p deb --target "nfpm-pkg/"
+          python3 -m build
 
       - name: "Publish release"
-        uses: "marvinpinto/action-automatic-releases@d68defdd11f9dcc7f52f35c1b7c236ee7513bcc1"
+        uses: "marvinpinto/action-automatic-releases@919008cf3f741b179569b7a6fb4d8860689ab7f0"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "${{ steps.get_version.outputs.version }}"
           title: "partition-manager ${{ steps.get_version.outputs.version }}"
           files: |
-            nfpm-pkg/*.deb
+            dist/*.whl
+            dist/*.tar.gz
