@@ -68,7 +68,7 @@ def get_statistics(partitions, current_timestamp, table):
         if not partitionmanager.types.is_partition_type(p):
             log.warning(
                 f"{table} get_statistics called with a partition list "
-                + f"that included a non-Partition entry: {p}"
+                f"that included a non-Partition entry: {p}"
             )
             raise partitionmanager.types.UnexpectedPartitionException(p)
 
@@ -78,7 +78,7 @@ def get_statistics(partitions, current_timestamp, table):
     if not isinstance(tail_part, partitionmanager.types.MaxValuePartition):
         log.warning(
             f"{table} get_statistics called with a partition list tail "
-            + f"that wasn't a MaxValuePartition: {tail_part}"
+            f"that wasn't a MaxValuePartition: {tail_part}"
         )
         raise partitionmanager.types.UnexpectedPartitionException(tail_part)
 

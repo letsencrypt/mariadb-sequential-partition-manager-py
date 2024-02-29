@@ -18,7 +18,9 @@ def timedelta_from_dict(r):
     for k, v in r.items():
         if k == "days":
             return timedelta(days=v)
-        raise argparse.ArgumentTypeError(f"Unknown retention period definition: {k}={v}")
+        raise argparse.ArgumentTypeError(
+            f"Unknown retention period definition: {k}={v}"
+        )
     return None
 
 
@@ -95,22 +97,32 @@ class SqlQuery(str):
             raise argparse.ArgumentTypeError(f"{args} is not a single argument")
         query_string = args[0].strip()
         if not query_string.endswith(";"):
-            raise argparse.ArgumentTypeError(f"[{query_string}] does not end with a ';'")
+            raise argparse.ArgumentTypeError(
+                f"[{query_string}] does not end with a ';'"
+            )
         if query_string.count(";") > 1:
-            raise argparse.ArgumentTypeError(f"[{query_string}] has more than one statement")
+            raise argparse.ArgumentTypeError(
+                f"[{query_string}] has more than one statement"
+            )
 
         if "?" not in query_string:
-            raise argparse.ArgumentTypeError(f"[{query_string}] has no substitution variable '?'")
+            raise argparse.ArgumentTypeError(
+                f"[{query_string}] has no substitution variable '?'"
+            )
         if query_string.count("?") > 1:
             raise argparse.ArgumentTypeError(
                 f"[{query_string}] has more than one substitution variable '?'"
             )
 
         if not query_string.upper().startswith("SELECT "):
-            raise argparse.ArgumentTypeError(f"[{query_string}] is not a SELECT statement")
+            raise argparse.ArgumentTypeError(
+                f"[{query_string}] is not a SELECT statement"
+            )
         for term in SqlQuery.forbidden_terms:
             if term in query_string.upper():
-                raise argparse.ArgumentTypeError(f"[{query_string}] has a forbidden term [{term}]")
+                raise argparse.ArgumentTypeError(
+                    f"[{query_string}] has a forbidden term [{term}]"
+                )
 
         return super().__new__(cls, query_string)
 
@@ -329,7 +341,8 @@ class PositionPartition(_Partition):
 
         if not other_position_list or len(self._position) != len(other_position_list):
             raise UnexpectedPartitionException(
-                f"Expected {len(self._position)} columns but partition has {other_position_list}."
+                f"Expected {len(self._position)} columns but partition has "
+                f"{other_position_list}."
             )
 
         # If ALL of v_mine >= v_other, then self is greater than other
@@ -497,7 +510,9 @@ class _PlannedPartition(abc.ABC):
         if not self._timestamp:
             raise ValueError
         if self._position:
-            return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(self._position)
+            return PositionPartition(f"p_{self._timestamp:%Y%m%d}").set_position(
+                self._position
+            )
         return MaxValuePartition(f"p_{self._timestamp:%Y%m%d}", count=self._num_columns)
 
     def __repr__(self):

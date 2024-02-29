@@ -409,8 +409,8 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
         )
         metrics.describe(
             "age_of_retained_partitions",
-            help_text="The age in seconds of the first partition for the table, indicating the "
-            "retention of data in the table.",
+            help_text="The age in seconds of the first partition for the table, "
+            "indicating the retention of data in the table.",
             type_name="gauge",
         )
         metrics.describe(
