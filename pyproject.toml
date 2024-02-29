@@ -106,7 +106,7 @@ ignore = ["S101"]  # Allow assert statements
 max-complexity = 16  # default is 10
 
 [tool.ruff.lint.per-file-ignores]
-"partitionmanager/cli.py" = ["B008"]  # TODO: Fix me
+"partitionmanager/cli.py" = ["B008", "PERF203"]  # TODO: Fix B008, upgrade to Py3.11 for PERF203
 "partitionmanager/cli_test.py" = ["S608", "SIM115", "SIM117"]  # TODO: Fix SIMs
 "partitionmanager/sql.py" = ["B904", "S603"]  # TODO: Fix S603
 "partitionmanager/table_append_partition.py" = ["S608", "SIM102"]  # TODO: Fix S608
