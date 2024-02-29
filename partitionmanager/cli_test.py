@@ -127,7 +127,7 @@ class TestPartitionCmd(unittest.TestCase):
         output = partition_cmd(args)
 
         self.assertEqual(len(output), 2)
-        self.assertSetEqual(set(output), set(["testtable", "another_table"]))
+        self.assertSetEqual(set(output), {"testtable", "another_table"})
 
     def test_partition_unpartitioned_table(self):
         o = run_partition_cmd_yaml(
@@ -186,7 +186,7 @@ partitionmanager:
     mariadb: {str(fake_exec)}
 """
         )
-        self.assertSetEqual(set(o), set(["test", "test_with_retention"]))
+        self.assertSetEqual(set(o), {"test", "test_with_retention"})
 
     def test_partition_period_daily(self):
         o = run_partition_cmd_yaml(
@@ -201,7 +201,7 @@ partitionmanager:
 """
         )
         self.assertSequenceEqual(
-            set(o), set(["partitioned_last_week", "partitioned_yesterday"])
+            set(o), {"partitioned_last_week", "partitioned_yesterday"}
         )
 
     def test_partition_period_seven_days(self):
@@ -221,16 +221,14 @@ partitionmanager:
 
         self.assertEqual(
             set(logctx.output),
-            set(
-                [
-                    "INFO:partition:Evaluating Table partitioned_last_week "
-                    "(duration=7 days, 0:00:00)",
-                    "DEBUG:partition:Table partitioned_last_week has no pending SQL updates.",  # noqa: E501
-                    "INFO:partition:Evaluating Table partitioned_yesterday "
-                    "(duration=7 days, 0:00:00)",
-                    "DEBUG:partition:Table partitioned_yesterday has no pending SQL updates.",  # noqa: E501
-                ]
-            ),
+            {
+                "INFO:partition:Evaluating Table partitioned_last_week "
+                "(duration=7 days, 0:00:00)",
+                "DEBUG:partition:Table partitioned_last_week has no pending SQL updates.",  # noqa: E501
+                "INFO:partition:Evaluating Table partitioned_yesterday "
+                "(duration=7 days, 0:00:00)",
+                "DEBUG:partition:Table partitioned_yesterday has no pending SQL updates.",  # noqa: E501
+            },
         )
         self.assertSequenceEqual(list(o), [])
 
@@ -249,7 +247,7 @@ partitionmanager:
 """
         )
         self.assertSequenceEqual(
-            set(o), set(["partitioned_yesterday", "partitioned_last_week"])
+            set(o), {"partitioned_yesterday", "partitioned_last_week"}
         )
 
     def test_partition_with_db_url(self):
@@ -283,7 +281,7 @@ class TestStatsCmd(unittest.TestCase):
 
     def assert_stats_prometheus_outfile(self, prom_file):
         lines = prom_file.split("\n")
-        metrics = dict()
+        metrics = {}
         for line in lines:
             if not line.startswith("#") and len(line) > 0:
                 key, value = line.split(" ")
@@ -350,9 +348,7 @@ partitionmanager:
 """,
             datetime.now(tz=timezone.utc),
         )
-        self.assertEqual(
-            {str(x.name) for x in conf.tables}, set(["table_one", "table_two"])
-        )
+        self.assertEqual({str(x.name) for x in conf.tables}, {"table_one", "table_two"})
 
     def test_cli_mariadb_override_yaml(self):
         args = PARSER.parse_args(["--mariadb", "/usr/bin/true", "stats"])
@@ -651,12 +647,10 @@ partitionmanager:
             )
         self.assertEqual(
             set(logctx.output),
-            set(
-                [
-                    "WARNING:do_find_drops_for_tables:unused:"
-                    "Cannot process Table unused: no retention specified"
-                ]
-            ),
+            {
+                "WARNING:do_find_drops_for_tables:unused:"
+                "Cannot process Table unused: no retention specified"
+            },
         )
 
     def test_drop_no_sql(self):
@@ -675,10 +669,8 @@ partitionmanager:
             )
         self.assertEqual(
             set(logctx.output),
-            set(
-                [
-                    "WARNING:do_find_drops_for_tables:unused:"
-                    "Cannot process Table unused: no date query specified"
-                ]
-            ),
+            {
+                "WARNING:do_find_drops_for_tables:unused:"
+                "Cannot process Table unused: no date query specified"
+            },
         )

@@ -11,7 +11,7 @@ ts = datetime(1949, 1, 12, tzinfo=timezone.utc)
 
 class TestStatistics(unittest.TestCase):
     def test_statistics_no_partitions(self):
-        s = get_statistics(list(), ts, Table("no_parts"))
+        s = get_statistics([], ts, Table("no_parts"))
         self.assertEqual(s, {"partitions": 0})
 
     def test_statistics_single_unnamed_partition(self):
@@ -44,7 +44,7 @@ class TestStatistics(unittest.TestCase):
         )
 
     def test_statistics_weekly_partitions_year(self):
-        parts = list()
+        parts = []
         base = datetime(2020, 5, 20, tzinfo=timezone.utc)
         for w in range(52):
             partName = f"p_{base + timedelta(weeks=w):%Y%m%d}"

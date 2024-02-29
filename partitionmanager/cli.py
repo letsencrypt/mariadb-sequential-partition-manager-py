@@ -182,8 +182,8 @@ def _extract_single_column(row):
 def list_tables(conf):
     """List all tables for the current database."""
     rows = conf.dbcmd.run("SHOW TABLES;")
-    table_names = map(lambda row: _extract_single_column(row), rows)
-    table_objects = map(lambda name: partitionmanager.types.Table(name), table_names)
+    table_names = (_extract_single_column(row) for row in rows)
+    table_objects = (partitionmanager.types.Table(name) for name in table_names)
     return list(table_objects)
 
 
@@ -287,7 +287,7 @@ def do_partition(conf):
         log.info("Database is read-only, only emitting statistics")
         if conf.prometheus_stats_path:
             do_stats(conf)
-        return dict()
+        return {}
 
     if conf.noop:
         log.info("Running in noop mode, no changes will be made")
@@ -304,7 +304,7 @@ def do_partition(conf):
         type_name="counter",
     )
 
-    all_results = dict()
+    all_results = {}
     for table in conf.tables:
         time_start = None
         try:
@@ -384,7 +384,7 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
 
     log = logging.getLogger("do_stats")
 
-    all_results = dict()
+    all_results = {}
     for table in list_tables(conf):
         table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if table_problems:
@@ -476,7 +476,7 @@ DROP_PARSER.set_defaults(func=drop_cmd)
 
 
 def do_find_drops_for_tables(conf):
-    all_results = dict()
+    all_results = {}
     for table in conf.tables:
         log = logging.getLogger(f"do_find_drops_for_tables:{table.name}")
 

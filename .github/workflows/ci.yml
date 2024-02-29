@@ -25,7 +25,7 @@ jobs:
 
     - name: Analysing the code with pylint
       run: |
-        python -m pylint -E partitionmanager
+        python -m pylint --errors-only partitionmanager
 
     - name: Lint Python code with Ruff
       run: |
