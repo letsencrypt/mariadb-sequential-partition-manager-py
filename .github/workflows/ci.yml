@@ -27,13 +27,13 @@ jobs:
       run: |
         python -m pylint -E partitionmanager
 
-    - name: Checking format with Ruff
-      run: |
-        python -m ruff format .
-
     - name: Lint Python code with Ruff
       run: |
         python -m ruff --output-format=github
+
+    - name: Checking format with Ruff
+      run: |
+        python -m ruff format --check .
 
     - name: Checking pyproject
       run: |
