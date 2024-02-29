@@ -9,6 +9,7 @@ from .types import (
     SqlInput,
     SqlQuery,
     Table,
+    TableEmptyException,
 )
 
 
@@ -45,6 +46,16 @@ class TestDatabaseHelpers(unittest.TestCase):
 
         pos = get_position_of_table(db, table, data)
         self.assertEqual(pos.as_list(), [90210])
+
+    def test_empty_table(self):
+        db = MockDatabase()
+        db.add_response("SELECT id FROM `burgers` ORDER BY", [])
+
+        table = Table("burgers")
+        data = {"range_cols": ["id"]}
+
+        with self.assertRaises(TableEmptyException):
+            get_position_of_table(db, table, data)
 
     def test_exact_timestamp_no_query(self):
         db = MockDatabase()
