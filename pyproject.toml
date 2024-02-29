@@ -1,3 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mariadb-sequential-partition-manager"
+maintainers = [
+  {name = "J.C. Jones", email = "jc@letsencrypt.org"},
+]
+version = "0.4.0"
+description = "Manage DB partitions based on sequential IDs"
+license = {file = "LICENSE.txt"}
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+  "Programming Language :: Python :: 3",
+]
+keywords = ["database", "mariadb"]
+dependencies = [
+  "pyyaml"
+]
+requires-python = ">=3.8"
+readme = "README.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["partitionmanager"]
+
+[project.optional-dependencies]
+pymysql = ["PyMySQL >= 1.0.2"]
+
+[project.urls]
+Repository = "http://github.com/letsencrypt/mariadb-sequential-partition-manager"
+
+[project.scripts]
+partition-manager = "partitionmanager.cli:main"
+
 [tool.ruff]
 line-length = 99  # default is 88
 target-version = "py38"
