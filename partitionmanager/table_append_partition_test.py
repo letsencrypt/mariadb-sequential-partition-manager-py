@@ -462,7 +462,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_predict_forward_time(self):
-        t = datetime(2000, 1, 1)
+        t = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
         with self.assertRaises(ValueError):
             _predict_forward_time(mkPos(0, 0), mkPos(100), [100], t)

@@ -48,6 +48,7 @@ select = [
   "BLE",    # flake8-blind-except
   "C90",    # McCabe cyclomatic complexity
   "DJ",     # flake8-django
+  "DTZ",    # flake8-datetimez
   "E",      # pycodestyle
   "EXE",    # flake8-executable
   "F",      # Pyflakes
@@ -85,7 +86,6 @@ select = [
   # "COM",  # flake8-commas
   # "CPY",  # flake8-copyright
   # "D",    # pydocstyle
-  # "DTZ",  # flake8-datetimez
   # "EM",   # flake8-errmsg
   # "ERA",  # eradicate
   # "FURB", # refurb

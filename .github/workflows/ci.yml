@@ -33,7 +33,7 @@ jobs:
 
     - name: Lint Python code with Ruff
       run: |
-        python -m ruff --output-format=github
+        python -m ruff check --output-format=github
 
     - name: Checking pyproject
       run: |

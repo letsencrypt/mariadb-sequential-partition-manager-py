@@ -346,7 +346,7 @@ def do_partition(conf):
                 continue
 
             log.info(f"{table} running SQL: {composite_sql_command}")
-            time_start = datetime.utcnow()
+            time_start = datetime.now(tz=timezone.utc)
             output = conf.dbcmd.run(composite_sql_command)
 
             all_results[table.name] = {"sql": composite_sql_command, "output": output}
@@ -364,7 +364,7 @@ def do_partition(conf):
             log.warning("Failed to handle %s: %s", table, e)
             metrics.add("alter_errors", table.name, 1)
 
-        time_end = datetime.utcnow()
+        time_end = datetime.now(tz=timezone.utc)
         if time_start:
             metrics.add(
                 "alter_time_seconds",
