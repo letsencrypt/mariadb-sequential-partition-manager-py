@@ -48,9 +48,9 @@ def calculate_exact_timestamp_via_query(database, table, position_partition):
         position_partition.position,
     )
 
-    start = datetime.now()
+    start = datetime.now(tz=timezone.utc)
     exact_time_result = database.run(sql_select_cmd)
-    end = datetime.now()
+    end = datetime.now(tz=timezone.utc)
 
     if not len(exact_time_result) == 1:
         raise partitionmanager.types.NoExactTimeException("No exact timestamp result")

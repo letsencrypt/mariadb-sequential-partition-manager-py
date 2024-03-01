@@ -1,7 +1,7 @@
 import io
 import unittest
 import yaml
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .migrate import (
     _generate_sql_copy_commands,
@@ -26,7 +26,7 @@ from .types import (
 
 class MockDatabase(DatabaseCommand):
     def __init__(self):
-        self._response = list()
+        self._response = []
         self._select_response = [[{"id": 150}]]
         self.num_queries = 0
 
@@ -60,7 +60,7 @@ class MockDatabase(DatabaseCommand):
 class TestBootstrapTool(unittest.TestCase):
     def test_writing_state_info(self):
         conf = Config()
-        conf.curtime = datetime(2021, 3, 1)
+        conf.curtime = datetime(2021, 3, 1, tzinfo=timezone.utc)
         conf.dbcmd = MockDatabase()
         conf.tables = [Table("test")]
 
@@ -97,7 +97,7 @@ class TestBootstrapTool(unittest.TestCase):
     def test_read_state_info(self):
         self.maxDiff = None
         conf_past = Config()
-        conf_past.curtime = datetime(2021, 3, 1)
+        conf_past.curtime = datetime(2021, 3, 1, tzinfo=timezone.utc)
         conf_past.dbcmd = MockDatabase()
         conf_past.tables = [Table("test").set_partition_period(timedelta(days=30))]
 
@@ -109,7 +109,7 @@ class TestBootstrapTool(unittest.TestCase):
             calculate_sql_alters_from_state_info(conf_past, state_fs)
 
         conf_now = Config()
-        conf_now.curtime = datetime(2021, 3, 3)
+        conf_now.curtime = datetime(2021, 3, 3, tzinfo=timezone.utc)
         conf_now.dbcmd = MockDatabase()
         conf_now.dbcmd._response = [
             [
@@ -131,16 +131,16 @@ class TestBootstrapTool(unittest.TestCase):
                     "ALTER TABLE test_new_20210303 PARTITION BY RANGE (id) (",
                     "\tPARTITION p_start VALUES LESS THAN MAXVALUE",
                     ");",
-                    "ALTER TABLE `test_new_20210303` WAIT 6 REORGANIZE PARTITION `p_start` "
-                    + "INTO (PARTITION `p_20210303` VALUES LESS THAN (156), "
-                    + "PARTITION `p_20210402` VALUES LESS THAN (2406), PARTITION "
-                    + "`p_20210502` VALUES LESS THAN MAXVALUE);",
-                    "CREATE OR REPLACE TRIGGER copy_inserts_from_test_to_test_new_20210303",
+                    "ALTER TABLE `test_new_20210303` WAIT 6 REORGANIZE PARTITION `p_start` "  # noqa: E501
+                    "INTO (PARTITION `p_20210303` VALUES LESS THAN (156), "
+                    "PARTITION `p_20210402` VALUES LESS THAN (2406), PARTITION "
+                    "`p_20210502` VALUES LESS THAN MAXVALUE);",
+                    "CREATE OR REPLACE TRIGGER copy_inserts_from_test_to_test_new_20210303",  # noqa: E501
                     "\tAFTER INSERT ON test FOR EACH ROW",
                     "\t\tINSERT INTO test_new_20210303 SET",
                     "\t\t\t`id` = NEW.`id`,",
                     "\t\t\t`serial` = NEW.`serial`;",
-                    "CREATE OR REPLACE TRIGGER copy_updates_from_test_to_test_new_20210303",
+                    "CREATE OR REPLACE TRIGGER copy_updates_from_test_to_test_new_20210303",  # noqa: E501
                     "\tAFTER UPDATE ON test FOR EACH ROW",
                     "\t\tUPDATE test_new_20210303 SET",
                     "\t\t\t`serial` = NEW.`serial`",
@@ -153,7 +153,7 @@ class TestBootstrapTool(unittest.TestCase):
         self.maxDiff = None
         conf = Config()
         conf.assume_partitioned_on = ["orderID", "authzID"]
-        conf.curtime = datetime(2021, 3, 3)
+        conf.curtime = datetime(2021, 3, 3, tzinfo=timezone.utc)
         conf.dbcmd = MockDatabase()
         conf.dbcmd._select_response = [[{"authzID": 22}], [{"orderID": 11}]]
         conf.dbcmd._response = [
@@ -184,16 +184,16 @@ class TestBootstrapTool(unittest.TestCase):
                     "CREATE TABLE map_table_new_20210303 LIKE map_table;",
                     "ALTER TABLE map_table_new_20210303 REMOVE PARTITIONING;",
                     "ALTER TABLE map_table_new_20210303 PARTITION BY RANGE "
-                    + "COLUMNS (orderID, authzID) (",
+                    "COLUMNS (orderID, authzID) (",
                     "\tPARTITION p_assumed VALUES LESS THAN (MAXVALUE, MAXVALUE)",
                     ");",
                     "ALTER TABLE `map_table_new_20210303` WAIT 6 REORGANIZE PARTITION "
-                    + "`p_assumed` INTO (PARTITION `p_20210303` VALUES LESS THAN "
-                    + "(11, 22), PARTITION `p_20210402` VALUES LESS THAN "
-                    + "(41, 82), PARTITION `p_20210502` VALUES LESS THAN "
-                    + "(MAXVALUE, MAXVALUE));",
+                    "`p_assumed` INTO (PARTITION `p_20210303` VALUES LESS THAN "
+                    "(11, 22), PARTITION `p_20210402` VALUES LESS THAN "
+                    "(41, 82), PARTITION `p_20210502` VALUES LESS THAN "
+                    "(MAXVALUE, MAXVALUE));",
                     "CREATE OR REPLACE TRIGGER copy_inserts_from_map_table_"
-                    + "to_map_table_new_20210303",
+                    "to_map_table_new_20210303",
                     "\tAFTER INSERT ON map_table FOR EACH ROW",
                     "\t\tINSERT INTO map_table_new_20210303 SET",
                     "\t\t\t`authzID` = NEW.`authzID`,",
@@ -223,7 +223,7 @@ class TestBootstrapTool(unittest.TestCase):
     def test_generate_sql_copy_commands(self):
         conf = Config()
         conf.assume_partitioned_on = ["id"]
-        conf.curtime = datetime(2021, 3, 3)
+        conf.curtime = datetime(2021, 3, 3, tzinfo=timezone.utc)
         conf.dbcmd = MockDatabase()
         map_data = _override_config_to_map_data(conf)
         cmds = list(
@@ -263,7 +263,7 @@ class TestBootstrapTool(unittest.TestCase):
 
     def test_plan_partitions_for_time_offsets(self):
         parts = _plan_partitions_for_time_offsets(
-            datetime(2021, 3, 3),
+            datetime(2021, 3, 3, tzinfo=timezone.utc),
             [timedelta(days=60), timedelta(days=360)],
             [11943234],
             [16753227640],

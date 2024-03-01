@@ -279,7 +279,7 @@ def do_partition(conf):
         log.info("Database is read-only, only emitting statistics")
         if conf.prometheus_stats_path:
             do_stats(conf)
-        return dict()
+        return {}
 
     if conf.noop:
         log.info("Running in noop mode, no changes will be made")
@@ -296,7 +296,7 @@ def do_partition(conf):
         type_name="counter",
     )
 
-    all_results = dict()
+    all_results = {}
     for table in conf.tables:
         time_start = None
         try:
@@ -338,7 +338,7 @@ def do_partition(conf):
                 continue
 
             log.info(f"{table} running SQL: {composite_sql_command}")
-            time_start = datetime.utcnow()
+            time_start = datetime.now(tz=timezone.utc)
             output = conf.dbcmd.run(composite_sql_command)
 
             all_results[table.name] = {"sql": composite_sql_command, "output": output}
@@ -352,11 +352,13 @@ def do_partition(conf):
         except partitionmanager.types.DatabaseCommandException as e:
             log.warning("Failed to automatically handle %s: %s", table, e)
             metrics.add("alter_errors", table.name, 1)
+        except partitionmanager.types.TableEmptyException:
+            log.warning("Table %s appears to be empty. Skipping.", table)
         except (ValueError, Exception) as e:
             log.warning("Failed to handle %s: %s", table, e)
             metrics.add("alter_errors", table.name, 1)
 
-        time_end = datetime.utcnow()
+        time_end = datetime.now(tz=timezone.utc)
         if time_start:
             metrics.add(
                 "alter_time_seconds",
@@ -377,7 +379,7 @@ def do_stats(conf, metrics=None):
     if not metrics:
         metrics = partitionmanager.stats.PrometheusMetrics()
 
-    all_results = dict()
+    all_results = {}
     for table in conf.tables:
         table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if table_problems:
@@ -402,8 +404,8 @@ def do_stats(conf, metrics=None):
         )
         metrics.describe(
             "age_of_retained_partitions",
-            help_text="The age in seconds of the first partition for the table, indicating the "
-            "retention of data in the table.",
+            help_text="The age in seconds of the first partition for the table, "
+            "indicating the retention of data in the table.",
             type_name="gauge",
         )
         metrics.describe(
@@ -469,7 +471,7 @@ DROP_PARSER.set_defaults(func=drop_cmd)
 
 
 def do_find_drops_for_tables(conf):
-    all_results = dict()
+    all_results = {}
     for table in conf.tables:
         log = logging.getLogger(f"do_find_drops_for_tables:{table.name}")
 

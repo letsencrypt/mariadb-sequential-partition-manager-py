@@ -25,15 +25,15 @@ jobs:
 
     - name: Analysing the code with pylint
       run: |
-        python -m pylint -E partitionmanager
-
-    - name: Checking format with Ruff
-      run: |
-        python -m ruff format .
+        python -m pylint --errors-only partitionmanager
 
     - name: Lint Python code with Ruff
       run: |
-        python -m ruff --output-format=github
+        python -m ruff check --output-format=github
+
+    - name: Checking format with Ruff
+      run: |
+        python -m ruff format --check .
 
     - name: Checking pyproject
       run: |

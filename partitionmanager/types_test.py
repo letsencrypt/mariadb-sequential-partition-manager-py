@@ -165,7 +165,7 @@ class TestTypes(unittest.TestCase):
         with self.assertRaises(argparse.ArgumentTypeError):
             timedelta_from_dict({"another thing": 1, "days": 30})
 
-        r = timedelta_from_dict(dict())
+        r = timedelta_from_dict({})
         self.assertEqual(None, r)
 
         with self.assertRaises(TypeError):
@@ -205,12 +205,12 @@ class TestTypes(unittest.TestCase):
             PositionPartition("p_20210101").set_position([1, 2, 3, 4])
         )
         self.assertFalse(c.has_modifications)
-        c.set_timestamp(datetime(2021, 1, 2))
+        c.set_timestamp(datetime(2021, 1, 2, tzinfo=timezone.utc))
         y = c.set_position([10, 10, 10, 10])
         self.assertEqual(c, y)
         self.assertTrue(c.has_modifications)
 
-        self.assertEqual(c.timestamp(), datetime(2021, 1, 2))
+        self.assertEqual(c.timestamp(), datetime(2021, 1, 2, tzinfo=timezone.utc))
         self.assertEqual(c.position.as_list(), [10, 10, 10, 10])
 
         self.assertEqual(
@@ -276,7 +276,7 @@ class TestTypes(unittest.TestCase):
             .as_partition(),
             NewPlannedPartition()
             .set_columns(4)
-            .set_timestamp(datetime(2021, 1, 1))
+            .set_timestamp(datetime(2021, 1, 1, tzinfo=timezone.utc))
             .as_partition(),
         )
 
@@ -287,7 +287,9 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(
             NewPlannedPartition()
             .set_columns(5)
-            .set_timestamp(datetime(2021, 12, 31, hour=23, minute=15))
+            .set_timestamp(
+                datetime(2021, 12, 31, hour=23, minute=15, tzinfo=timezone.utc)
+            )
             .as_partition(),
             MaxValuePartition("p_20211231", count=5),
         )
@@ -297,7 +299,7 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(
             NewPlannedPartition()
             .set_position([3])
-            .set_timestamp(datetime(2021, 12, 31))
+            .set_timestamp(datetime(2021, 12, 31, tzinfo=timezone.utc))
             .as_partition(),
             PositionPartition("p_20211231").set_position(mkPos(3)),
         )
@@ -305,7 +307,7 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(
             NewPlannedPartition()
             .set_position([1, 1, 1])
-            .set_timestamp(datetime(1994, 1, 1))
+            .set_timestamp(datetime(1994, 1, 1, tzinfo=timezone.utc))
             .as_partition(),
             PositionPartition("p_19940101").set_position([1, 1, 1]),
         )
@@ -313,18 +315,22 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(
             NewPlannedPartition()
             .set_position([3])
-            .set_timestamp(datetime(2021, 12, 31)),
+            .set_timestamp(datetime(2021, 12, 31, tzinfo=timezone.utc)),
             NewPlannedPartition()
             .set_position([3])
-            .set_timestamp(datetime(2021, 12, 31)),
+            .set_timestamp(datetime(2021, 12, 31, tzinfo=timezone.utc)),
         )
 
         self.assertEqual(
             NewPlannedPartition()
             .set_position([99, 999])
-            .set_timestamp(datetime(2021, 12, 31, hour=19, minute=2))
+            .set_timestamp(
+                datetime(2021, 12, 31, hour=19, minute=2, tzinfo=timezone.utc)
+            )
             .set_as_max_value(),
-            NewPlannedPartition().set_columns(2).set_timestamp(datetime(2021, 12, 31)),
+            NewPlannedPartition()
+            .set_columns(2)
+            .set_timestamp(datetime(2021, 12, 31, tzinfo=timezone.utc)),
         )
 
 
@@ -380,7 +386,7 @@ class TestPartition(unittest.TestCase):
         self.assertLess(cur_pos, p_20230724)
 
     def test_instant_partition(self):
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
 
         ip = InstantPartition("p_20380101", now, [1, 2])
         self.assertEqual(ip.position.as_list(), [1, 2])
@@ -390,7 +396,9 @@ class TestPartition(unittest.TestCase):
     def test_is_partition_type(self):
         self.assertTrue(is_partition_type(mkPPart("b", 1, 2)))
         self.assertTrue(
-            is_partition_type(InstantPartition("p_19490520", datetime.utcnow(), [1, 2]))
+            is_partition_type(
+                InstantPartition("p_19490520", datetime.now(tz=timezone.utc), [1, 2])
+            )
         )
         self.assertFalse(is_partition_type(None))
         self.assertFalse(is_partition_type(1))

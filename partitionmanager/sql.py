@@ -53,7 +53,7 @@ class XmlResult:
         self.rows = None
         self.current_row = None
         self.current_field = None
-        self.current_elements = list()
+        self.current_elements = []
         self.statement = None
 
     def parse(self, data):
@@ -61,7 +61,7 @@ class XmlResult:
         if self.rows is not None:
             raise ValueError("XmlResult objects can only be used once")
 
-        self.rows = list()
+        self.rows = []
         self.xmlparser.Parse(data)
 
         if self.current_elements:
@@ -186,4 +186,4 @@ class IntegratedDatabaseCommand(partitionmanager.types.DatabaseCommand):
         logging.debug(f"IntegratedDatabaseCommand executing {sql_cmd}")
         with self.connection.cursor() as cursor:
             cursor.execute(sql_cmd)
-            return [row for row in cursor]
+            return list(cursor)
