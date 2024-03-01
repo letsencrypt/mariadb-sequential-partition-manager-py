@@ -279,13 +279,17 @@ class TestStatsCmd(unittest.TestCase):
             results["partitioned_yesterday"]["max_partition_delta"].days, 2
         )
 
-    def assert_stats_prometheus_outfile(self, prom_file):
+    def parse_prometheus_outfile(self, prom_file):
         lines = prom_file.split("\n")
         metrics = {}
         for line in lines:
             if not line.startswith("#") and len(line) > 0:
                 key, value = line.split(" ")
                 metrics[key] = value
+        return metrics
+
+    def assert_stats_prometheus_outfile(self, prom_file):
+        metrics = self.parse_prometheus_outfile(prom_file)
 
         for table in ["partitioned_last_week", "partitioned_yesterday", "other"]:
             self.assertIn(f'partition_total{{table="{table}"}}', metrics)
@@ -303,7 +307,7 @@ class TestStatsCmd(unittest.TestCase):
     def test_stats_cli_flag(self):
         args = PARSER.parse_args(["--mariadb", str(fake_exec), "stats"])
         results = stats_cmd(args)
-        self.assert_stats_results(results)
+        assert results == {}
 
     def test_stats_yaml(self):
         with tempfile.NamedTemporaryFile(
@@ -314,7 +318,9 @@ class TestStatsCmd(unittest.TestCase):
         mariadb: {str(fake_exec)}
         prometheus_stats: {stats_outfile.name}
         tables:
-            unused:
+            other:
+            partitioned_last_week:
+            partitioned_yesterday:
     """
             insert_into_file(tmpfile, yaml)
             args = PARSER.parse_args(["--config", tmpfile.name, "stats"])
@@ -323,6 +329,36 @@ class TestStatsCmd(unittest.TestCase):
 
             self.assert_stats_results(results)
             self.assert_stats_prometheus_outfile(stats_outfile.read())
+
+    def test_stats_yaml_ignore_unconfigured_tables(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w+", encoding="UTF-8"
+        ) as stats_outfile, tempfile.NamedTemporaryFile() as tmpfile:
+            yaml = f"""
+    partitionmanager:
+        mariadb: {str(fake_exec)}
+        prometheus_stats: {stats_outfile.name}
+        tables:
+            other:
+    """
+            insert_into_file(tmpfile, yaml)
+            args = PARSER.parse_args(["--config", tmpfile.name, "stats"])
+
+            results = stats_cmd(args)
+
+            assert list(results.keys()) == ["other"]
+
+            out_data = stats_outfile.read()
+
+            metrics = self.parse_prometheus_outfile(out_data)
+            assert list(metrics.keys()) == [
+                'partition_total{table="other"}',
+                'partition_time_remaining_until_partition_overrun{table="other"}',
+                'partition_age_of_retained_partitions{table="other"}',
+                'partition_mean_delta_seconds{table="other"}',
+                'partition_max_delta_seconds{table="other"}',
+                "partition_last_run_timestamp{}",
+            ]
 
 
 class TestConfig(unittest.TestCase):

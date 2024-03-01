@@ -1,4 +1,0 @@
-mariadb-sequential-partition-manager:
-  maintainer_name: "Let's Encrypt"
-  maintainer_email: "opensource@letsencrypt.org"
-  extended_desc: "Manage DB partitions based on sequential IDs"
