@@ -20,7 +20,7 @@ def _timestamp_rsp(year, mo, day):
 
 class MockDatabase(DatabaseCommand):
     def __init__(self):
-        self._responses = list()
+        self._responses = []
         self.num_queries = 0
 
     def add_response(self, expected, response):
@@ -230,6 +230,6 @@ def test_get_droppable_partitions_no_exact_times(caplog):
         database, partitions, current_position, current_timestamp, table
     )
     assert (
-        "Couldn't determine exact times for Table burgers.1: (100), it is probably droppable too."
-        in caplog.messages
+        "Couldn't determine exact times for Table burgers.1: (100), it is probably "
+        "droppable too." in caplog.messages
     )

@@ -90,11 +90,11 @@ class TestParseTableInformationSchema(unittest.TestCase):
 
     def test_normal(self):
         info = [{"CREATE_OPTIONS": "partitioned"}]
-        self.assertEqual(_get_table_information_schema_problems(info, "table"), list())
+        self.assertEqual(_get_table_information_schema_problems(info, "table"), [])
 
     def test_normal_multiple_create_options(self):
         info = [{"CREATE_OPTIONS": "magical, partitioned"}]
-        self.assertEqual(_get_table_information_schema_problems(info, "table"), list())
+        self.assertEqual(_get_table_information_schema_problems(info, "table"), [])
 
 
 class TestParsePartitionMap(unittest.TestCase):
@@ -403,7 +403,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
 
     def test_get_weighted_position_increase_per_day_for_partitions(self):
         with self.assertRaises(ValueError):
-            _get_weighted_position_increase_per_day_for_partitions(list())
+            _get_weighted_position_increase_per_day_for_partitions([])
 
         self.assertEqual(
             _get_weighted_position_increase_per_day_for_partitions(
@@ -462,7 +462,7 @@ class TestPartitionAlgorithm(unittest.TestCase):
         )
 
     def test_predict_forward_time(self):
-        t = datetime(2000, 1, 1)
+        t = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
         with self.assertRaises(ValueError):
             _predict_forward_time(mkPos(0, 0), mkPos(100), [100], t)

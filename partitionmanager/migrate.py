@@ -48,7 +48,7 @@ def write_state_info(conf, out_fp):
     log = logging.getLogger("write_state_info")
 
     log.info("Writing current state information")
-    state_info = {"time": conf.curtime, "tables": dict()}
+    state_info = {"time": conf.curtime, "tables": {}}
     for table in conf.tables:
         map_data = _get_map_data_from_config(conf, table)
 
@@ -90,7 +90,7 @@ def _plan_partitions_for_time_offsets(
 
         rate_of_change: an ordered list of positions per RATE_UNIT.
     """
-    changes = list()
+    changes = []
     for (i, offset), is_final in partitionmanager.tools.iter_show_end(
         enumerate(time_offsets)
     ):
@@ -171,7 +171,10 @@ def _generate_sql_copy_commands(
     yield f"DROP TABLE IF EXISTS {new_table.name};"
     yield f"CREATE TABLE {new_table.name} LIKE {existing_table.name};"
     yield f"ALTER TABLE {new_table.name} REMOVE PARTITIONING;"
-    yield f"ALTER TABLE {new_table.name} PARTITION BY {range_cols_string} ({range_id_string}) ("
+    yield (
+        f"ALTER TABLE {new_table.name} PARTITION BY {range_cols_string} "
+        f"({range_id_string}) ("
+    )
     yield f"\tPARTITION {max_val_part.name} VALUES LESS THAN {max_val_string}"
     yield ");"
 
@@ -240,7 +243,7 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
             f"{prior_data['time']} = {time_delta}"
         )
 
-    commands = dict()
+    commands = {}
 
     for table_name, prior_pos in prior_data["tables"].items():
         table = None
@@ -267,7 +270,7 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
         delta_positions = list(
             map(operator.sub, ordered_current_pos, ordered_prior_pos)
         )
-        rate_of_change = list(map(lambda pos: pos / time_delta, delta_positions))
+        rate_of_change = [pos / time_delta for pos in delta_positions]
 
         max_val_part = map_data["partitions"][-1]
         if not isinstance(max_val_part, partitionmanager.types.MaxValuePartition):
@@ -275,8 +278,9 @@ def calculate_sql_alters_from_state_info(conf, in_fp):
             raise Exception("Unexpected part?")
 
         log.info(
-            f"{table}, {time_delta:0.1f} hours, {ordered_prior_pos} - {ordered_current_pos}, "
-            f"{delta_positions} pos_change, {rate_of_change}/hour"
+            f"{table}, {time_delta:0.1f} hours, {ordered_prior_pos} - "
+            f"{ordered_current_pos}, {delta_positions} pos_change, "
+            f"{rate_of_change}/hour"
         )
 
         part_duration = conf.partition_period

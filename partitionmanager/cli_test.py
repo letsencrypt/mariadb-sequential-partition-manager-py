@@ -127,7 +127,7 @@ class TestPartitionCmd(unittest.TestCase):
         output = partition_cmd(args)
 
         self.assertEqual(len(output), 2)
-        self.assertSetEqual(set(output), set(["testtable", "another_table"]))
+        self.assertSetEqual(set(output), {"testtable", "another_table"})
 
     def test_partition_unpartitioned_table(self):
         o = run_partition_cmd_yaml(
@@ -186,7 +186,7 @@ partitionmanager:
     mariadb: {str(fake_exec)}
 """
         )
-        self.assertSetEqual(set(o), set(["test", "test_with_retention"]))
+        self.assertSetEqual(set(o), {"test", "test_with_retention"})
 
     def test_partition_period_daily(self):
         o = run_partition_cmd_yaml(
@@ -201,7 +201,7 @@ partitionmanager:
 """
         )
         self.assertSequenceEqual(
-            set(o), set(["partitioned_last_week", "partitioned_yesterday"])
+            set(o), {"partitioned_last_week", "partitioned_yesterday"}
         )
 
     def test_partition_period_seven_days(self):
@@ -221,16 +221,14 @@ partitionmanager:
 
         self.assertEqual(
             set(logctx.output),
-            set(
-                [
-                    "INFO:partition:Evaluating Table partitioned_last_week "
-                    "(duration=7 days, 0:00:00)",
-                    "DEBUG:partition:Table partitioned_last_week has no pending SQL updates.",
-                    "INFO:partition:Evaluating Table partitioned_yesterday "
-                    "(duration=7 days, 0:00:00)",
-                    "DEBUG:partition:Table partitioned_yesterday has no pending SQL updates.",
-                ]
-            ),
+            {
+                "INFO:partition:Evaluating Table partitioned_last_week "
+                "(duration=7 days, 0:00:00)",
+                "DEBUG:partition:Table partitioned_last_week has no pending SQL updates.",  # noqa: E501
+                "INFO:partition:Evaluating Table partitioned_yesterday "
+                "(duration=7 days, 0:00:00)",
+                "DEBUG:partition:Table partitioned_yesterday has no pending SQL updates.",  # noqa: E501
+            },
         )
         self.assertSequenceEqual(list(o), [])
 
@@ -249,7 +247,7 @@ partitionmanager:
 """
         )
         self.assertSequenceEqual(
-            set(o), set(["partitioned_yesterday", "partitioned_last_week"])
+            set(o), {"partitioned_yesterday", "partitioned_last_week"}
         )
 
     def test_partition_with_db_url(self):
@@ -283,7 +281,7 @@ class TestStatsCmd(unittest.TestCase):
 
     def assert_stats_prometheus_outfile(self, prom_file):
         lines = prom_file.split("\n")
-        metrics = dict()
+        metrics = {}
         for line in lines:
             if not line.startswith("#") and len(line) > 0:
                 key, value = line.split(" ")
@@ -348,11 +346,9 @@ partitionmanager:
         table_b:
         table_c:
 """,
-            datetime.now(),
+            datetime.now(tz=timezone.utc),
         )
-        self.assertEqual(
-            {str(x.name) for x in conf.tables}, set(["table_one", "table_two"])
-        )
+        self.assertEqual({str(x.name) for x in conf.tables}, {"table_one", "table_two"})
 
     def test_cli_mariadb_override_yaml(self):
         args = PARSER.parse_args(["--mariadb", "/usr/bin/true", "stats"])
@@ -364,7 +360,7 @@ partitionmanager:
     tables:
         one:
 """,
-            datetime.now(),
+            datetime.now(tz=timezone.utc),
         )
         self.assertEqual(conf.dbcmd.exe, "/usr/bin/true")
 
@@ -381,7 +377,7 @@ partitionmanager:
     tables:
         one:
 """,
-                datetime.now(),
+                datetime.now(tz=timezone.utc),
             )
 
     def test_migrate_cmd_out(self):
@@ -494,26 +490,26 @@ partitionmanager:
                     "partitioned_yesterday": [
                         "DROP TABLE IF EXISTS partitioned_yesterday_new_20210421;",
                         "CREATE TABLE partitioned_yesterday_new_20210421 "
-                        + "LIKE partitioned_yesterday;",
+                        "LIKE partitioned_yesterday;",
                         "ALTER TABLE partitioned_yesterday_new_20210421 "
-                        + "REMOVE PARTITIONING;",
+                        "REMOVE PARTITIONING;",
                         "ALTER TABLE partitioned_yesterday_new_20210421 "
-                        + "PARTITION BY RANGE (id) (",
+                        "PARTITION BY RANGE (id) (",
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
                         "ALTER TABLE `partitioned_yesterday_new_20210421` WAIT 6 "
-                        + "REORGANIZE PARTITION `p_assumed` INTO (PARTITION "
-                        + "`p_20210421` VALUES LESS THAN (150), PARTITION "
-                        + "`p_20210521` VALUES LESS THAN (300), PARTITION "
-                        + "`p_20210620` VALUES LESS THAN MAXVALUE);",
+                        "REORGANIZE PARTITION `p_assumed` INTO (PARTITION "
+                        "`p_20210421` VALUES LESS THAN (150), PARTITION "
+                        "`p_20210521` VALUES LESS THAN (300), PARTITION "
+                        "`p_20210620` VALUES LESS THAN MAXVALUE);",
                         "CREATE OR REPLACE TRIGGER copy_inserts_from_"
-                        + "partitioned_yesterday_to_partitioned_yesterday",
+                        "partitioned_yesterday_to_partitioned_yesterday",
                         "\tAFTER INSERT ON partitioned_yesterday FOR EACH ROW",
                         "\t\tINSERT INTO partitioned_yesterday_new_20210421 SET",
                         "\t\t\t`id` = NEW.`id`,",
                         "\t\t\t`serial` = NEW.`serial`;",
                         "CREATE OR REPLACE TRIGGER copy_updates_from_"
-                        + "partitioned_yesterday_to_partitioned_yesterday",
+                        "partitioned_yesterday_to_partitioned_yesterday",
                         "\tAFTER UPDATE ON partitioned_yesterday FOR EACH ROW",
                         "\t\tUPDATE partitioned_yesterday_new_20210421 SET",
                         "\t\t\t`serial` = NEW.`serial`",
@@ -527,16 +523,16 @@ partitionmanager:
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
                         "ALTER TABLE `two_new_20210421` WAIT 6 REORGANIZE PARTITION "
-                        + "`p_assumed` INTO (PARTITION `p_20210421` VALUES "
-                        + "LESS THAN (150), PARTITION `p_20210521` VALUES LESS "
-                        + "THAN (375), PARTITION `p_20210620` VALUES LESS THAN "
-                        + "MAXVALUE);",
-                        "CREATE OR REPLACE TRIGGER copy_inserts_from_two_to_two_new_20210421",
+                        "`p_assumed` INTO (PARTITION `p_20210421` VALUES "
+                        "LESS THAN (150), PARTITION `p_20210521` VALUES LESS "
+                        "THAN (375), PARTITION `p_20210620` VALUES LESS THAN "
+                        "MAXVALUE);",
+                        "CREATE OR REPLACE TRIGGER copy_inserts_from_two_to_two_new_20210421",  # noqa: E501
                         "\tAFTER INSERT ON two FOR EACH ROW",
                         "\t\tINSERT INTO two_new_20210421 SET",
                         "\t\t\t`id` = NEW.`id`,",
                         "\t\t\t`serial` = NEW.`serial`;",
-                        "CREATE OR REPLACE TRIGGER copy_updates_from_two_to_two_new_20210421",
+                        "CREATE OR REPLACE TRIGGER copy_updates_from_two_to_two_new_20210421",  # noqa: E501
                         "\tAFTER UPDATE ON two FOR EACH ROW",
                         "\t\tUPDATE two_new_20210421 SET",
                         "\t\t\t`serial` = NEW.`serial`",
@@ -583,22 +579,22 @@ partitionmanager:
                         "DROP TABLE IF EXISTS unpartitioned_new_20210421;",
                         "CREATE TABLE unpartitioned_new_20210421 LIKE unpartitioned;",
                         "ALTER TABLE unpartitioned_new_20210421 REMOVE PARTITIONING;",
-                        "ALTER TABLE unpartitioned_new_20210421 PARTITION BY RANGE (id) (",
+                        "ALTER TABLE unpartitioned_new_20210421 PARTITION BY RANGE (id) (",  # noqa: E501
                         "\tPARTITION p_assumed VALUES LESS THAN MAXVALUE",
                         ");",
                         "ALTER TABLE `unpartitioned_new_20210421` WAIT 6 REORGANIZE "
-                        + "PARTITION `p_assumed` INTO (PARTITION `p_20210421` "
-                        + "VALUES LESS THAN (150), PARTITION `p_20210521` VALUES "
-                        + "LESS THAN (300), PARTITION `p_20210620` VALUES LESS "
-                        + "THAN MAXVALUE);",
+                        "PARTITION `p_assumed` INTO (PARTITION `p_20210421` "
+                        "VALUES LESS THAN (150), PARTITION `p_20210521` VALUES "
+                        "LESS THAN (300), PARTITION `p_20210620` VALUES LESS "
+                        "THAN MAXVALUE);",
                         "CREATE OR REPLACE TRIGGER copy_inserts_from_"
-                        + "unpartitioned_to_unpartitioned_new_20210421",
+                        "unpartitioned_to_unpartitioned_new_20210421",
                         "\tAFTER INSERT ON unpartitioned FOR EACH ROW",
                         "\t\tINSERT INTO unpartitioned_new_20210421 SET",
                         "\t\t\t`id` = NEW.`id`,",
                         "\t\t\t`serial` = NEW.`serial`;",
                         "CREATE OR REPLACE TRIGGER copy_updates_from_"
-                        + "unpartitioned_to_unpartitioned_new_20210421",
+                        "unpartitioned_to_unpartitioned_new_20210421",
                         "\tAFTER UPDATE ON unpartitioned FOR EACH ROW",
                         "\t\tUPDATE unpartitioned_new_20210421 SET",
                         "\t\t\t`serial` = NEW.`serial`",
@@ -651,12 +647,10 @@ partitionmanager:
             )
         self.assertEqual(
             set(logctx.output),
-            set(
-                [
-                    "WARNING:do_find_drops_for_tables:unused:"
-                    "Cannot process Table unused: no retention specified"
-                ]
-            ),
+            {
+                "WARNING:do_find_drops_for_tables:unused:"
+                "Cannot process Table unused: no retention specified"
+            },
         )
 
     def test_drop_no_sql(self):
@@ -675,10 +669,8 @@ partitionmanager:
             )
         self.assertEqual(
             set(logctx.output),
-            set(
-                [
-                    "WARNING:do_find_drops_for_tables:unused:"
-                    "Cannot process Table unused: no date query specified"
-                ]
-            ),
+            {
+                "WARNING:do_find_drops_for_tables:unused:"
+                "Cannot process Table unused: no date query specified"
+            },
         )

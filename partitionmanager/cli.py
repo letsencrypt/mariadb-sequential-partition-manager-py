@@ -182,8 +182,8 @@ def _extract_single_column(row):
 def list_tables(conf):
     """List all tables for the current database."""
     rows = conf.dbcmd.run("SHOW TABLES;")
-    table_names = map(lambda row: _extract_single_column(row), rows)
-    table_objects = map(lambda name: partitionmanager.types.Table(name), table_names)
+    table_names = (_extract_single_column(row) for row in rows)
+    table_objects = (partitionmanager.types.Table(name) for name in table_names)
     return list(table_objects)
 
 
@@ -273,6 +273,7 @@ MIGRATE_PARSER.add_argument(
 )
 MIGRATE_PARSER.set_defaults(func=migrate_cmd)
 
+
 def _partition_table(conf, log, table, metrics):
     if table_problems := pm_tap.get_table_compatibility_problems(conf.dbcmd, table):
         log.error(f"Cannot proceed: {table} {table_problems}")
@@ -309,9 +310,9 @@ def _partition_table(conf, log, table, metrics):
 
     log.info(f"{table} running SQL: {composite_sql_command}")
 
-    time_start = datetime.utcnow()
+    time_start = datetime.now(tz=timezone.utc)
     output = conf.dbcmd.run(composite_sql_command)
-    time_end = datetime.utcnow()
+    time_end = datetime.now(tz=timezone.utc)
     metrics.add(
         "alter_time_seconds",
         table.name,
@@ -320,6 +321,7 @@ def _partition_table(conf, log, table, metrics):
 
     log.info(f"{table} results: {output}")
     return {"sql": composite_sql_command, "output": output}
+
 
 def do_partition(conf):
     """Produces SQL statements to manage partitions per the supplied configuration.
@@ -334,7 +336,7 @@ def do_partition(conf):
         log.info("Database is read-only, only emitting statistics")
         if conf.prometheus_stats_path:
             do_stats(conf)
-        return dict()
+        return {}
 
     if conf.noop:
         log.info("Running in noop mode, no changes will be made")
@@ -351,7 +353,7 @@ def do_partition(conf):
         type_name="counter",
     )
 
-    all_results = dict()
+    all_results = {}
     for table in conf.tables:
         try:
             results = _partition_table(conf, log, table, metrics)
@@ -361,11 +363,14 @@ def do_partition(conf):
         except partitionmanager.types.NoEmptyPartitionsAvailableException:
             log.warning(
                 "Unable to automatically handle %s: No empty "
-                "partition is available.", table
+                "partition is available.",
+                table,
             )
         except partitionmanager.types.DatabaseCommandException as e:
             log.warning("Failed to automatically handle %s: %s", table, e)
             metrics.add("alter_errors", table.name, 1)
+        except partitionmanager.types.TableEmptyException:
+            log.warning("Table %s appears to be empty. Skipping.", table)
         except (ValueError, Exception) as e:
             log.warning("Failed to handle %s: %s", table, e)
             metrics.add("alter_errors", table.name, 1)
@@ -380,7 +385,7 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
 
     log = logging.getLogger("do_stats")
 
-    all_results = dict()
+    all_results = {}
     for table in list_tables(conf):
         table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
         if table_problems:
@@ -405,8 +410,8 @@ def do_stats(conf, metrics=partitionmanager.stats.PrometheusMetrics()):
         )
         metrics.describe(
             "age_of_retained_partitions",
-            help_text="The age in seconds of the first partition for the table, indicating the "
-            "retention of data in the table.",
+            help_text="The age in seconds of the first partition for the table, "
+            "indicating the retention of data in the table.",
             type_name="gauge",
         )
         metrics.describe(
@@ -472,7 +477,7 @@ DROP_PARSER.set_defaults(func=drop_cmd)
 
 
 def do_find_drops_for_tables(conf):
-    all_results = dict()
+    all_results = {}
     for table in conf.tables:
         log = logging.getLogger(f"do_find_drops_for_tables:{table.name}")
 

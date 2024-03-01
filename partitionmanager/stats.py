@@ -22,14 +22,14 @@ class PrometheusMetrics:
     """A set of metrics that can be rendered for Prometheus."""
 
     def __init__(self):
-        self.metrics = dict()
-        self.help = dict()
-        self.types = dict()
+        self.metrics = {}
+        self.help = {}
+        self.types = {}
 
     def add(self, name, table, data):
         """Record metric data representing the name and table."""
         if name not in self.metrics:
-            self.metrics[name] = list()
+            self.metrics[name] = []
         self.metrics[name].append(PrometheusMetric(name, table, data))
 
     def describe(self, name, help_text=None, type_name=None):
@@ -50,7 +50,7 @@ class PrometheusMetrics:
             if n in self.types:
                 print(f"# TYPE {name} {self.types[n]}", file=fp)
             for m in metrics:
-                labels = list()
+                labels = []
                 if m.table:
                     labels = [f'table="{m.table}"']
                 print(f"{name}{{{','.join(labels)}}} {m.data}", file=fp)
@@ -68,7 +68,7 @@ def get_statistics(partitions, current_timestamp, table):
         if not partitionmanager.types.is_partition_type(p):
             log.warning(
                 f"{table} get_statistics called with a partition list "
-                + f"that included a non-Partition entry: {p}"
+                f"that included a non-Partition entry: {p}"
             )
             raise partitionmanager.types.UnexpectedPartitionException(p)
 
@@ -78,7 +78,7 @@ def get_statistics(partitions, current_timestamp, table):
     if not isinstance(tail_part, partitionmanager.types.MaxValuePartition):
         log.warning(
             f"{table} get_statistics called with a partition list tail "
-            + f"that wasn't a MaxValuePartition: {tail_part}"
+            f"that wasn't a MaxValuePartition: {tail_part}"
         )
         raise partitionmanager.types.UnexpectedPartitionException(tail_part)
 

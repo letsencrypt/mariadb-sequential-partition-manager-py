@@ -24,7 +24,7 @@ def get_table_compatibility_problems(database, table):
 
     sql_cmd = (
         "SELECT CREATE_OPTIONS FROM INFORMATION_SCHEMA.TABLES "
-        + f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
+        f"WHERE TABLE_SCHEMA='{db_name}' and TABLE_NAME='{table.name}';"
     ).strip()
     return _get_table_information_schema_problems(database.run(sql_cmd), table.name)
 
@@ -37,7 +37,7 @@ def _get_table_information_schema_problems(rows, table_name):
     options = rows[0]
     if "partitioned" not in options["CREATE_OPTIONS"]:
         return [f"Table {table_name} is not partitioned"]
-    return list()
+    return []
 
 
 def get_current_positions(database, table, columns):
@@ -50,7 +50,7 @@ def get_current_positions(database, table, columns):
     ):
         raise ValueError("columns must be a list and table must be a Table")
 
-    positions = dict()
+    positions = {}
     for column in columns:
         if not isinstance(column, str):
             raise ValueError("columns must be a list of strings")
@@ -61,7 +61,7 @@ def get_current_positions(database, table, columns):
                 f"Expected one result from {table.name}"
             )
         if not rows:
-            raise partitionmanager.types.TableInformationException(
+            raise partitionmanager.types.TableEmptyException(
                 f"Table {table.name} appears to be empty. (No results)"
             )
         positions[column] = rows[0][column]
@@ -84,8 +84,8 @@ def _parse_partition_map(rows):
     The "range_cols" is the ordered list of what columns are used as the
     range identifiers for the partitions.
 
-    The "partitions" is a list of the Partition objects representing each
-    defined partition. There will be at least one partitionmanager.types.MaxValuePartition.
+    The "partitions" is a list of the Partition objects representing each defined
+    partition. There will be at least one partitionmanager.types.MaxValuePartition.
     """
     log = logging.getLogger("parse_partition_map")
 
@@ -100,7 +100,7 @@ def _parse_partition_map(rows):
     )
 
     range_cols = None
-    partitions = list()
+    partitions = []
 
     if len(rows) != 1:
         raise partitionmanager.types.TableInformationException("Expected one result")
@@ -128,7 +128,8 @@ def _parse_partition_map(rows):
 
             if len(part_vals) != len(range_cols):
                 log.error(
-                    f"Partition columns {part_vals} don't match the partition range {range_cols}"
+                    f"Partition columns {part_vals} don't match the partition range "
+                    f"{range_cols}"
                 )
                 raise partitionmanager.types.MismatchedIdException(
                     "Partition columns mismatch"
@@ -202,8 +203,8 @@ def _split_partitions_around_position(partition_list, current_position):
     if not isinstance(current_position, partitionmanager.types.Position):
         raise ValueError
 
-    less_than_partitions = list()
-    greater_or_equal_partitions = list()
+    less_than_partitions = []
+    greater_or_equal_partitions = []
 
     for p in partition_list:
         if p < current_position:
@@ -238,19 +239,20 @@ def _get_position_increase_per_day(p1, p2):
 
     if None in (p1.timestamp(), p2.timestamp()):
         # An empty list skips this pair in get_weighted_position_increase
-        return list()
+        return []
     if p1.timestamp() >= p2.timestamp():
         log.warning(
-            f"Skipping rate of change between p1 {p1} and p2 {p2} as they are out-of-order"
+            f"Skipping rate of change between p1 {p1} and p2 {p2} as they are "
+            "out-of-order"
         )
-        return list()
+        return []
 
     delta_time = p2.timestamp() - p1.timestamp()
     delta_days = delta_time / timedelta(days=1)
     delta_positions = list(
         map(operator.sub, p2.position.as_list(), p1.position.as_list())
     )
-    return list(map(lambda pos: pos / delta_days, delta_positions))
+    return [pos / delta_days for pos in delta_positions]
 
 
 def _generate_weights(count):
@@ -293,7 +295,7 @@ def _get_weighted_position_increase_per_day_for_partitions(partitions):
     for p_r, weight in zip(pos_rates, weights):
         for idx, val in enumerate(p_r):
             weighted_sums[idx] += val * weight
-    return list(map(lambda x: x / sum(weights), weighted_sums))
+    return [x / sum(weights) for x in weighted_sums]
 
 
 def _predict_forward_position(current_positions, rate_of_change, duration):
@@ -311,7 +313,7 @@ def _predict_forward_position(current_positions, rate_of_change, duration):
             f"Can't predict forward with a negative rate of change: {neg_rate}"
         )
 
-    increase = list(map(lambda x: x * (duration / timedelta(days=1)), rate_of_change))
+    increase = [x * (duration / timedelta(days=1)) for x in rate_of_change]
     predicted_positions = [int(p + i) for p, i in zip(current_positions, increase)]
     for old, new in zip(current_positions, predicted_positions):
         assert new >= old, f"Always predict forward, {new} < {old}"
@@ -429,7 +431,7 @@ def _get_rate_partitions_with_queried_timestamps(
     if not table.has_date_query:
         raise ValueError("Table has no defined date query")
 
-    instant_partitions = list()
+    instant_partitions = []
 
     for partition in partition_list:
         exact_time = (
@@ -585,7 +587,7 @@ def _plan_partition_changes(
     while conflict_found:
         conflict_found = False
 
-        existing_timestamps = set(map(lambda p: p.timestamp(), partition_list))
+        existing_timestamps = {p.timestamp() for p in partition_list}
 
         for partition in results:
             if partition.timestamp() in existing_timestamps:
@@ -597,7 +599,7 @@ def _plan_partition_changes(
                     continue
 
                 log.debug(
-                    f"{partition} has a conflict for its timestamp, increasing by 1 day."
+                    f"{partition} has a conflict for its timestamp, increasing by 1 day"
                 )
                 partition.set_timestamp(partition.timestamp() + timedelta(days=1))
                 conflict_found = True
@@ -626,9 +628,12 @@ def _should_run_changes(table, altered_partitions):
             log.debug(f"{p} is new")
             return True
 
-        if isinstance(p, partitionmanager.types.ChangePlannedPartition) and p.important():
-                log.debug(f"{p} is marked important")
-                return True
+        if (
+            isinstance(p, partitionmanager.types.ChangePlannedPartition)
+            and p.important()
+        ):
+            log.debug(f"{p} is marked important")
+            return True
     return False
 
 
@@ -643,8 +648,8 @@ def generate_sql_reorganize_partition_commands(table, changes):
     """
     log = logging.getLogger(f"generate_sql_reorganize_partition_commands:{table.name}")
 
-    modified_partitions = list()
-    new_partitions = list()
+    modified_partitions = []
+    new_partitions = []
 
     for p in changes:
         if isinstance(p, partitionmanager.types.ChangePlannedPartition):
@@ -679,7 +684,7 @@ def generate_sql_reorganize_partition_commands(table, changes):
             log.debug(f"{modified_partition} does not have modifications, skip")
             continue
 
-        partition_strings = list()
+        partition_strings = []
         for part in new_part_list:
             if part.name in partition_names_set:
                 raise partitionmanager.types.DuplicatePartitionException(
@@ -693,8 +698,8 @@ def generate_sql_reorganize_partition_commands(table, changes):
         partition_update = ", ".join(partition_strings)
 
         alter_cmd = (
-            f"ALTER TABLE `{table.name}` WAIT 6 "
-            f"REORGANIZE PARTITION `{modified_partition.old.name}` INTO ({partition_update});"
+            f"ALTER TABLE `{table.name}` WAIT 6 REORGANIZE "
+            f"PARTITION `{modified_partition.old.name}` INTO ({partition_update});"
         )
 
         log.debug(f"Yielding {alter_cmd}")
@@ -752,7 +757,7 @@ def get_pending_sql_reorganize_partition_commands(
 
     if not _should_run_changes(table, partition_changes):
         log.info(f"{table} does not need to be modified currently.")
-        return list()
+        return []
 
     log.debug(f"{table} has changes waiting.")
     return generate_sql_reorganize_partition_commands(table, partition_changes)
