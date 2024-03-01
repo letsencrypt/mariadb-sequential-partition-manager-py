@@ -274,16 +274,13 @@ MIGRATE_PARSER.add_argument(
 MIGRATE_PARSER.set_defaults(func=migrate_cmd)
 
 def _partition_table(conf, log, table, metrics):
-    table_problems = pm_tap.get_table_compatibility_problems(conf.dbcmd, table)
-    if table_problems:
+    if table_problems := pm_tap.get_table_compatibility_problems(conf.dbcmd, table):
         log.error(f"Cannot proceed: {table} {table_problems}")
         return None
 
     map_data = pm_tap.get_partition_map(conf.dbcmd, table)
 
-    duration = conf.partition_period
-    if table.partition_period:
-        duration = table.partition_period
+    duration = table.partition_period or conf.partition_period
 
     log.info(f"Evaluating {table} (duration={duration})")
     cur_pos = partitionmanager.database_helpers.get_position_of_table(
