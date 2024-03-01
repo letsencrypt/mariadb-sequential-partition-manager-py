@@ -356,8 +356,7 @@ def do_partition(conf):
     all_results = {}
     for table in conf.tables:
         try:
-            results = _partition_table(conf, log, table, metrics)
-            if results:
+            if results := _partition_table(conf, log, table, metrics):
                 all_results[table.name] = results
 
         except partitionmanager.types.NoEmptyPartitionsAvailableException:
