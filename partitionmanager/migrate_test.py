@@ -26,7 +26,7 @@ from .types import (
 
 class MockDatabase(DatabaseCommand):
     def __init__(self):
-        self._response = list()
+        self._response = []
         self._select_response = [[{"id": 150}]]
         self.num_queries = 0
 

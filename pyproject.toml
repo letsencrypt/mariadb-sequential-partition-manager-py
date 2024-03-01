@@ -46,6 +46,7 @@ select = [
   "ASYNC",  # flake8-async
   "B",      # flake8-bugbear
   "BLE",    # flake8-blind-except
+  "C4",     # flake8-comprehensions
   "C90",    # McCabe cyclomatic complexity
   "DJ",     # flake8-django
   "DTZ",    # flake8-datetimez
@@ -83,7 +84,6 @@ select = [
   "W",      # pycodestyle
   "YTT",    # flake8-2020
   # "ANN",  # flake8-annotations
-  # "C4",   # flake8-comprehensions
   # "COM",  # flake8-commas
   # "CPY",  # flake8-copyright
   # "D",    # pydocstyle
@@ -100,7 +100,10 @@ select = [
   # "T20",  # flake8-print
   # "TRY",  # tryceratops
 ]
-ignore = ["S101"]  # Allow assert statements
+ignore = [
+  "ISC001", # Implicit string concatenation can conflict with ruff format
+  "S101",   # Allow assert statements
+]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 16  # default is 10

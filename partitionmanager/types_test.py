@@ -165,7 +165,7 @@ class TestTypes(unittest.TestCase):
         with self.assertRaises(argparse.ArgumentTypeError):
             timedelta_from_dict({"another thing": 1, "days": 30})
 
-        r = timedelta_from_dict(dict())
+        r = timedelta_from_dict({})
         self.assertEqual(None, r)
 
         with self.assertRaises(TypeError):

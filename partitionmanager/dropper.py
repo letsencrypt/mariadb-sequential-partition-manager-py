@@ -16,7 +16,7 @@ def _drop_statement(table, partition_list):
     if not partition_list:
         raise ValueError("Partition list may not be empty")
 
-    partitions = ",".join(map(lambda x: f"`{x.name}`", partition_list))
+    partitions = ",".join(f"`{x.name}`" for x in partition_list)
 
     alter_cmd = f"ALTER TABLE `{table.name}` DROP PARTITION IF EXISTS {partitions};"
 

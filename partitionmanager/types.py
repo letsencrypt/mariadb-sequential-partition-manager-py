@@ -254,7 +254,7 @@ class Position:
     """
 
     def __init__(self):
-        self._position = list()
+        self._position = []
 
     def set_position(self, position_in):
         """Set the list of identifiers for this position."""
