@@ -287,7 +287,9 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(
             NewPlannedPartition()
             .set_columns(5)
-            .set_timestamp(datetime(2021, 12, 31, hour=23, minute=15, tzinfo=timezone.utc))
+            .set_timestamp(
+                datetime(2021, 12, 31, hour=23, minute=15, tzinfo=timezone.utc)
+            )
             .as_partition(),
             MaxValuePartition("p_20211231", count=5),
         )
@@ -322,9 +324,13 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(
             NewPlannedPartition()
             .set_position([99, 999])
-            .set_timestamp(datetime(2021, 12, 31, hour=19, minute=2, tzinfo=timezone.utc))
+            .set_timestamp(
+                datetime(2021, 12, 31, hour=19, minute=2, tzinfo=timezone.utc)
+            )
             .set_as_max_value(),
-            NewPlannedPartition().set_columns(2).set_timestamp(datetime(2021, 12, 31, tzinfo=timezone.utc)),
+            NewPlannedPartition()
+            .set_columns(2)
+            .set_timestamp(datetime(2021, 12, 31, tzinfo=timezone.utc)),
         )
 
 
@@ -390,7 +396,9 @@ class TestPartition(unittest.TestCase):
     def test_is_partition_type(self):
         self.assertTrue(is_partition_type(mkPPart("b", 1, 2)))
         self.assertTrue(
-            is_partition_type(InstantPartition("p_19490520", datetime.now(tz=timezone.utc), [1, 2]))
+            is_partition_type(
+                InstantPartition("p_19490520", datetime.now(tz=timezone.utc), [1, 2])
+            )
         )
         self.assertFalse(is_partition_type(None))
         self.assertFalse(is_partition_type(1))
