@@ -1,7 +1,7 @@
 import io
 import unittest
 import yaml
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .migrate import (
     _generate_sql_copy_commands,
@@ -60,7 +60,7 @@ class MockDatabase(DatabaseCommand):
 class TestBootstrapTool(unittest.TestCase):
     def test_writing_state_info(self):
         conf = Config()
-        conf.curtime = datetime(2021, 3, 1)
+        conf.curtime = datetime(2021, 3, 1, tzinfo=timezone.utc)
         conf.dbcmd = MockDatabase()
         conf.tables = [Table("test")]
 
@@ -97,7 +97,7 @@ class TestBootstrapTool(unittest.TestCase):
     def test_read_state_info(self):
         self.maxDiff = None
         conf_past = Config()
-        conf_past.curtime = datetime(2021, 3, 1)
+        conf_past.curtime = datetime(2021, 3, 1, tzinfo=timezone.utc)
         conf_past.dbcmd = MockDatabase()
         conf_past.tables = [Table("test").set_partition_period(timedelta(days=30))]
 
@@ -109,7 +109,7 @@ class TestBootstrapTool(unittest.TestCase):
             calculate_sql_alters_from_state_info(conf_past, state_fs)
 
         conf_now = Config()
-        conf_now.curtime = datetime(2021, 3, 3)
+        conf_now.curtime = datetime(2021, 3, 3, tzinfo=timezone.utc)
         conf_now.dbcmd = MockDatabase()
         conf_now.dbcmd._response = [
             [
@@ -153,7 +153,7 @@ class TestBootstrapTool(unittest.TestCase):
         self.maxDiff = None
         conf = Config()
         conf.assume_partitioned_on = ["orderID", "authzID"]
-        conf.curtime = datetime(2021, 3, 3)
+        conf.curtime = datetime(2021, 3, 3, tzinfo=timezone.utc)
         conf.dbcmd = MockDatabase()
         conf.dbcmd._select_response = [[{"authzID": 22}], [{"orderID": 11}]]
         conf.dbcmd._response = [
@@ -223,7 +223,7 @@ class TestBootstrapTool(unittest.TestCase):
     def test_generate_sql_copy_commands(self):
         conf = Config()
         conf.assume_partitioned_on = ["id"]
-        conf.curtime = datetime(2021, 3, 3)
+        conf.curtime = datetime(2021, 3, 3, tzinfo=timezone.utc)
         conf.dbcmd = MockDatabase()
         map_data = _override_config_to_map_data(conf)
         cmds = list(
@@ -263,7 +263,7 @@ class TestBootstrapTool(unittest.TestCase):
 
     def test_plan_partitions_for_time_offsets(self):
         parts = _plan_partitions_for_time_offsets(
-            datetime(2021, 3, 3),
+            datetime(2021, 3, 3, tzinfo=timezone.utc),
             [timedelta(days=60), timedelta(days=360)],
             [11943234],
             [16753227640],

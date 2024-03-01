@@ -348,7 +348,7 @@ partitionmanager:
         table_b:
         table_c:
 """,
-            datetime.now(),
+            datetime.now(tz=timezone.utc),
         )
         self.assertEqual(
             {str(x.name) for x in conf.tables}, set(["table_one", "table_two"])
@@ -364,7 +364,7 @@ partitionmanager:
     tables:
         one:
 """,
-            datetime.now(),
+            datetime.now(tz=timezone.utc),
         )
         self.assertEqual(conf.dbcmd.exe, "/usr/bin/true")
 
@@ -381,7 +381,7 @@ partitionmanager:
     tables:
         one:
 """,
-                datetime.now(),
+                datetime.now(tz=timezone.utc),
             )
 
     def test_migrate_cmd_out(self):
