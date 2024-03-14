@@ -363,8 +363,8 @@ def do_partition(conf):
         except (
             partitionmanager.types.TableEmptyException,
             partitionmanager.types.NoValidRatesOfChangeException,
-        ):
-            log.warning("Table %s appears to be empty. Skipping.", table)
+        ) as e:
+            log.warning("Table %s appears to be empty (%s). Skipping.", table, e)
         except (ValueError, Exception) as e:
             log.warning("Failed to handle %s: %s", table, e)
             metrics.add("alter_errors", table.name, 1)
