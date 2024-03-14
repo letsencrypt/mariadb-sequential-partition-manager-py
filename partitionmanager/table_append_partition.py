@@ -287,7 +287,7 @@ def _get_weighted_position_increase_per_day_for_partitions(partitions):
         log.error(
             "No rates of change were valid for the partition list: %s", partitions
         )
-        raise ValueError("No valid rates of change")
+        raise partitionmanager.types.NoValidRatesOfChangeException
 
     # Initialize a list with a zero for each position
     weighted_sums = [0] * partitions[0].num_columns
