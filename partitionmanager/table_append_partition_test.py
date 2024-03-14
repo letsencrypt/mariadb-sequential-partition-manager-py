@@ -9,6 +9,7 @@ from partitionmanager.types import (
     DuplicatePartitionException,
     NewPlannedPartition,
     NoEmptyPartitionsAvailableException,
+    NoValidRatesOfChangeException,
     InstantPartition,
     SqlInput,
     SqlQuery,
@@ -444,6 +445,12 @@ class TestPartitionAlgorithm(unittest.TestCase):
             ),
             [548.3636363636364],
         )
+        with self.assertRaises(NoValidRatesOfChangeException):
+            _get_weighted_position_increase_per_day_for_partitions(
+                [
+                    mkPPart("p_736563646E64", 1200000),
+                ]
+            )
 
     def test_predict_forward_position(self):
         with self.assertRaises(ValueError):

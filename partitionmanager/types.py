@@ -625,3 +625,7 @@ class DatabaseCommandException(Exception):
 
 class NoExactTimeException(Exception):
     """Raised if there's no exact time available for this partition."""
+
+
+class NoValidRatesOfChangeException(Exception):
+    """Raised if the table's rate of change cannot be calculated."""

@@ -360,8 +360,11 @@ def do_partition(conf):
         except partitionmanager.types.DatabaseCommandException as e:
             log.warning("Failed to automatically handle %s: %s", table, e)
             metrics.add("alter_errors", table.name, 1)
-        except partitionmanager.types.TableEmptyException:
-            log.warning("Table %s appears to be empty. Skipping.", table)
+        except (
+            partitionmanager.types.TableEmptyException,
+            partitionmanager.types.NoValidRatesOfChangeException,
+        ) as e:
+            log.warning("Table %s appears to be empty (%s). Skipping.", table, e)
         except (ValueError, Exception) as e:
             log.warning("Failed to handle %s: %s", table, e)
             metrics.add("alter_errors", table.name, 1)
