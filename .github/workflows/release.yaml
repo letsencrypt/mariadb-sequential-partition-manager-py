@@ -42,6 +42,7 @@ jobs:
       - name: Build partition-manager
         run: |
           python3 -m build
+          sha256sum dist/*.whl dist/*.tar.gz >dist/sha256sums
 
       - name: "Publish release"
         uses: "marvinpinto/action-automatic-releases@919008cf3f741b179569b7a6fb4d8860689ab7f0"
@@ -50,5 +51,6 @@ jobs:
           automatic_release_tag: "${{ steps.get_version.outputs.version }}"
           title: "partition-manager ${{ steps.get_version.outputs.version }}"
           files: |
+            dist/sha256sums
             dist/*.whl
             dist/*.tar.gz
