@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.x'
           architecture: 'x64'
@@ -31,13 +31,14 @@ jobs:
           pip3 install build
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Get version from git tag
         id: get_version
-        uses: battila7/get-version-action@v2
+        uses: battila7/get-version-action@d97fbc34ceb64d1f5d95f4dfd6dce33521ccccf5 # v2.3.0
 
       - name: Build partition-manager
         run: |
@@ -45,12 +46,12 @@ jobs:
           sha256sum dist/*.whl dist/*.tar.gz >dist/sha256sums
 
       - name: "Publish release"
-        uses: "marvinpinto/action-automatic-releases@919008cf3f741b179569b7a6fb4d8860689ab7f0"
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "${{ steps.get_version.outputs.version }}"
-          title: "partition-manager ${{ steps.get_version.outputs.version }}"
-          files: |
-            dist/sha256sums
-            dist/*.whl
-            dist/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          gh release create "$VERSION" \
+            --target "$GITHUB_SHA" \
+            --title "partition-manager $VERSION" \
+            --generate-notes \
+            dist/sha256sums dist/*.whl dist/*.tar.gz
