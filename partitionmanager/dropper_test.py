@@ -80,8 +80,11 @@ class TestDropper(unittest.TestCase):
         table.set_retention_period(timedelta(days=2))
         current_timestamp = datetime(2021, 1, 1, tzinfo=timezone.utc)
         current_position = PositionPartition("p_20210102").set_position([10])
-        assert {} == get_droppable_partitions(
-            database, [], current_position, current_timestamp, table
+        assert (
+            get_droppable_partitions(
+                database, [], current_position, current_timestamp, table
+            )
+            == {}
         )
 
     def test_get_droppable_partitions(self):
