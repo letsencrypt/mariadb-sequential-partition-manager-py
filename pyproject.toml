@@ -101,8 +101,12 @@ select = [
   # "TRY",  # tryceratops
 ]
 ignore = [
-  "ISC001", # Implicit string concatenation can conflict with ruff format
-  "S101",   # Allow assert statements
+  "ISC001",  # Implicit string concatenation can conflict with ruff format
+  "S101",    # Allow assert statements
+  "LOG015",  # Call on root logger
+  "BLE001",  # Do not catch blind exception
+  "PLW1641", # Object does not implement __hash__ method
+  "PLC0415", # import should be at the top-level of a file
 ]
 
 [tool.ruff.lint.mccabe]

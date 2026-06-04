@@ -113,8 +113,7 @@ def get_statistics(partitions, current_timestamp, table):
             log.debug(f"{table} had partitions that aren't comparable: {a} and {b}")
             continue
         d = b.timestamp() - a.timestamp()
-        if d > max_d:
-            max_d = d
+        max_d = max(max_d, d)
 
     if max_d > timedelta():
         results["max_partition_delta"] = max_d
