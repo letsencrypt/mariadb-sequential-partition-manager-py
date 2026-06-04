@@ -353,8 +353,7 @@ def do_partition(conf):
 
         except partitionmanager.types.NoEmptyPartitionsAvailableException:
             log.warning(
-                "Unable to automatically handle %s: No empty "
-                "partition is available.",
+                "Unable to automatically handle %s: No empty partition is available.",
                 table,
             )
         except partitionmanager.types.DatabaseCommandException as e:
